@@ -216,3 +216,27 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+# --- Monorepo Additions ---
+.env
+.env.local
+*.log
+
+# Web (Node / React / Vue)
+node_modules/
+dist/
+build/
+.npm/
+
+# Mobile (Flutter / Dart)
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+ios/Pods/
+android/.gradle/
+android/local.properties
+
+# Docker & Temp
+tmp/
+artifacts/
