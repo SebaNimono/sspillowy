@@ -1,0 +1,118 @@
+from enum import Enum
+from typing import Optional, List
+from datetime import datetime
+from pydantic import BaseModel, ConfigDict, Field
+
+class EngineType(str, Enum):
+    SEMGREP = "semgrep"
+    TRIVY = "trivy"
+    GITLEAKS = "gitleaks"
+    OWASP_ZAP = "owasp_zap"
+
+class SeverityLevel(str, Enum):
+    CRITICAL = "CRITICAL"
+    HIGH = "HIGH"
+    MEDIUM = "MEDIUM"
+    LOW = "LOW"
+    INFO = "INFO"
+
+class FindingStatus(str, Enum):
+    OPEN = "OPEN"
+    IN_REVIEW = "IN_REVIEW"
+    ACCEPTED_RISK = "ACCEPTED_RISK"
+    FIXED = "FIXED"
+    FALSE_POSITIVE = "FALSE_POSITIVE"
+
+# Finding Schemas
+class FindingBase(BaseModel):
+    title: str
+    description: str
+    engine: EngineType
+    severity: SeverityLevel
+    file_path: Optional[str] = None
+    line_number: Optional[int] = None
+    cwe: Optional[str] = None
+    owasp_category: Optional[str] = None
+
+class FindingCreate(FindingBase):
+    repository_id: str
+    scan_id: str
+
+class FindingResponse(FindingBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    repository_id: str
+    scan_id: str
+    status: FindingStatus = FindingStatus.OPEN
+    ai_triaged: bool = False
+    ai_confidence: Optional[float] = None
+    ai_summary: Optional[str] = None
+    ai_remediation: Optional[str] = None
+    created_at: datetime
+
+# Repository Schemas
+class RepositoryBase(BaseModel):
+    name: str
+    url: str
+    branch: str = "main"
+
+class RepositoryCreate(RepositoryBase):
+    pass
+
+class RepositoryResponse(RepositoryBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    is_active: bool = True
+    health_score: int = 100
+    open_criticals: int = 0
+    open_highs: int = 0
+    total_findings: int = 0
+    last_scan_at: Optional[datetime] = None
+    created_at: datetime
+
+# Scan Schemas
+class ScanCreate(BaseModel):
+    repository_id: str
+    triggered_by: str = "web_user"
+    branch: str = "main"
+
+class ScanResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    repository_id: str
+    status: str
+    triggered_by: str
+    branch: str
+    total_findings: int = 0
+    critical_count: int = 0
+    high_count: int = 0
+    medium_count: int = 0
+    low_count: int = 0
+    created_at: datetime
+    completed_at: Optional[datetime] = None
+
+# Security Gate Policy Schema
+class SecurityGatePolicy(BaseModel):
+    id: str = "default-policy"
+    name: str = "Política Estándar DevSecOps"
+    max_critical_allowed: int = 0
+    max_high_allowed: int = 2
+    block_on_secrets: bool = True
+    require_ciso_approval_for_bypass: bool = True
+    enabled: bool = True
+
+# Dashboard Stats Schema
+class DashboardStats(BaseModel):
+    overall_health_score: int
+    monitored_repos: int
+    total_scans_run: int
+    total_open_findings: int
+    critical_findings: int
+    high_findings: int
+    medium_findings: int
+    low_findings: int
+    secrets_leaked_prevented: int
+    findings_by_engine: dict
