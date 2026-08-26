@@ -1,25 +1,28 @@
 import React, { useEffect, useState } from 'react';
 import { Header } from '../components/Header';
 import { SidebarState } from '../components/Sidebar';
-import { DashboardStats, fetchStats } from '../api/client';
-import { KeyRound, Cpu, ShieldCheck, CheckCircle2, AlertOctagon, Terminal, Layers } from 'lucide-react';
+import { HeatmapCalendar } from '../components/HeatmapCalendar';
+import { DashboardStats, HeatmapData, AuditEvent, fetchStats, fetchHeatmap, fetchAuditLog } from '../api/client';
+import { buildFallbackHeatmap, FALLBACK_AUDIT } from '../api/fallbacks';
+import { KeyRound, Cpu, ShieldCheck, CheckCircle2, AlertOctagon, Terminal, Layers, Activity, Flame } from 'lucide-react';
 
 const DEFAULT_STATS: DashboardStats = {
   overall_health_score: 82,
   monitored_repos: 3,
   total_scans_run: 48,
-  total_open_findings: 4,
-  critical_findings: 2,
-  high_findings: 1,
+  total_open_findings: 6,
+  critical_findings: 3,
+  high_findings: 3,
   medium_findings: 1,
   low_findings: 0,
   secrets_leaked_prevented: 14,
   findings_by_engine: {
-    semgrep: 5,
-    trivy: 4,
+    semgrep: 2,
+    trivy: 1,
     gitleaks: 2,
-    owasp_zap: 3,
+    owasp_zap: 2,
   },
+  trend_7d: [3, 5, 2, 8, 4, 6, 3],
 };
 
 interface PageProps {
@@ -27,20 +30,59 @@ interface PageProps {
   setSidebarState: (state: SidebarState) => void;
   user?: { email: string; name: string } | null;
   onLogout?: () => void;
+  onNavigate?: (tab: string) => void;
+  unreadCount?: number;
 }
 
-export const DashboardPage: React.FC<PageProps> = ({ sidebarState, setSidebarState, user, onLogout }) => {
+const ENGINE_META: Array<{ key: string; label: string; color: string }> = [
+  { key: 'semgrep', label: 'Semgrep (SAST - Código)', color: '#0969da' },
+  { key: 'trivy', label: 'Trivy (SCA / IaC / CVEs)', color: '#9a6700' },
+  { key: 'gitleaks', label: 'GitLeaks (Secretos & Keys)', color: '#cf222e' },
+  { key: 'owasp_zap', label: 'OWASP ZAP (DAST - APIs)', color: '#8250df' },
+];
+
+const actionColor = (action: string) => {
+  if (action.includes('SECRET') || action.includes('GATE_BLOCK')) return '#cf222e';
+  if (action.includes('AI')) return '#8250df';
+  if (action.includes('SCAN')) return '#0969da';
+  return '#656d76';
+};
+
+export const DashboardPage: React.FC<PageProps> = ({
+  sidebarState,
+  setSidebarState,
+  user,
+  onLogout,
+  onNavigate,
+  unreadCount,
+}) => {
   const [stats, setStats] = useState<DashboardStats>(DEFAULT_STATS);
+  const [heatmap, setHeatmap] = useState<HeatmapData>(buildFallbackHeatmap());
+  const [events, setEvents] = useState<AuditEvent[]>(FALLBACK_AUDIT);
 
   useEffect(() => {
     fetchStats()
       .then((data) => {
         if (data) setStats(data);
       })
-      .catch(() => {
-        setStats(DEFAULT_STATS);
-      });
+      .catch(() => setStats(DEFAULT_STATS));
+
+    fetchHeatmap()
+      .then((data) => {
+        if (data?.cells?.length) setHeatmap(data);
+      })
+      .catch(() => setHeatmap(buildFallbackHeatmap()));
+
+    fetchAuditLog()
+      .then((data) => {
+        if (data?.length) setEvents(data);
+      })
+      .catch(() => setEvents(FALLBACK_AUDIT));
   }, []);
+
+  const engineTotal = Object.values(stats.findings_by_engine || {}).reduce((a, b) => a + b, 0) || 1;
+  const trend = stats.trend_7d && stats.trend_7d.length ? stats.trend_7d : DEFAULT_STATS.trend_7d!;
+  const trendMax = Math.max(...trend, 1);
 
   return (
     <div>
@@ -52,9 +94,10 @@ export const DashboardPage: React.FC<PageProps> = ({ sidebarState, setSidebarSta
         setSidebarState={setSidebarState}
         user={user}
         onLogout={onLogout}
+        onNavigate={onNavigate}
+        unreadCount={unreadCount}
       />
 
-      {/* GitHub/Datadog Light Metrics Cards Grid */}
       <div className="stats-grid">
         <div className="stat-card">
           <div>
@@ -97,9 +140,7 @@ export const DashboardPage: React.FC<PageProps> = ({ sidebarState, setSidebarSta
         </div>
       </div>
 
-      {/* Main Grid: Engines Distribution + Architecture Pipeline */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-        {/* Scanner Engine Distribution */}
+      <div className="split-grid">
         <div className="card">
           <div className="card-header">
             <div className="card-title">
@@ -109,49 +150,24 @@ export const DashboardPage: React.FC<PageProps> = ({ sidebarState, setSidebarSta
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '0.5rem' }}>
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem', fontSize: '0.85rem' }}>
-                <span style={{ color: '#1f2328', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>Semgrep (SAST - Código)</span>
-                <span style={{ color: '#0969da', fontWeight: 600 }}>{stats.findings_by_engine.semgrep || 5} hallazgos</span>
-              </div>
-              <div style={{ width: '100%', height: '8px', background: '#e5e7eb', borderRadius: '4px', overflow: 'hidden' }}>
-                <div style={{ width: '45%', height: '100%', background: '#0969da' }}></div>
-              </div>
-            </div>
-
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem', fontSize: '0.85rem' }}>
-                <span style={{ color: '#1f2328', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>Trivy (SCA / IaC / CVEs)</span>
-                <span style={{ color: '#9a6700', fontWeight: 600 }}>{stats.findings_by_engine.trivy || 4} hallazgos</span>
-              </div>
-              <div style={{ width: '100%', height: '8px', background: '#e5e7eb', borderRadius: '4px', overflow: 'hidden' }}>
-                <div style={{ width: '35%', height: '100%', background: '#9a6700' }}></div>
-              </div>
-            </div>
-
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem', fontSize: '0.85rem' }}>
-                <span style={{ color: '#1f2328', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>GitLeaks (Secretos & Keys)</span>
-                <span style={{ color: '#cf222e', fontWeight: 600 }}>{stats.findings_by_engine.gitleaks || 2} hallazgos</span>
-              </div>
-              <div style={{ width: '100%', height: '8px', background: '#e5e7eb', borderRadius: '4px', overflow: 'hidden' }}>
-                <div style={{ width: '25%', height: '100%', background: '#cf222e' }}></div>
-              </div>
-            </div>
-
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem', fontSize: '0.85rem' }}>
-                <span style={{ color: '#1f2328', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>OWASP ZAP (DAST - APIs)</span>
-                <span style={{ color: '#8250df', fontWeight: 600 }}>{stats.findings_by_engine.owasp_zap || 3} hallazgos</span>
-              </div>
-              <div style={{ width: '100%', height: '8px', background: '#e5e7eb', borderRadius: '4px', overflow: 'hidden' }}>
-                <div style={{ width: '30%', height: '100%', background: '#8250df' }}></div>
-              </div>
-            </div>
+            {ENGINE_META.map((engine) => {
+              const count = stats.findings_by_engine?.[engine.key] || 0;
+              const width = Math.max(6, Math.round((count / engineTotal) * 100));
+              return (
+                <div key={engine.key}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem', fontSize: '0.85rem' }}>
+                    <span style={{ color: '#1f2328', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{engine.label}</span>
+                    <span style={{ color: engine.color, fontWeight: 600 }}>{count} hallazgos</span>
+                  </div>
+                  <div style={{ width: '100%', height: '8px', background: '#e5e7eb', borderRadius: '4px', overflow: 'hidden' }}>
+                    <div style={{ width: `${width}%`, height: '100%', background: engine.color }}></div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 
-        {/* System Pipeline Status */}
         <div className="card">
           <div className="card-header">
             <div className="card-title">
@@ -192,6 +208,61 @@ export const DashboardPage: React.FC<PageProps> = ({ sidebarState, setSidebarSta
                 <div style={{ color: '#656d76', fontSize: '0.75rem' }}>Triaje de alcanzabilidad y remediación en tiempo real</div>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="split-grid">
+        <div className="card">
+          <div className="card-header">
+            <div className="card-title">
+              <Flame size={18} color="#cf222e" />
+              <span>Mapa de calor de hallazgos (12 semanas)</span>
+            </div>
+            <span style={{ fontSize: '0.75rem', color: '#656d76', fontWeight: 600 }}>
+              Intensidad = volumen de detección
+            </span>
+          </div>
+          <HeatmapCalendar data={heatmap} />
+        </div>
+
+        <div className="card">
+          <div className="card-header">
+            <div className="card-title">
+              <Activity size={18} color="#0969da" />
+              <span>Bitácora de eventos</span>
+            </div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.45rem' }}>
+                <span style={{ fontSize: '0.75rem', color: '#656d76', fontWeight: 600 }}>Tendencia 7 días</span>
+                <span style={{ fontSize: '0.75rem', color: '#656d76' }}>hallazgos / día</span>
+              </div>
+              <div className="trend-bars">
+                {trend.map((value, idx) => (
+                  <div key={idx} className="trend-col">
+                    <div className="trend-bar" style={{ height: `${Math.max(12, (value / trendMax) * 72)}px` }} />
+                    <span className="trend-label">{value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {events.slice(0, 5).map((event) => (
+              <div key={event.id} className="activity-item">
+                <span className="activity-dot" style={{ background: actionColor(event.action) }} />
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ display: 'flex', gap: '0.45rem', alignItems: 'baseline', flexWrap: 'wrap' }}>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', fontWeight: 700, color: actionColor(event.action) }}>
+                      {event.action}
+                    </span>
+                    <span style={{ fontSize: '0.75rem', color: '#1f2328', fontWeight: 600 }}>{event.target}</span>
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: '#656d76', marginTop: '0.15rem' }}>{event.detail}</div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>

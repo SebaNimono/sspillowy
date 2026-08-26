@@ -1,32 +1,47 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Sidebar, SidebarState } from './components/Sidebar';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { RepositoriesPage } from './pages/RepositoriesPage';
 import { FindingsPage } from './pages/FindingsPage';
 import { SecurityGatesPage } from './pages/SecurityGatesPage';
+import { ScansPage } from './pages/ScansPage';
+import { NotificationsPage } from './pages/NotificationsPage';
+import { ReportsPage } from './pages/ReportsPage';
+import { fetchNotifications } from './api/client';
+import { FALLBACK_NOTIFICATIONS } from './api/fallbacks';
 import './styles/index.css';
 
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
+  const [unreadCount, setUnreadCount] = useState(0);
 
-  // Authenticated user session state
   const [user, setUser] = useState<{ email: string; name: string } | null>(() => {
     try {
       const saved = localStorage.getItem('sspillowy_user');
       if (saved) return JSON.parse(saved);
-    } catch (e) {
+    } catch {
       // ignore
     }
     return null;
   });
+
+  const refreshUnread = () => {
+    fetchNotifications()
+      .then((data) => setUnreadCount((data || []).filter((n) => !n.read).length))
+      .catch(() => setUnreadCount(FALLBACK_NOTIFICATIONS.filter((n) => !n.read).length));
+  };
+
+  useEffect(() => {
+    if (user) refreshUnread();
+  }, [user, activeTab]);
 
   const handleLoginSuccess = (email: string, name: string) => {
     const newUser = { email, name };
     setUser(newUser);
     try {
       localStorage.setItem('sspillowy_user', JSON.stringify(newUser));
-    } catch (e) {
+    } catch {
       // ignore
     }
   };
@@ -35,19 +50,18 @@ export const App: React.FC = () => {
     setUser(null);
     try {
       localStorage.removeItem('sspillowy_user');
-    } catch (e) {
+    } catch {
       // ignore
     }
   };
 
-  // Initialize sidebarState from localStorage
   const [sidebarState, setSidebarStateInternal] = useState<SidebarState>(() => {
     try {
       const saved = localStorage.getItem('sspillowy_sidebar_state');
       if (saved === 'expanded' || saved === 'collapsed' || saved === 'hidden') {
         return saved as SidebarState;
       }
-    } catch (e) {
+    } catch {
       // ignore
     }
     return 'expanded';
@@ -57,7 +71,7 @@ export const App: React.FC = () => {
     setSidebarStateInternal(newState);
     try {
       localStorage.setItem('sspillowy_sidebar_state', newState);
-    } catch (e) {
+    } catch {
       // ignore
     }
   };
@@ -73,23 +87,37 @@ export const App: React.FC = () => {
     }
   };
 
-  // If user is not logged in, display the minimalist GitHub-style login page
   if (!user) {
     return <LoginPage onLoginSuccess={handleLoginSuccess} />;
   }
 
+  const pageProps = {
+    sidebarState,
+    setSidebarState,
+    user,
+    onLogout: handleLogout,
+    onNavigate: setActiveTab,
+    unreadCount,
+  };
+
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <DashboardPage sidebarState={sidebarState} setSidebarState={setSidebarState} user={user} onLogout={handleLogout} />;
+        return <DashboardPage {...pageProps} />;
       case 'repositories':
-        return <RepositoriesPage sidebarState={sidebarState} setSidebarState={setSidebarState} user={user} onLogout={handleLogout} />;
+        return <RepositoriesPage {...pageProps} />;
       case 'findings':
-        return <FindingsPage sidebarState={sidebarState} setSidebarState={setSidebarState} user={user} onLogout={handleLogout} />;
+        return <FindingsPage {...pageProps} />;
+      case 'scans':
+        return <ScansPage {...pageProps} />;
       case 'gates':
-        return <SecurityGatesPage sidebarState={sidebarState} setSidebarState={setSidebarState} user={user} onLogout={handleLogout} />;
+        return <SecurityGatesPage {...pageProps} />;
+      case 'notifications':
+        return <NotificationsPage {...pageProps} onNotificationsChange={refreshUnread} />;
+      case 'reports':
+        return <ReportsPage {...pageProps} />;
       default:
-        return <DashboardPage sidebarState={sidebarState} setSidebarState={setSidebarState} user={user} onLogout={handleLogout} />;
+        return <DashboardPage {...pageProps} />;
     }
   };
 

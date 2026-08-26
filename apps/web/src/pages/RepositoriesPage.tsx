@@ -49,9 +49,11 @@ interface PageProps {
   setSidebarState: (state: SidebarState) => void;
   user?: { email: string; name: string } | null;
   onLogout?: () => void;
+  onNavigate?: (tab: string) => void;
+  unreadCount?: number;
 }
 
-export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebarState, user, onLogout }) => {
+export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebarState, user, onLogout, onNavigate, unreadCount }) => {
   const [repos, setRepos] = useState<Repository[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -157,6 +159,8 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
         setSidebarState={setSidebarState}
         user={user}
         onLogout={onLogout}
+        onNavigate={onNavigate}
+        unreadCount={unreadCount}
       />
 
       {scanStatus && (

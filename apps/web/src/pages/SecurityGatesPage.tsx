@@ -20,9 +20,11 @@ interface PageProps {
   setSidebarState: (state: SidebarState) => void;
   user?: { email: string; name: string } | null;
   onLogout?: () => void;
+  onNavigate?: (tab: string) => void;
+  unreadCount?: number;
 }
 
-export const SecurityGatesPage: React.FC<PageProps> = ({ sidebarState, setSidebarState, user, onLogout }) => {
+export const SecurityGatesPage: React.FC<PageProps> = ({ sidebarState, setSidebarState, user, onLogout, onNavigate, unreadCount }) => {
   const [policy, setPolicy] = useState<SecurityGatePolicy>(DEFAULT_POLICY);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
@@ -65,6 +67,8 @@ export const SecurityGatesPage: React.FC<PageProps> = ({ sidebarState, setSideba
         setSidebarState={setSidebarState}
         user={user}
         onLogout={onLogout}
+        onNavigate={onNavigate}
+        unreadCount={unreadCount}
       />
 
       <div className="card">

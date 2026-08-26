@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Activity, Bell, Smartphone, Menu, ChevronRight, LogOut } from 'lucide-react';
 import { SidebarState } from './Sidebar';
+import { fetchNotifications, NotificationItem } from '../api/client';
+import { FALLBACK_NOTIFICATIONS } from '../api/fallbacks';
 
 interface HeaderProps {
   title: string;
@@ -10,6 +12,8 @@ interface HeaderProps {
   setSidebarState: (state: SidebarState) => void;
   user?: { email: string; name: string } | null;
   onLogout?: () => void;
+  onNavigate?: (tab: string) => void;
+  unreadCount?: number;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -20,9 +24,19 @@ export const Header: React.FC<HeaderProps> = ({
   setSidebarState,
   user,
   onLogout,
+  onNavigate,
+  unreadCount,
 }) => {
   const [hoveringMenuBtn, setHoveringMenuBtn] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showNotifMenu, setShowNotifMenu] = useState(false);
+  const [preview, setPreview] = useState<NotificationItem[]>([]);
+
+  useEffect(() => {
+    fetchNotifications()
+      .then((data) => setPreview((data || []).slice(0, 4)))
+      .catch(() => setPreview(FALLBACK_NOTIFICATIONS.slice(0, 4)));
+  }, [unreadCount]);
 
   return (
     <header className="top-bar">
@@ -128,12 +142,44 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Notifications Button */}
-        <button
-          className="btn btn-secondary"
-          style={{ padding: '0.45rem', borderRadius: '6px' }}
-        >
-          <Bell size={16} color="#656d76" />
-        </button>
+        <div style={{ position: 'relative' }}>
+          <button
+            className="btn btn-secondary"
+            style={{ padding: '0.45rem', borderRadius: '6px', position: 'relative' }}
+            onClick={() => setShowNotifMenu(!showNotifMenu)}
+          >
+            <Bell size={16} color="#656d76" />
+            {(unreadCount || 0) > 0 && (
+              <span className="notif-badge">{unreadCount}</span>
+            )}
+          </button>
+
+          {showNotifMenu && (
+            <div className="header-dropdown" style={{ width: '340px' }}>
+              <div style={{ padding: '0.55rem 0.75rem', borderBottom: '1px solid #d0d7de', display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ fontWeight: 600, fontSize: '0.8rem' }}>Notificaciones</span>
+                <button
+                  type="button"
+                  onClick={() => { setShowNotifMenu(false); onNavigate?.('notifications'); }}
+                  style={{ background: 'none', border: 'none', color: '#0969da', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}
+                >
+                  Ver todas
+                </button>
+              </div>
+              {preview.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => { setShowNotifMenu(false); onNavigate?.(item.finding_id ? 'findings' : 'notifications'); }}
+                  className="notif-preview"
+                >
+                  <div style={{ fontWeight: 600, fontSize: '0.8rem', color: '#1f2328' }}>{item.title}</div>
+                  <div style={{ fontSize: '0.72rem', color: '#656d76', marginTop: '0.15rem' }}>{item.message}</div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* User Profile Pill & Dropdown Menu */}
         {user && (

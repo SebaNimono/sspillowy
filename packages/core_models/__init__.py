@@ -5,6 +5,7 @@ from .schemas import (
     FindingBase,
     FindingCreate,
     FindingResponse,
+    FindingStatusUpdate,
     RepositoryBase,
     RepositoryCreate,
     RepositoryResponse,
@@ -12,6 +13,13 @@ from .schemas import (
     ScanResponse,
     SecurityGatePolicy,
     DashboardStats,
+    NotificationType,
+    NotificationResponse,
+    AuditEventResponse,
+    HeatmapCell,
+    HeatmapResponse,
+    IsoControl,
+    ComplianceReport,
 )
 
 __all__ = [
@@ -21,6 +29,7 @@ __all__ = [
     "FindingBase",
     "FindingCreate",
     "FindingResponse",
+    "FindingStatusUpdate",
     "RepositoryBase",
     "RepositoryCreate",
     "RepositoryResponse",
@@ -28,4 +37,11 @@ __all__ = [
     "ScanResponse",
     "SecurityGatePolicy",
     "DashboardStats",
+    "NotificationType",
+    "NotificationResponse",
+    "AuditEventResponse",
+    "HeatmapCell",
+    "HeatmapResponse",
+    "IsoControl",
+    "ComplianceReport",
 ]

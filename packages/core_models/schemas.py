@@ -33,6 +33,7 @@ class FindingBase(BaseModel):
     line_number: Optional[int] = None
     cwe: Optional[str] = None
     owasp_category: Optional[str] = None
+    iso_control: Optional[str] = None
 
 class FindingCreate(FindingBase):
     repository_id: str
@@ -116,3 +117,69 @@ class DashboardStats(BaseModel):
     low_findings: int
     secrets_leaked_prevented: int
     findings_by_engine: dict
+    trend_7d: List[int] = Field(default_factory=list)
+
+
+class FindingStatusUpdate(BaseModel):
+    status: FindingStatus
+    note: Optional[str] = None
+
+
+class NotificationType(str, Enum):
+    SECRET_LEAK = "SECRET_LEAK"
+    CRITICAL_FINDING = "CRITICAL_FINDING"
+    GATE_BLOCK = "GATE_BLOCK"
+    SCAN_COMPLETED = "SCAN_COMPLETED"
+    PULSE_BYPASS = "PULSE_BYPASS"
+    AI_TRIAGE = "AI_TRIAGE"
+
+
+class NotificationResponse(BaseModel):
+    id: str
+    type: NotificationType
+    severity: SeverityLevel
+    title: str
+    message: str
+    repository_id: Optional[str] = None
+    finding_id: Optional[str] = None
+    read: bool = False
+    created_at: datetime
+
+
+class AuditEventResponse(BaseModel):
+    id: str
+    actor: str
+    action: str
+    target: str
+    detail: str
+    created_at: datetime
+
+
+class HeatmapCell(BaseModel):
+    date: str
+    count: int
+    level: int
+
+
+class HeatmapResponse(BaseModel):
+    cells: List[HeatmapCell]
+    max_count: int
+    total_findings_period: int
+    weeks: int = 12
+
+
+class IsoControl(BaseModel):
+    code: str
+    title: str
+    status: str
+    related_engine: Optional[str] = None
+    open_findings: int = 0
+
+
+class ComplianceReport(BaseModel):
+    standard: str
+    period: str
+    health_score: int
+    controls: List[IsoControl]
+    generated_at: datetime
+    evidence_pack_ready: bool = True

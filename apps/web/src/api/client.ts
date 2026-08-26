@@ -24,6 +24,7 @@ export interface Finding {
   line_number?: number;
   cwe?: string;
   owasp_category?: string;
+  iso_control?: string;
   status: 'OPEN' | 'IN_REVIEW' | 'ACCEPTED_RISK' | 'FIXED' | 'FALSE_POSITIVE';
   ai_triaged: boolean;
   ai_confidence?: number;
@@ -43,6 +44,7 @@ export interface DashboardStats {
   low_findings: number;
   secrets_leaked_prevented: number;
   findings_by_engine: Record<string, number>;
+  trend_7d?: number[];
 }
 
 export interface SecurityGatePolicy {
@@ -55,62 +57,157 @@ export interface SecurityGatePolicy {
   enabled: boolean;
 }
 
+export interface Scan {
+  id: string;
+  repository_id: string;
+  status: string;
+  triggered_by: string;
+  branch: string;
+  total_findings: number;
+  critical_count: number;
+  high_count: number;
+  medium_count: number;
+  low_count: number;
+  created_at: string;
+  completed_at?: string | null;
+}
+
+export interface HeatmapCell {
+  date: string;
+  count: number;
+  level: number;
+}
+
+export interface HeatmapData {
+  cells: HeatmapCell[];
+  max_count: number;
+  total_findings_period: number;
+  weeks: number;
+}
+
+export interface AuditEvent {
+  id: string;
+  actor: string;
+  action: string;
+  target: string;
+  detail: string;
+  created_at: string;
+}
+
+export interface NotificationItem {
+  id: string;
+  type: 'SECRET_LEAK' | 'CRITICAL_FINDING' | 'GATE_BLOCK' | 'SCAN_COMPLETED' | 'PULSE_BYPASS' | 'AI_TRIAGE';
+  severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'INFO';
+  title: string;
+  message: string;
+  repository_id?: string;
+  finding_id?: string;
+  read: boolean;
+  created_at: string;
+}
+
+export interface IsoControl {
+  code: string;
+  title: string;
+  status: string;
+  related_engine?: string | null;
+  open_findings: number;
+}
+
+export interface ComplianceReport {
+  standard: string;
+  period: string;
+  health_score: number;
+  controls: IsoControl[];
+  generated_at: string;
+  evidence_pack_ready: boolean;
+}
+
 const API_BASE = '/api/v1';
 
-export async function fetchStats(): Promise<DashboardStats> {
-  const res = await fetch(`${API_BASE}/stats`);
-  if (!res.ok) throw new Error('Error al cargar estadísticas');
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, init);
+  if (!res.ok) throw new Error(`Error de API (${res.status})`);
   return res.json();
+}
+
+export async function fetchStats(): Promise<DashboardStats> {
+  return request('/stats');
 }
 
 export async function fetchRepositories(): Promise<Repository[]> {
-  const res = await fetch(`${API_BASE}/repositories`);
-  if (!res.ok) throw new Error('Error al cargar repositorios');
-  return res.json();
+  return request('/repositories');
 }
 
 export async function createRepository(name: string, url: string, branch: string): Promise<Repository> {
-  const res = await fetch(`${API_BASE}/repositories`, {
+  return request('/repositories', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, url, branch }),
   });
-  if (!res.ok) throw new Error('Error al agregar repositorio');
-  return res.json();
 }
 
-export async function fetchFindings(engine?: string, severity?: string): Promise<Finding[]> {
+export async function fetchFindings(engine?: string, severity?: string, statusFilter?: string): Promise<Finding[]> {
   const params = new URLSearchParams();
   if (engine) params.append('engine', engine);
   if (severity) params.append('severity', severity);
-  
-  const res = await fetch(`${API_BASE}/findings?${params.toString()}`);
-  if (!res.ok) throw new Error('Error al cargar hallazgos');
-  return res.json();
+  if (statusFilter) params.append('status', statusFilter);
+  const qs = params.toString();
+  return request(`/findings${qs ? `?${qs}` : ''}`);
 }
 
-export async function triggerScan(repositoryId: string): Promise<any> {
-  const res = await fetch(`${API_BASE}/scans`, {
+export async function updateFindingStatus(findingId: string, status: Finding['status'], note?: string): Promise<Finding> {
+  return request(`/findings/${findingId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status, note }),
+  });
+}
+
+export async function triggerScan(repositoryId: string): Promise<Scan> {
+  return request('/scans', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ repository_id: repositoryId, triggered_by: 'web_hub' }),
   });
-  if (!res.ok) throw new Error('Error al iniciar escaneo');
-  return res.json();
+}
+
+export async function fetchScans(): Promise<Scan[]> {
+  return request('/scans');
 }
 
 export async function fetchSecurityGate(): Promise<SecurityGatePolicy> {
-  const res = await fetch(`${API_BASE}/security-gates`);
-  if (!res.ok) throw new Error('Error al cargar políticas');
-  return res.json();
+  return request('/security-gates');
 }
 
 export async function updateSecurityGate(policy: SecurityGatePolicy): Promise<SecurityGatePolicy> {
-  const res = await fetch(`${API_BASE}/security-gates`, {
+  return request('/security-gates', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(policy),
   });
-  if (!res.ok) throw new Error('Error al actualizar política');
-  return res.json();
+}
+
+export async function fetchHeatmap(): Promise<HeatmapData> {
+  return request('/heatmap');
+}
+
+export async function fetchAuditLog(): Promise<AuditEvent[]> {
+  return request('/audit-log');
+}
+
+export async function fetchNotifications(unreadOnly = false): Promise<NotificationItem[]> {
+  return request(`/notifications${unreadOnly ? '?unread_only=true' : ''}`);
+}
+
+export async function markNotificationRead(id: string): Promise<NotificationItem> {
+  return request(`/notifications/${id}/read`, { method: 'POST' });
+}
+
+export async function markAllNotificationsRead(): Promise<{ updated: number }> {
+  return request('/notifications/read-all', { method: 'POST' });
+}
+
+export async function fetchComplianceReport(): Promise<ComplianceReport> {
+  return request('/compliance/iso27001');
 }

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, FolderGit2, ShieldAlert, Sliders, Minus, Plus, X } from 'lucide-react';
+import { LayoutDashboard, FolderGit2, ShieldAlert, Sliders, Minus, Plus, X, Radar, Bell, FileArchive } from 'lucide-react';
 
 export type SidebarState = 'expanded' | 'collapsed' | 'hidden';
 
@@ -26,7 +26,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'dashboard', label: 'Dashboard General', icon: LayoutDashboard },
     { id: 'repositories', label: 'Repositorios', icon: FolderGit2 },
     { id: 'findings', label: 'Matriz de Hallazgos', icon: ShieldAlert },
+    { id: 'scans', label: 'Escaneos', icon: Radar },
     { id: 'gates', label: 'Security Gates (CI/CD)', icon: Sliders },
+    { id: 'notifications', label: 'Notificaciones', icon: Bell },
+    { id: 'reports', label: 'Informes ISO 27001', icon: FileArchive },
   ];
 
   return (
