@@ -3,10 +3,16 @@ import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { useGSAP } from '@gsap/react';
 import { prefersReducedMotion } from '../motion/siteMotion';
+import { BrandMarks, type BrandKey } from './BrandMarks';
 
 gsap.registerPlugin(ScrollTrigger);
 
-export type PipelineStep = { n: string; title: string; text: string };
+export type PipelineStep = {
+  n: string;
+  title: string;
+  text: string;
+  marks?: readonly BrandKey[];
+};
 
 interface PipelineScrollSceneProps {
   steps: PipelineStep[];
@@ -32,14 +38,14 @@ export const PipelineScrollScene: React.FC<PipelineScrollSceneProps> = ({ steps 
 
       gsap.set(progress, { scaleX: 0, transformOrigin: 'left center' });
       stepRefs.current.forEach((el) => {
-        if (el) gsap.set(el, { opacity: 0.35, y: 6 });
+        if (el) gsap.set(el, { opacity: 0.4, y: 10 });
       });
 
       const tl = gsap.timeline({
         scrollTrigger: {
           trigger: root,
-          start: 'top 75%',
-          end: 'bottom 35%',
+          start: 'top 72%',
+          end: 'bottom 30%',
           scrub: 0.55,
         },
       });
@@ -79,9 +85,21 @@ export const PipelineScrollScene: React.FC<PipelineScrollSceneProps> = ({ steps 
               stepRefs.current[i] = el;
             }}
           >
-            <span>{step.n}</span>
+            <span className="site-pipeline-n">{step.n}</span>
             <strong>{step.title}</strong>
             <p>{step.text}</p>
+            {step.marks && step.marks.length > 0 && (
+              <div className="site-pipeline-marks" aria-hidden="true">
+                {step.marks.map((key) => {
+                  const Icon = BrandMarks[key];
+                  return (
+                    <i key={key} className="site-pipeline-mark">
+                      <Icon />
+                    </i>
+                  );
+                })}
+              </div>
+            )}
           </li>
         ))}
       </ol>

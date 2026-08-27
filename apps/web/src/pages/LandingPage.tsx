@@ -11,6 +11,7 @@ import { HeroMotion } from '../components/HeroMotion';
 import { PipelineScrollScene } from '../components/PipelineScrollScene';
 import { EngineOrchestrator } from '../components/EngineOrchestrator';
 import { ModuleMotionGrid } from '../components/ModuleMotionGrid';
+import { PrinciplesScene } from '../components/PrinciplesScene';
 import { motion, MotionConfig } from 'framer-motion';
 
 interface LandingPageProps {
@@ -21,11 +22,36 @@ interface LandingPageProps {
 }
 
 const steps = [
-  { n: '01', title: 'Disparador', text: 'Webhook de Git (push/PR) o un escaneo manual desde el Web Hub.' },
-  { n: '02', title: 'Workers', text: 'ARQ clona el repo y corre Semgrep, Trivy y GitLeaks en paralelo.' },
-  { n: '03', title: 'Normalización', text: 'Las salidas se unifican en un JSON común. Sin inventar hallazgos.' },
-  { n: '04', title: 'Triaje HITL', text: 'La IA propone alcanzabilidad y parche. Un auditor valida o descarta.' },
-  { n: '05', title: 'Gobernanza', text: 'Security Gate bloquea el pipeline. Pulse aprueba excepciones. Queda evidencia.' },
+  {
+    n: '01',
+    title: 'Disparador',
+    text: 'Webhook de Git (push/PR) o un escaneo manual desde el Web Hub.',
+    marks: ['github', 'gitlab'] as const,
+  },
+  {
+    n: '02',
+    title: 'Workers',
+    text: 'ARQ clona el repo y corre Semgrep, Trivy y GitLeaks en paralelo.',
+    marks: ['semgrep', 'trivy', 'gitleaks'] as const,
+  },
+  {
+    n: '03',
+    title: 'Normalización',
+    text: 'Las salidas se unifican en un JSON común. Sin inventar hallazgos.',
+    marks: ['cwe'] as const,
+  },
+  {
+    n: '04',
+    title: 'Triaje HITL',
+    text: 'La IA propone alcanzabilidad y parche. Un auditor valida o descarta.',
+    marks: ['hitl'] as const,
+  },
+  {
+    n: '05',
+    title: 'Gobernanza',
+    text: 'Security Gate bloquea el pipeline. Pulse aprueba excepciones. Queda evidencia.',
+    marks: ['iso'] as const,
+  },
 ];
 
 const modules = [
@@ -226,17 +252,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ user, onCuenta, onOpen
             <h2 className="site-h2 site-h2-dark">De un push a una decisión auditada</h2>
             <PipelineScrollScene steps={steps} />
             <div className="site-kicker site-kicker-spaced">Quién hace qué</div>
-            <ol className="site-principles site-principles-dark">
-              {principles.map((item, i) => (
-                <li key={item.k}>
-                  <span className="site-principle-n">0{i + 1}</span>
-                  <div>
-                    <strong>{item.k}</strong>
-                    <p>{item.v}</p>
-                  </div>
-                </li>
-              ))}
-            </ol>
+            <PrinciplesScene principles={principles} />
           </Reveal>
         </div>
       </section>
