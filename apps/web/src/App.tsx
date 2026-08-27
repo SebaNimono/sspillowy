@@ -11,7 +11,7 @@ import { NotificationsPage } from './pages/NotificationsPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { fetchNotifications, fetchAuthSession } from './api/client';
 import { FALLBACK_NOTIFICATIONS } from './api/fallbacks';
-import './styles/index.css';
+import { CookieBanner } from './components/CookieBanner';
 
 type AppView = 'site' | 'login' | 'console';
 
@@ -141,22 +141,36 @@ export const App: React.FC = () => {
 
   if (view === 'site') {
     return (
-      <LandingPage
-        user={user}
-        onCuenta={() => setView('login')}
-        onOpenConsole={() => setView('console')}
-        onLogout={handleLogout}
-      />
+      <>
+        <LandingPage
+          user={user}
+          onCuenta={() => setView('login')}
+          onOpenConsole={() => setView('console')}
+          onLogout={handleLogout}
+        />
+        <CookieBanner onPrivacy={() => setView('site')} />
+      </>
     );
   }
 
   if (view === 'login' || !user) {
     return (
-      <LoginPage
-        onLoginSuccess={handleLoginSuccess}
-        onBack={() => { setOauthError(null); setView('site'); }}
-        oauthError={oauthError}
-      />
+      <>
+        <LoginPage
+          onLoginSuccess={handleLoginSuccess}
+          onBack={() => { setOauthError(null); setView('site'); }}
+          oauthError={oauthError}
+        />
+        <CookieBanner
+          onPrivacy={() => {
+            setOauthError(null);
+            setView('site');
+            window.setTimeout(() => {
+              document.getElementById('privacidad')?.scrollIntoView({ behavior: 'smooth' });
+            }, 50);
+          }}
+        />
+      </>
     );
   }
 
@@ -208,6 +222,14 @@ export const App: React.FC = () => {
       >
         {renderContent()}
       </main>
+      <CookieBanner
+        onPrivacy={() => {
+          setView('site');
+          window.setTimeout(() => {
+            document.getElementById('privacidad')?.scrollIntoView({ behavior: 'smooth' });
+          }, 50);
+        }}
+      />
     </div>
   );
 };

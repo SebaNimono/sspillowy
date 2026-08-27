@@ -47,6 +47,11 @@
   padding: 0;
 }
 
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 64px;
+}
+
 body {
   background-color: var(--bg-canvas);
   color: var(--fg-default);
@@ -836,9 +841,9 @@ html {
 }
 
 .site-hero-copy h1 {
-  font-size: 1.85rem;
-  line-height: 1.25;
-  letter-spacing: -0.4px;
+  font-size: 2.15rem;
+  line-height: 1.2;
+  letter-spacing: -0.5px;
   color: #ffffff;
   margin: 0.55rem 0 0.85rem;
 }
@@ -937,8 +942,8 @@ html {
 }
 
 .site-h2 {
-  font-size: 1.35rem;
-  letter-spacing: -0.3px;
+  font-size: 1.55rem;
+  letter-spacing: -0.4px;
   margin: 0.4rem 0 1.25rem;
 }
 
@@ -1062,8 +1067,204 @@ html {
   padding: 0.05rem 0.3rem;
 }
 
+.site-modules {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+.site-modules article {
+  background: #ffffff;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  padding: 1.15rem 1.2rem;
+  border-top: 3px solid #0969da;
+}
+
+.site-modules article:nth-child(3n+2) {
+  border-top-color: #8250df;
+}
+
+.site-modules article:nth-child(3n) {
+  border-top-color: #1f883d;
+}
+
+.site-modules span {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+.site-modules h3 {
+  font-size: 0.98rem;
+  margin: 0.4rem 0 0.4rem;
+}
+
+.site-modules p {
+  color: var(--fg-muted);
+  font-size: 0.85rem;
+}
+
+.site-cta {
+  background: #1b1e2e;
+  border-top: 1px solid #2d334a;
+  color: #ffffff;
+}
+
+.site-cta .site-kicker {
+  color: #58a6ff;
+}
+
+.site-cta h2 {
+  font-size: 1.7rem;
+  letter-spacing: -0.4px;
+  max-width: 36rem;
+  margin: 0.4rem 0 0.75rem;
+}
+
+.site-cta p {
+  color: #c8cbe0;
+  max-width: 38rem;
+  font-size: 0.95rem;
+  margin-bottom: 1.15rem;
+}
+
+.site-privacy {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.site-privacy article {
+  background: #ffffff;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  padding: 1.15rem 1.25rem;
+}
+
+.site-privacy h3 {
+  font-size: 0.95rem;
+  margin-bottom: 0.4rem;
+}
+
+.site-privacy p {
+  color: var(--fg-muted);
+  font-size: 0.85rem;
+}
+
+.site-privacy .site-footer-link {
+  margin-top: 0.7rem;
+}
+
 .site-footer {
   border-top: 1px solid var(--border-default);
+  background: #ffffff;
+}
+
+.site-footer-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr 1fr;
+  gap: 1.5rem;
+  padding-top: 1.75rem;
+  padding-bottom: 2rem;
+}
+
+.site-footer-grid strong {
+  display: block;
+  font-size: 0.9rem;
+  margin-bottom: 0.4rem;
+}
+
+.site-footer-grid p {
+  color: var(--fg-muted);
+  font-size: 0.78rem;
+  max-width: 16rem;
+}
+
+.site-footer-grid span {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  margin-bottom: 0.55rem;
+}
+
+.site-footer-grid a,
+.site-footer-grid button {
+  display: block;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0 0 0.35rem;
+  color: #0969da;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  text-decoration: none;
+  font-family: inherit;
+}
+
+.site-footer-grid a:hover,
+.site-footer-grid button:hover {
+  text-decoration: underline;
+}
+
+.cookie-banner {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 80;
+  padding: 0.85rem 1.25rem 1rem;
+  background: rgba(246, 248, 250, 0.96);
+  border-top: 1px solid var(--border-default);
+  box-shadow: 0 -8px 24px rgba(31, 35, 40, 0.08);
+}
+
+.cookie-banner-inner {
+  max-width: 1080px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+}
+
+.cookie-banner strong {
+  display: block;
+  font-size: 0.85rem;
+  margin-bottom: 0.2rem;
+}
+
+.cookie-banner p {
+  color: var(--fg-muted);
+  font-size: 0.8rem;
+  max-width: 46rem;
+  line-height: 1.45;
+}
+
+.cookie-inline {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #0969da;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: inherit;
+  font-family: inherit;
+  text-decoration: underline;
+}
+
+.cookie-banner-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
 }
 
 .site-footer-inner {
@@ -1356,8 +1557,20 @@ html {
   .site-docs,
   .site-services,
   .site-facts-row,
-  .site-principles {
+  .site-principles,
+  .site-modules,
+  .site-privacy,
+  .site-footer-grid {
     grid-template-columns: 1fr;
+  }
+
+  .site-hero-copy h1 {
+    font-size: 1.7rem;
+  }
+
+  .cookie-banner-inner {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .site-fact {
