@@ -46,10 +46,10 @@ export const AnimatedBackground: React.FC<AnimatedBackgroundProps> = ({ containe
     const dark = contained;
     const lanes = dark
       ? [
-          { label: 'SAST', color: '#58a6ff' },
-          { label: 'SCA', color: '#8250df' },
-          { label: 'SECRETS', color: '#f85149' },
-          { label: 'DAST', color: '#3fb950' },
+          { label: 'SAST', color: '#8b949e' },
+          { label: 'SCA', color: '#6e7681' },
+          { label: 'SECRETS', color: '#8b949e' },
+          { label: 'DAST', color: '#58a6ff' },
         ]
       : [
           { label: 'SAST', color: '#0969da' },
@@ -87,7 +87,7 @@ export const AnimatedBackground: React.FC<AnimatedBackgroundProps> = ({ containe
     const render = () => {
       ctx.clearRect(0, 0, width, height);
 
-      const grid = dark ? 'rgba(88, 166, 255, 0.07)' : 'rgba(208, 215, 222, 0.55)';
+      const grid = dark ? 'rgba(139, 148, 158, 0.14)' : 'rgba(208, 215, 222, 0.55)';
       ctx.strokeStyle = grid;
       ctx.lineWidth = 1;
       const gridSize = 32;
@@ -109,7 +109,7 @@ export const AnimatedBackground: React.FC<AnimatedBackgroundProps> = ({ containe
 
       lanes.forEach((lane, i) => {
         const y = padY + (usable / (lanes.length - 1 || 1)) * i;
-        ctx.strokeStyle = dark ? 'rgba(88, 166, 255, 0.18)' : 'rgba(9, 105, 218, 0.12)';
+        ctx.strokeStyle = dark ? 'rgba(139, 148, 158, 0.22)' : 'rgba(9, 105, 218, 0.12)';
         ctx.lineWidth = 1;
         ctx.setLineDash([4, 8]);
         ctx.beginPath();
@@ -140,9 +140,9 @@ export const AnimatedBackground: React.FC<AnimatedBackgroundProps> = ({ containe
       if (dark) {
         scanX = (scanX + 0.9) % (width + 80);
         const grad = ctx.createLinearGradient(scanX - 40, 0, scanX + 40, 0);
-        grad.addColorStop(0, 'rgba(88, 166, 255, 0)');
-        grad.addColorStop(0.5, 'rgba(88, 166, 255, 0.07)');
-        grad.addColorStop(1, 'rgba(88, 166, 255, 0)');
+        grad.addColorStop(0, 'rgba(139, 148, 158, 0)');
+        grad.addColorStop(0.5, 'rgba(139, 148, 158, 0.08)');
+        grad.addColorStop(1, 'rgba(139, 148, 158, 0)');
         ctx.fillStyle = grad;
         ctx.fillRect(scanX - 40, 0, 80, height);
       }

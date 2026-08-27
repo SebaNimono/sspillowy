@@ -7,6 +7,7 @@ import { CountUp } from '../components/CountUp';
 import { ScrollProgress } from '../components/ScrollProgress';
 import { ScanTerminal } from '../components/ScanTerminal';
 import { HubPreview } from '../components/HubPreview';
+import { motion, MotionConfig } from 'framer-motion';
 
 interface LandingPageProps {
   user: { email: string; name: string } | null;
@@ -133,6 +134,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ user, onCuenta, onOpen
   };
 
   return (
+    <MotionConfig reducedMotion="user">
     <div className="site">
       <ScrollProgress />
       <header className="site-nav">
@@ -245,15 +247,27 @@ export const LandingPage: React.FC<LandingPageProps> = ({ user, onCuenta, onOpen
           <Reveal>
             <div className="site-kicker">Flujo</div>
             <h2 className="site-h2 site-h2-dark">De un push a una decisión auditada</h2>
-            <ol className="site-pipeline">
+            <motion.ol
+              className="site-pipeline"
+              initial="hidden"
+              whileInView="show"
+              viewport={{ once: true, margin: '-60px' }}
+              variants={{ show: { transition: { staggerChildren: 0.08 } } }}
+            >
               {steps.map((step) => (
-                <li key={step.n}>
+                <motion.li
+                  key={step.n}
+                  variants={{
+                    hidden: { opacity: 0, y: 10 },
+                    show: { opacity: 1, y: 0, transition: { duration: 0.35 } },
+                  }}
+                >
                   <span>{step.n}</span>
                   <strong>{step.title}</strong>
                   <p>{step.text}</p>
-                </li>
+                </motion.li>
               ))}
-            </ol>
+            </motion.ol>
             <div className="site-kicker site-kicker-spaced">Quién hace qué</div>
             <ol className="site-principles site-principles-dark">
               {principles.map((item, i) => (
@@ -471,5 +485,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ user, onCuenta, onOpen
         </div>
       </footer>
     </div>
+    </MotionConfig>
   );
 };
