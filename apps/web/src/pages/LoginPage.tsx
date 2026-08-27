@@ -284,7 +284,19 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oa
                 Contraseña
               </label>
               {!isRegister && (
-                <a href="#forgot" onClick={(e) => { e.preventDefault(); handleOAuthClick('Recuperación de Clave'); }} style={{ fontSize: '0.75rem', color: '#0969da', textDecoration: 'none' }}>
+                <a
+                  href="#forgot"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setToast({
+                      id: Date.now().toString(),
+                      type: 'info',
+                      title: 'Recuperación de clave',
+                      message: 'El alta y el acceso van por Google, GitHub, GitLab o Microsoft. El formulario de correo es solo demo.',
+                    });
+                  }}
+                  style={{ fontSize: '0.75rem', color: '#0969da', textDecoration: 'none' }}
+                >
                   ¿Olvidaste tu clave?
                 </a>
               )}
