@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { motion } from 'framer-motion';
 import { LiveOpsPanel } from './LiveOpsPanel';
 
 export const HubPreview: React.FC = () => {
@@ -13,18 +14,37 @@ export const HubPreview: React.FC = () => {
           Panel en vivo: los hallazgos entran en cola. El móvil no sustituye la auditoría; firma excepciones cuando el pipeline está bloqueado.
         </p>
         <div className="site-pane-switch" role="tablist" aria-label="Capa">
-          <button type="button" role="tab" aria-selected={pane === 'hub'} className={pane === 'hub' ? 'is-on' : ''} onClick={() => setPane('hub')}>
-            Web Hub
-          </button>
-          <button type="button" role="tab" aria-selected={pane === 'pulse'} className={pane === 'pulse' ? 'is-on' : ''} onClick={() => setPane('pulse')}>
-            Pulse
-          </button>
+          {(['hub', 'pulse'] as const).map((key) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={pane === key}
+              className={pane === key ? 'is-on' : ''}
+              onClick={() => setPane(key)}
+            >
+              {pane === key && (
+                <motion.span
+                  layoutId="hub-pane-indicator"
+                  className="site-pane-indicator"
+                  transition={{ type: 'spring', stiffness: 480, damping: 34 }}
+                />
+              )}
+              {key === 'hub' ? 'Web Hub' : 'Pulse'}
+            </button>
+          ))}
         </div>
-        <p className="site-showcase-note">
+        <motion.p
+          key={pane}
+          className="site-showcase-note"
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.25 }}
+        >
           {pane === 'hub'
             ? 'Repositorios, matriz HITL, mapa de calor, gates e informe ISO/IEC 27001:2022.'
             : 'Push ante crítica o secreto y bypass biométrico. En construcción; el Hub ya reserva la capa.'}
-        </p>
+        </motion.p>
       </div>
       <LiveOpsPanel pane={pane} />
     </div>

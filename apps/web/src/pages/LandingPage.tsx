@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowRight, BookOpen, UserRound, LogOut, ChevronDown } from 'lucide-react';
+import { ArrowRight, UserRound, LogOut, ChevronDown } from 'lucide-react';
 import { AnimatedBackground } from '../components/AnimatedBackground';
 import { Reveal } from '../components/Reveal';
 import { StackMarquee } from '../components/StackMarquee';
@@ -7,6 +7,10 @@ import { CountUp } from '../components/CountUp';
 import { ScrollProgress } from '../components/ScrollProgress';
 import { ScanTerminal } from '../components/ScanTerminal';
 import { HubPreview } from '../components/HubPreview';
+import { HeroMotion } from '../components/HeroMotion';
+import { PipelineScrollScene } from '../components/PipelineScrollScene';
+import { EngineOrchestrator } from '../components/EngineOrchestrator';
+import { ModuleMotionGrid } from '../components/ModuleMotionGrid';
 import { motion, MotionConfig } from 'framer-motion';
 
 interface LandingPageProps {
@@ -15,13 +19,6 @@ interface LandingPageProps {
   onOpenConsole: () => void;
   onLogout: () => void;
 }
-
-const engines = [
-  { name: 'Semgrep', layer: 'SAST', role: 'Patrones de código vulnerable sobre el AST. OWASP Top 10.' },
-  { name: 'Trivy', layer: 'SCA / IaC', role: 'CVEs en dependencias, Dockerfiles y manifiestos.' },
-  { name: 'GitLeaks', layer: 'Secretos', role: 'Tokens, claves y credenciales en historial Git.' },
-  { name: 'OWASP ZAP', layer: 'DAST', role: 'Encabezados, CORS y endpoints HTTP en runtime.' },
-];
 
 const steps = [
   { n: '01', title: 'Disparador', text: 'Webhook de Git (push/PR) o un escaneo manual desde el Web Hub.' },
@@ -194,35 +191,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({ user, onCuenta, onOpen
       <section className="site-hero" id="inicio">
         <AnimatedBackground contained />
         <div className="site-shell site-hero-grid">
-          <div className="site-hero-copy">
-            <div className="site-kicker">Web Hub · DevSecOps</div>
-            <h1>Gobernanza de seguridad de software, sin mezclar detección e interpretación.</h1>
-            <p>
-              SSPILLOWY orquesta Semgrep, Trivy, GitLeaks y OWASP ZAP, unifica los hallazgos y deja
-              el cierre en manos humanas. La IA sugiere. No decide.
-            </p>
-            <ul className="site-hero-chips">
-              <li>SAST · Semgrep</li>
-              <li>SCA · Trivy</li>
-              <li>Secretos · GitLeaks</li>
-              <li>DAST · ZAP</li>
-            </ul>
-            <div className="site-hero-actions">
-              <button className="btn btn-primary" onClick={user ? onOpenConsole : onCuenta}>
-                <span>{user ? 'Abrir consola' : 'Empezar'}</span>
-                <ArrowRight size={16} />
-              </button>
-              <a href="#servicios" className="btn btn-secondary site-hero-docs">
-                <span>Ver la plataforma</span>
-              </a>
-              <a href="#documentacion" className="btn btn-secondary site-hero-docs">
-                <BookOpen size={15} />
-                <span>Docs</span>
-              </a>
-            </div>
-          </div>
+          <HeroMotion user={user} onCuenta={onCuenta} onOpenConsole={onOpenConsole} />
 
-          <ScanTerminal />
+          <motion.div
+            initial={{ opacity: 0, x: 24, rotateY: -6 }}
+            animate={{ opacity: 1, x: 0, rotateY: 0 }}
+            transition={{ duration: 0.65, delay: 0.12, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <ScanTerminal />
+          </motion.div>
         </div>
       </section>
 
@@ -247,27 +224,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ user, onCuenta, onOpen
           <Reveal>
             <div className="site-kicker">Flujo</div>
             <h2 className="site-h2 site-h2-dark">De un push a una decisión auditada</h2>
-            <motion.ol
-              className="site-pipeline"
-              initial="hidden"
-              whileInView="show"
-              viewport={{ once: true, margin: '-60px' }}
-              variants={{ show: { transition: { staggerChildren: 0.08 } } }}
-            >
-              {steps.map((step) => (
-                <motion.li
-                  key={step.n}
-                  variants={{
-                    hidden: { opacity: 0, y: 10 },
-                    show: { opacity: 1, y: 0, transition: { duration: 0.35 } },
-                  }}
-                >
-                  <span>{step.n}</span>
-                  <strong>{step.title}</strong>
-                  <p>{step.text}</p>
-                </motion.li>
-              ))}
-            </motion.ol>
+            <PipelineScrollScene steps={steps} />
             <div className="site-kicker site-kicker-spaced">Quién hace qué</div>
             <ol className="site-principles site-principles-dark">
               {principles.map((item, i) => (
@@ -298,18 +255,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ user, onCuenta, onOpen
           <p className="site-lead">
             Del repo al gate: el Hub agrupa lo que los motores encuentran. Pulse llega después; no sustituye la auditoría.
           </p>
-          <div className="site-modules">
-            {modules.map((item) => (
-              <article key={item.name}>
-                <div className="site-module-viz" aria-hidden="true">
-                  <i /><i /><i /><i /><i />
-                </div>
-                <span>{item.layer}</span>
-                <h3>{item.name}</h3>
-                <p>{item.text}</p>
-              </article>
-            ))}
-          </div>
+          <ModuleMotionGrid modules={modules} />
           </Reveal>
         </div>
       </section>
@@ -321,33 +267,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ user, onCuenta, onOpen
         <p className="site-lead">
           Los motores no alucinan. La IA no abre ni cierra tickets. Ese corte es el producto.
         </p>
-        <div className="site-frame site-frame-light">
+        <div className="site-frame site-frame-light site-engines-scene">
           <div className="site-frame-bar">
             <span />
             <span />
             <span />
-            <em>engines · detection</em>
+            <em>engines · orchestration</em>
           </div>
-          <div className="table-container site-table">
-            <table className="custom-table">
-              <thead>
-                <tr>
-                  <th>Motor</th>
-                  <th>Capa</th>
-                  <th>Qué cubre</th>
-                </tr>
-              </thead>
-              <tbody>
-                {engines.map((engine) => (
-                  <tr key={engine.name}>
-                    <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700 }}>{engine.name}</td>
-                    <td><span className="badge badge-engine">{engine.layer}</span></td>
-                    <td style={{ color: 'var(--fg-muted)' }}>{engine.role}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <EngineOrchestrator />
         </div>
         </Reveal>
       </section>
