@@ -51,9 +51,10 @@ interface PageProps {
   onLogout?: () => void;
   onNavigate?: (tab: string) => void;
   unreadCount?: number;
+  onGoToSite?: () => void;
 }
 
-export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebarState, user, onLogout, onNavigate, unreadCount }) => {
+export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebarState, user, onLogout, onNavigate, unreadCount, onGoToSite }) => {
   const [repos, setRepos] = useState<Repository[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -161,6 +162,7 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
         onLogout={onLogout}
         onNavigate={onNavigate}
         unreadCount={unreadCount}
+        onGoToSite={onGoToSite}
       />
 
       {scanStatus && (

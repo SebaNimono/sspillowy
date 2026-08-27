@@ -1,7 +1,12 @@
 import React, { useEffect, useRef } from 'react';
 
-export const AnimatedBackground: React.FC = () => {
+interface AnimatedBackgroundProps {
+  contained?: boolean;
+}
+
+export const AnimatedBackground: React.FC<AnimatedBackgroundProps> = ({ contained = false }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -11,13 +16,26 @@ export const AnimatedBackground: React.FC = () => {
     if (!ctx) return;
 
     let animationFrameId: number;
-    let width = (canvas.width = window.innerWidth);
-    let height = (canvas.height = window.innerHeight);
+
+    const measure = () => {
+      if (contained && wrapRef.current) {
+        return {
+          width: wrapRef.current.clientWidth || window.innerWidth,
+          height: wrapRef.current.clientHeight || 420,
+        };
+      }
+      return { width: window.innerWidth, height: window.innerHeight };
+    };
+
+    const first = measure();
+    let width = (canvas.width = first.width);
+    let height = (canvas.height = first.height);
 
     const handleResize = () => {
       if (!canvas) return;
-      width = canvas.width = window.innerWidth;
-      height = canvas.height = window.innerHeight;
+      const next = measure();
+      width = canvas.width = next.width;
+      height = canvas.height = next.height;
     };
 
     window.addEventListener('resize', handleResize);
@@ -155,17 +173,26 @@ export const AnimatedBackground: React.FC = () => {
   }, []);
 
   return (
-    <canvas
-      ref={canvasRef}
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        width: '100vw',
-        height: '100vh',
-        pointerEvents: 'none',
-        zIndex: 0,
-      }}
-    />
+    <div
+      ref={wrapRef}
+      style={
+        contained
+          ? { position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }
+          : undefined
+      }
+    >
+      <canvas
+        ref={canvasRef}
+        style={{
+          position: contained ? 'absolute' : 'fixed',
+          top: 0,
+          left: 0,
+          width: contained ? '100%' : '100vw',
+          height: contained ? '100%' : '100vh',
+          pointerEvents: 'none',
+          zIndex: 0,
+        }}
+      />
+    </div>
   );
 };

@@ -123,7 +123,13 @@ export interface ComplianceReport {
   evidence_pack_ready: boolean;
 }
 
-const API_BASE = '/api/v1';
+/** Vacío en local (Vite proxy). En Vercel: VITE_API_URL = URL pública de Railway. */
+const API_ORIGIN = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+const API_BASE = `${API_ORIGIN}/api/v1`;
+
+export function apiUrl(path: string): string {
+  return `${API_BASE}${path}`;
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, init);
@@ -210,4 +216,25 @@ export async function markAllNotificationsRead(): Promise<{ updated: number }> {
 
 export async function fetchComplianceReport(): Promise<ComplianceReport> {
   return request('/compliance/iso27001');
+}
+
+export interface AuthSession {
+  id: string;
+  email: string;
+  name: string;
+  avatar_url?: string;
+  provider: string;
+}
+
+export async function fetchAuthProviders(): Promise<{
+  github: boolean;
+  gitlab: boolean;
+  google: boolean;
+  microsoft: boolean;
+}> {
+  return request('/auth/providers');
+}
+
+export async function fetchAuthSession(sessionId: string): Promise<AuthSession> {
+  return request(`/auth/session/${sessionId}`);
 }

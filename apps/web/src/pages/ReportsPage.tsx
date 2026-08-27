@@ -13,6 +13,7 @@ interface PageProps {
   onLogout?: () => void;
   onNavigate?: (tab: string) => void;
   unreadCount?: number;
+  onGoToSite?: () => void;
 }
 
 const statusBadge = (status: string) => {
@@ -28,6 +29,7 @@ export const ReportsPage: React.FC<PageProps> = ({
   onLogout,
   onNavigate,
   unreadCount,
+  onGoToSite,
 }) => {
   const [report, setReport] = useState<ComplianceReport>(FALLBACK_COMPLIANCE);
   const [toast, setToast] = useState<ToastMessage | null>(null);
@@ -89,6 +91,7 @@ export const ReportsPage: React.FC<PageProps> = ({
         onLogout={onLogout}
         onNavigate={onNavigate}
         unreadCount={unreadCount}
+        onGoToSite={onGoToSite}
       />
 
       <div className="stats-grid">

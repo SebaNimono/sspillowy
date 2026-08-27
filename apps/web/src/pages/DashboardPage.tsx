@@ -32,6 +32,7 @@ interface PageProps {
   onLogout?: () => void;
   onNavigate?: (tab: string) => void;
   unreadCount?: number;
+  onGoToSite?: () => void;
 }
 
 const ENGINE_META: Array<{ key: string; label: string; color: string }> = [
@@ -55,6 +56,7 @@ export const DashboardPage: React.FC<PageProps> = ({
   onLogout,
   onNavigate,
   unreadCount,
+  onGoToSite,
 }) => {
   const [stats, setStats] = useState<DashboardStats>(DEFAULT_STATS);
   const [heatmap, setHeatmap] = useState<HeatmapData>(buildFallbackHeatmap());
@@ -96,6 +98,7 @@ export const DashboardPage: React.FC<PageProps> = ({
         onLogout={onLogout}
         onNavigate={onNavigate}
         unreadCount={unreadCount}
+        onGoToSite={onGoToSite}
       />
 
       <div className="stats-grid">

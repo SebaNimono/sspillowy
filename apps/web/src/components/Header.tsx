@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Activity, Bell, Smartphone, Menu, ChevronRight, LogOut } from 'lucide-react';
+import { Activity, Bell, Smartphone, Menu, ChevronRight, LogOut, Globe } from 'lucide-react';
 import { SidebarState } from './Sidebar';
 import { fetchNotifications, NotificationItem } from '../api/client';
 import { FALLBACK_NOTIFICATIONS } from '../api/fallbacks';
@@ -14,6 +14,7 @@ interface HeaderProps {
   onLogout?: () => void;
   onNavigate?: (tab: string) => void;
   unreadCount?: number;
+  onGoToSite?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -26,6 +27,7 @@ export const Header: React.FC<HeaderProps> = ({
   onLogout,
   onNavigate,
   unreadCount,
+  onGoToSite,
 }) => {
   const [hoveringMenuBtn, setHoveringMenuBtn] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -235,6 +237,29 @@ export const Header: React.FC<HeaderProps> = ({
                   <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#1f2328' }}>{user.name}</div>
                   <div style={{ fontSize: '0.75rem', color: '#656d76', wordBreak: 'break-all' }}>{user.email}</div>
                 </div>
+
+                {onGoToSite && (
+                  <button
+                    onClick={() => { setShowProfileMenu(false); onGoToSite(); }}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      padding: '0.45rem 0.65rem',
+                      background: 'transparent',
+                      border: 'none',
+                      borderRadius: '4px',
+                      color: '#1f2328',
+                      fontSize: '0.8rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Globe size={14} />
+                    <span>Sitio público</span>
+                  </button>
+                )}
 
                 <button
                   onClick={() => { setShowProfileMenu(false); if (onLogout) onLogout(); }}

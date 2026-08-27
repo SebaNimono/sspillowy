@@ -13,6 +13,7 @@ interface PageProps {
   onLogout?: () => void;
   onNavigate?: (tab: string) => void;
   unreadCount?: number;
+  onGoToSite?: () => void;
 }
 
 export const ScansPage: React.FC<PageProps> = ({
@@ -22,6 +23,7 @@ export const ScansPage: React.FC<PageProps> = ({
   onLogout,
   onNavigate,
   unreadCount,
+  onGoToSite,
 }) => {
   const [scans, setScans] = useState<Scan[]>(FALLBACK_SCANS);
   const [loading, setLoading] = useState(true);
@@ -86,6 +88,7 @@ export const ScansPage: React.FC<PageProps> = ({
         onLogout={onLogout}
         onNavigate={onNavigate}
         unreadCount={unreadCount}
+        onGoToSite={onGoToSite}
       />
 
       <div className="card">

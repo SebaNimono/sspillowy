@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Sidebar, SidebarState } from './components/Sidebar';
 import { LoginPage } from './pages/LoginPage';
+import { LandingPage } from './pages/LandingPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { RepositoriesPage } from './pages/RepositoriesPage';
 import { FindingsPage } from './pages/FindingsPage';
@@ -8,13 +9,18 @@ import { SecurityGatesPage } from './pages/SecurityGatesPage';
 import { ScansPage } from './pages/ScansPage';
 import { NotificationsPage } from './pages/NotificationsPage';
 import { ReportsPage } from './pages/ReportsPage';
-import { fetchNotifications } from './api/client';
+import { fetchNotifications, fetchAuthSession } from './api/client';
 import { FALLBACK_NOTIFICATIONS } from './api/fallbacks';
 import './styles/index.css';
 
+type AppView = 'site' | 'login' | 'console';
+
 export const App: React.FC = () => {
+  const [view, setView] = useState<AppView>('site');
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [unreadCount, setUnreadCount] = useState(0);
+  const [bootstrapping, setBootstrapping] = useState(true);
+  const [oauthError, setOauthError] = useState<string | null>(null);
 
   const [user, setUser] = useState<{ email: string; name: string } | null>(() => {
     try {
@@ -33,12 +39,13 @@ export const App: React.FC = () => {
   };
 
   useEffect(() => {
-    if (user) refreshUnread();
-  }, [user, activeTab]);
+    if (user && view === 'console') refreshUnread();
+  }, [user, activeTab, view]);
 
   const handleLoginSuccess = (email: string, name: string) => {
     const newUser = { email, name };
     setUser(newUser);
+    setView('console');
     try {
       localStorage.setItem('sspillowy_user', JSON.stringify(newUser));
     } catch {
@@ -46,8 +53,45 @@ export const App: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get('sspillowy_session');
+    const error = params.get('oauth_error');
+
+    const clearQuery = () => {
+      window.history.replaceState({}, '', window.location.pathname);
+    };
+
+    if (error) {
+      setOauthError(error);
+      setView('login');
+      clearQuery();
+      setBootstrapping(false);
+      return;
+    }
+
+    if (sessionId) {
+      fetchAuthSession(sessionId)
+        .then((session) => {
+          handleLoginSuccess(session.email, session.name);
+        })
+        .catch(() => {
+          setOauthError('session_expired');
+          setView('login');
+        })
+        .finally(() => {
+          clearQuery();
+          setBootstrapping(false);
+        });
+      return;
+    }
+
+    setBootstrapping(false);
+  }, []);
+
   const handleLogout = () => {
     setUser(null);
+    setView('site');
     try {
       localStorage.removeItem('sspillowy_user');
     } catch {
@@ -87,8 +131,33 @@ export const App: React.FC = () => {
     }
   };
 
-  if (!user) {
-    return <LoginPage onLoginSuccess={handleLoginSuccess} />;
+  if (bootstrapping) {
+    return (
+      <div style={{ minHeight: '100vh', background: '#f6f8fa', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#656d76', fontSize: '0.85rem', fontWeight: 600 }}>
+        Conectando sesión…
+      </div>
+    );
+  }
+
+  if (view === 'site') {
+    return (
+      <LandingPage
+        user={user}
+        onCuenta={() => setView('login')}
+        onOpenConsole={() => setView('console')}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
+  if (view === 'login' || !user) {
+    return (
+      <LoginPage
+        onLoginSuccess={handleLoginSuccess}
+        onBack={() => { setOauthError(null); setView('site'); }}
+        oauthError={oauthError}
+      />
+    );
   }
 
   const pageProps = {
@@ -98,6 +167,7 @@ export const App: React.FC = () => {
     onLogout: handleLogout,
     onNavigate: setActiveTab,
     unreadCount,
+    onGoToSite: () => setView('site'),
   };
 
   const renderContent = () => {

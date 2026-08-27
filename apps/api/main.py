@@ -1,13 +1,19 @@
 import uuid
 from datetime import datetime, timezone, timedelta, date
 from typing import List, Optional
+from pathlib import Path
 from fastapi import FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
 
 # Import shared schemas
 import sys
 import os
+
+load_dotenv(Path(__file__).resolve().parents[2] / ".env")
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from packages.core_models import (
     EngineType,
@@ -29,6 +35,12 @@ from packages.core_models import (
     IsoControl,
 )
 
+from github_oauth import router as github_auth_router
+from gitlab_oauth import router as gitlab_auth_router
+from google_oauth import router as google_auth_router
+from microsoft_oauth import router as microsoft_auth_router
+from oauth_common import router as auth_meta_router
+
 app = FastAPI(
     title="SSPILLOWY API Core",
     description="Software Security Platform for Intelligent, Low-latency Oversight & Warning Yield",
@@ -44,6 +56,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(auth_meta_router)
+app.include_router(github_auth_router)
+app.include_router(gitlab_auth_router)
+app.include_router(google_auth_router)
+app.include_router(microsoft_auth_router)
 
 # In-memory mock store for instant UI demo & development
 MOCK_REPOSITORIES = [

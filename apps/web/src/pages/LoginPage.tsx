@@ -1,18 +1,63 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Lock, Mail, ArrowRight, Github, Chrome, Code2, Globe } from 'lucide-react';
 import { Toast, ToastMessage } from '../components/Toast';
 import { AnimatedBackground } from '../components/AnimatedBackground';
+import { apiUrl, fetchAuthProviders } from '../api/client';
 
 interface LoginPageProps {
   onLoginSuccess: (email: string, name: string) => void;
+  onBack?: () => void;
+  oauthError?: string | null;
 }
 
-export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
+const oauthErrorMessage = (code: string) => {
+  switch (code) {
+    case 'github_not_configured':
+      return 'Falta GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET en el .env.';
+    case 'gitlab_not_configured':
+      return 'Falta GITLAB_CLIENT_ID / GITLAB_CLIENT_SECRET en el .env.';
+    case 'access_denied':
+      return 'Cancelaste el acceso en el proveedor.';
+    case 'invalid_state':
+    case 'state_expired':
+      return 'La sesión OAuth expiró. Vuelve a intentar.';
+    case 'session_expired':
+      return 'No se pudo leer la sesión. Intenta de nuevo.';
+    case 'gitlab_http':
+      return 'GitLab no respondió. Revisa el Redirect URI y reinicia uvicorn.';
+    case 'google_not_configured':
+      return 'Falta GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET en el .env.';
+    case 'google_http':
+      return 'Google no respondió. Revisa el redirect URI y que tu Gmail esté en Test users.';
+    case 'google_no_email':
+      return 'Google no devolvió el correo. Activa el scope email en la pantalla de consentimiento.';
+    case 'microsoft_not_configured':
+      return 'Falta MICROSOFT_CLIENT_ID / MICROSOFT_CLIENT_SECRET en el .env.';
+    case 'microsoft_http':
+      return 'Microsoft no respondió. Revisa el redirect URI (tipo Web) y el tenant common.';
+    case 'microsoft_no_email':
+      return 'Microsoft no devolvió el correo. Revisa que la app pida email y User.Read.';
+    default:
+      return 'El proveedor no autorizó el inicio de sesión. Revisa el callback URL y el .env.';
+  }
+};
+
+export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oauthError }) => {
   const [isRegister, setIsRegister] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [toast, setToast] = useState<ToastMessage | null>(null);
+
+  useEffect(() => {
+    if (!oauthError) return;
+    setToast({
+      id: 'oauth-error',
+      type: 'error',
+      title: 'Inicio de sesión',
+      message: oauthErrorMessage(oauthError),
+    });
+  }, [oauthError]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,13 +75,28 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
     onLoginSuccess(email, name);
   };
 
-  const handleOAuthClick = (provider: string) => {
-    setToast({
-      id: Date.now().toString(),
-      type: 'info',
-      title: 'Integración Próximamente',
-      message: `El inicio de sesión único (SSO) con ${provider} se integrará próximamente.`,
-    });
+  const startOAuth = async (provider: 'github' | 'gitlab' | 'google' | 'microsoft') => {
+    const labels = { github: 'GitHub', gitlab: 'GitLab', google: 'Google', microsoft: 'Microsoft' };
+    try {
+      const providers = await fetchAuthProviders();
+      if (!providers[provider]) {
+        setToast({
+          id: Date.now().toString(),
+          type: 'error',
+          title: `${labels[provider]} no configurado`,
+          message: `Crea la aplicación OAuth y pega CLIENT_ID y SECRET en las variables de entorno de la API. Reinicia el servidor.`,
+        });
+        return;
+      }
+      window.location.href = apiUrl(`/auth/${provider}`);
+    } catch {
+      setToast({
+        id: Date.now().toString(),
+        type: 'error',
+        title: 'API no disponible',
+        message: 'En local arranca uvicorn en el puerto 8000. En Vercel configura VITE_API_URL con la URL de Railway y vuelve a desplegar.',
+      });
+    }
   };
 
   return (
@@ -57,6 +117,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
       <AnimatedBackground />
 
       <Toast toast={toast} onClose={() => setToast(null)} />
+
+      {onBack && (
+        <button type="button" className="login-back" onClick={onBack}>
+          <img src="/sspillowy_favicon.png" alt="" width={18} height={18} />
+          <span>SSPILLOWY</span>
+        </button>
+      )}
 
       {/* Brand Header with large official PNG Logo without white box */}
       <div
@@ -274,7 +341,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
           <button
             type="button"
             className="btn btn-secondary"
-            onClick={() => handleOAuthClick('Google (Gmail)')}
+            onClick={() => startOAuth('google')}
             style={{ justifyContent: 'center', fontSize: '0.8rem', padding: '0.5rem' }}
           >
             <Chrome size={15} color="#ea4335" />
@@ -284,7 +351,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
           <button
             type="button"
             className="btn btn-secondary"
-            onClick={() => handleOAuthClick('GitHub')}
+            onClick={() => startOAuth('github')}
             style={{ justifyContent: 'center', fontSize: '0.8rem', padding: '0.5rem' }}
           >
             <Github size={15} color="#24292f" />
@@ -294,7 +361,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
           <button
             type="button"
             className="btn btn-secondary"
-            onClick={() => handleOAuthClick('GitLab')}
+            onClick={() => startOAuth('gitlab')}
             style={{ justifyContent: 'center', fontSize: '0.8rem', padding: '0.5rem' }}
           >
             <Code2 size={15} color="#fc6d26" />
@@ -304,7 +371,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
           <button
             type="button"
             className="btn btn-secondary"
-            onClick={() => handleOAuthClick('Microsoft')}
+            onClick={() => startOAuth('microsoft')}
             style={{ justifyContent: 'center', fontSize: '0.8rem', padding: '0.5rem' }}
           >
             <Globe size={15} color="#00a4ef" />

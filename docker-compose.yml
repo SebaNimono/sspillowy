@@ -39,6 +39,7 @@
     restart: always
     ports:
       - "8000:8000"
+    command: ["uvicorn", "apps.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     env_file:
       - .env
     volumes:

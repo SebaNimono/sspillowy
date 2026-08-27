@@ -12,6 +12,7 @@ interface PageProps {
   onLogout?: () => void;
   onNavigate?: (tab: string) => void;
   unreadCount?: number;
+  onGoToSite?: () => void;
   onNotificationsChange?: () => void;
 }
 
@@ -39,6 +40,7 @@ export const NotificationsPage: React.FC<PageProps> = ({
   onLogout,
   onNavigate,
   unreadCount,
+  onGoToSite,
   onNotificationsChange,
 }) => {
   const [items, setItems] = useState<NotificationItem[]>(FALLBACK_NOTIFICATIONS);
@@ -97,6 +99,7 @@ export const NotificationsPage: React.FC<PageProps> = ({
         onLogout={onLogout}
         onNavigate={onNavigate}
         unreadCount={unreadCount}
+        onGoToSite={onGoToSite}
       />
 
       <div className="card" style={{ padding: '1rem 1.5rem', marginBottom: '1.5rem' }}>
