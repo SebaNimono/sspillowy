@@ -6,9 +6,9 @@ import { fadeUp, staggerContainer } from '../motion/siteMotion';
 export type Principle = { k: string; v: string };
 
 const META = [
-  { icon: Radar, accent: '#58a6ff', role: 'Motor OSS', tone: 'detect' as const },
-  { icon: Sparkles, accent: '#a371f7', role: 'LLM Router', tone: 'propose' as const },
-  { icon: PenLine, accent: '#3fb950', role: 'Auditor', tone: 'sign' as const },
+  { icon: Radar, accent: '#0969da', role: 'Motor OSS', tone: 'detect' as const },
+  { icon: Sparkles, accent: '#8250df', role: 'LLM Router', tone: 'propose' as const },
+  { icon: PenLine, accent: '#1a7f37', role: 'Auditor', tone: 'sign' as const },
 ];
 
 interface PrinciplesSceneProps {

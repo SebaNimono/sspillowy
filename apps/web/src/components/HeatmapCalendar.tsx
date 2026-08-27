@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { motion } from 'framer-motion';
 import { HeatmapData } from '../api/client';
 
 interface HeatmapCalendarProps {
@@ -30,8 +31,8 @@ export const HeatmapCalendar: React.FC<HeatmapCalendarProps> = ({ data }) => {
         <div className="heatmap-grid">
           {weeks.map((week, wi) => (
             <div key={wi} className="heatmap-col">
-              {week.map((cell) => (
-                <button
+              {week.map((cell, ci) => (
+                <motion.button
                   key={cell.date}
                   type="button"
                   className="heatmap-cell"
@@ -39,6 +40,10 @@ export const HeatmapCalendar: React.FC<HeatmapCalendarProps> = ({ data }) => {
                   title={`${cell.date}: ${cell.count} hallazgos`}
                   onMouseEnter={() => setHover({ date: cell.date, count: cell.count })}
                   onMouseLeave={() => setHover(null)}
+                  initial={{ opacity: 0, scale: 0.6 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: (wi * 7 + ci) * 0.004, duration: 0.25 }}
+                  whileHover={{ scale: 1.35, zIndex: 2 }}
                 />
               ))}
             </div>
