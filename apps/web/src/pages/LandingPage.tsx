@@ -43,6 +43,19 @@ const services = [
   },
 ];
 
+const facts = [
+  { value: '4', label: 'Motores OSS', hint: 'Semgrep, Trivy, GitLeaks, ZAP' },
+  { value: 'HITL', label: 'Cierre humano', hint: 'La IA no firma FIXED' },
+  { value: 'ISO', label: 'Evidencia 27001', hint: 'Paquete JSON de controles' },
+  { value: 'SSO', label: 'GitHub · GitLab · Google · Microsoft', hint: 'Misma cuenta, sin alta extra' },
+];
+
+const principles = [
+  { k: 'Detecta', v: 'El motor. AST, CVE, secreto o runtime. Determinista.' },
+  { k: 'Propone', v: 'El LLM Router. Alcanzabilidad y parche. Nunca cierra.' },
+  { k: 'Firma', v: 'El auditor. OPEN → IN_REVIEW → FIXED / falso positivo / riesgo.' },
+];
+
 const faqs = [
   {
     q: '¿La IA cierra vulnerabilidades sola?',
@@ -58,17 +71,17 @@ const faqs = [
   },
   {
     q: '¿Dónde corre hoy?',
-    a: 'El sitio y el Hub se prueban en local (Vite 5173 + FastAPI 8000). El front puede ir a Vercel. PostgreSQL y Redis entran cuando el worker deje de ser mock.',
+    a: 'El Hub está en Vercel. La API (OAuth y REST) en Railway. En local: Vite 5173 + FastAPI 8000. PostgreSQL, Redis y el worker real (Semgrep primero) son el siguiente tramo; el Hub aún usa datos de demostración en varias vistas.',
   },
   {
     q: '¿Cómo entro si ya tengo sesión?',
-    a: 'Arriba a la derecha, Cuenta abre tu perfil (consola o cerrar sesión). Consola entra directo al Hub. Si no hay sesión, Cuenta abre el login.',
+    a: 'Arriba a la derecha, Cuenta abre tu perfil (consola o cerrar sesión). Consola entra directo al Hub. Si no hay sesión, Cuenta abre el login. El formulario correo/clave es demo; el acceso real es SSO.',
   },
 ];
 
 export const LandingPage: React.FC<LandingPageProps> = ({ user, onCuenta, onOpenConsole, onLogout }) => {
   const [accountOpen, setAccountOpen] = useState(false);
-  const [openFaq, setOpenFaq] = useState<number | null>(0);
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
 
   const handleCuenta = () => {
     if (user) {
@@ -144,6 +157,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ user, onCuenta, onOpen
               SSPILLOWY orquesta Semgrep, Trivy, GitLeaks y OWASP ZAP, unifica los hallazgos y deja
               el cierre en manos humanas. La IA sugiere. No decide.
             </p>
+            <ul className="site-hero-chips">
+              <li>SAST · Semgrep</li>
+              <li>SCA · Trivy</li>
+              <li>Secretos · GitLeaks</li>
+              <li>DAST · ZAP</li>
+            </ul>
             <div className="site-hero-actions">
               <button className="btn btn-primary" onClick={user ? onOpenConsole : onCuenta}>
                 <span>{user ? 'Abrir consola' : 'Cuenta'}</span>
@@ -179,8 +198,34 @@ export const LandingPage: React.FC<LandingPageProps> = ({ user, onCuenta, onOpen
         </div>
       </section>
 
+      <section className="site-facts" aria-label="Hechos de la plataforma">
+        <div className="site-shell site-facts-row">
+          {facts.map((fact) => (
+            <div key={fact.label} className="site-fact">
+              <strong>{fact.value}</strong>
+              <span>{fact.label}</span>
+              <em>{fact.hint}</em>
+            </div>
+          ))}
+        </div>
+      </section>
+
       <section className="site-shell" id="plataforma">
-        <div className="site-kicker">Flujo</div>
+        <div className="site-kicker">Regla de producto</div>
+        <h2 className="site-h2">Quién hace qué. Sin ambigüedad.</h2>
+        <ol className="site-principles">
+          {principles.map((item, i) => (
+            <li key={item.k}>
+              <span className="site-principle-n">0{i + 1}</span>
+              <div>
+                <strong>{item.k}</strong>
+                <p>{item.v}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+
+        <div className="site-kicker site-kicker-spaced">Flujo</div>
         <h2 className="site-h2">De un push a una decisión auditada</h2>
         <ol className="site-steps">
           {steps.map((step) => (
@@ -264,7 +309,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ user, onCuenta, onOpen
         <div className="site-docs">
           <article>
             <h3>API</h3>
-            <p>REST en <code>/api/v1</code>. OpenAPI vive en <code>/docs</code> cuando el core está arriba (puerto 8000).</p>
+            <p>REST en <code>/api/v1</code>. OpenAPI en <code>/docs</code> cuando el core está arriba. Auth SSO en <code>/api/v1/auth/&#123;github|gitlab|google|microsoft&#125;</code>.</p>
             <ul>
               <li><code>GET /health</code></li>
               <li><code>GET /api/v1/stats</code> · heatmap · audit-log</li>
@@ -291,13 +336,21 @@ export const LandingPage: React.FC<LandingPageProps> = ({ user, onCuenta, onOpen
           <div className="site-faq">
             {faqs.map((item, index) => {
               const open = openFaq === index;
+              const panelId = `faq-panel-${index}`;
               return (
                 <div key={item.q} className={`site-faq-item ${open ? 'open' : ''}`}>
-                  <button type="button" onClick={() => setOpenFaq(open ? null : index)}>
+                  <button
+                    type="button"
+                    aria-expanded={open}
+                    aria-controls={panelId}
+                    onClick={() => setOpenFaq(open ? null : index)}
+                  >
                     <span>{item.q}</span>
                     <ChevronDown size={16} />
                   </button>
-                  {open && <p>{item.a}</p>}
+                  <div className="site-faq-panel" id={panelId} role="region">
+                    <p>{item.a}</p>
+                  </div>
                 </div>
               );
             })}

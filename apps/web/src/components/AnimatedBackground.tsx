@@ -4,6 +4,7 @@ interface AnimatedBackgroundProps {
   contained?: boolean;
 }
 
+/** Fondo clásico: rejilla + carriles de pipeline. Sin cubos ni tokens a la deriva. */
 export const AnimatedBackground: React.FC<AnimatedBackgroundProps> = ({ contained = false }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -11,11 +12,12 @@ export const AnimatedBackground: React.FC<AnimatedBackgroundProps> = ({ containe
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    let animationFrameId: number;
+    let animationFrameId = 0;
+    let width = 0;
+    let height = 0;
 
     const measure = () => {
       if (contained && wrapRef.current) {
@@ -27,100 +29,74 @@ export const AnimatedBackground: React.FC<AnimatedBackgroundProps> = ({ containe
       return { width: window.innerWidth, height: window.innerHeight };
     };
 
-    const first = measure();
-    let width = (canvas.width = first.width);
-    let height = (canvas.height = first.height);
-
-    const handleResize = () => {
-      if (!canvas) return;
+    const applySize = () => {
       const next = measure();
-      width = canvas.width = next.width;
-      height = canvas.height = next.height;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      width = next.width;
+      height = next.height;
+      canvas.width = Math.floor(width * dpr);
+      canvas.height = Math.floor(height * dpr);
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
 
+    applySize();
+
+    const dark = contained;
+    const lanes = dark
+      ? [
+          { label: 'SAST', color: '#58a6ff' },
+          { label: 'SCA', color: '#8250df' },
+          { label: 'SECRETS', color: '#f85149' },
+          { label: 'DAST', color: '#3fb950' },
+        ]
+      : [
+          { label: 'SAST', color: '#0969da' },
+          { label: 'SCA', color: '#8250df' },
+          { label: 'SECRETS', color: '#cf222e' },
+          { label: 'DAST', color: '#1a7f37' },
+        ];
+
+    type Packet = { lane: number; x: number; speed: number; r: number };
+    const packets: Packet[] = [];
+    const seedPackets = () => {
+      packets.length = 0;
+      const count = dark ? 14 : 8;
+      for (let i = 0; i < count; i++) {
+        packets.push({
+          lane: i % lanes.length,
+          x: Math.random() * width,
+          speed: 0.35 + Math.random() * 0.45,
+          r: 1.6 + Math.random() * 1.1,
+        });
+      }
+    };
+    seedPackets();
+
+    let scanX = 0;
+
+    const handleResize = () => {
+      applySize();
+      seedPackets();
+    };
     window.addEventListener('resize', handleResize);
-
-    // DevSecOps subtle code & security tokens to stream left-to-right
-    const tokens = [
-      'const scan = await semgrep.scan()',
-      'CVE-2024-21626 [PATCHED]',
-      'GitLeaks: 0 secrets exposed',
-      'OWASP A03: Injection Filtered',
-      'AES-256-GCM',
-      'OAuth2 / OIDC Verified',
-      'CWE-798: remediated',
-      'FastAPI uvicorn 8000',
-      'PostgreSQL 16 SSL',
-      'ARQ Redis Worker active',
-      'SecurityGate [PASS]',
-      'Pulse Mobile Sync: True',
-      'SHA256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-    ];
-
-    // Floating particles/text items
-    const items: Array<{
-      x: number;
-      y: number;
-      speed: number;
-      text: string;
-      fontSize: number;
-      opacity: number;
-      isCode: boolean;
-      color: string;
-    }> = [];
-
-    const colors = ['#0969da', '#8250df', '#1a7f37', '#656d76'];
-
-    // Populate initial items
-    for (let i = 0; i < 22; i++) {
-      items.push({
-        x: Math.random() * width,
-        y: Math.random() * height,
-        speed: 0.3 + Math.random() * 0.5, // gentle left-to-right drift
-        text: tokens[Math.floor(Math.random() * tokens.length)],
-        fontSize: 11 + Math.random() * 3,
-        opacity: 0.12 + Math.random() * 0.12,
-        isCode: true,
-        color: colors[Math.floor(Math.random() * colors.length)],
-      });
-    }
-
-    // Floating subtle geometric squares/cubes
-    const cubes: Array<{
-      x: number;
-      y: number;
-      size: number;
-      speed: number;
-      opacity: number;
-      color: string;
-    }> = [];
-
-    for (let i = 0; i < 15; i++) {
-      cubes.push({
-        x: Math.random() * width,
-        y: Math.random() * height,
-        size: 12 + Math.random() * 24,
-        speed: 0.2 + Math.random() * 0.4,
-        opacity: 0.04 + Math.random() * 0.06,
-        color: colors[Math.floor(Math.random() * colors.length)],
-      });
-    }
+    const ro = contained && wrapRef.current ? new ResizeObserver(handleResize) : null;
+    if (wrapRef.current && ro) ro.observe(wrapRef.current);
 
     const render = () => {
       ctx.clearRect(0, 0, width, height);
 
-      // Draw faint background grid
-      ctx.strokeStyle = 'rgba(208, 215, 222, 0.25)';
+      const grid = dark ? 'rgba(88, 166, 255, 0.07)' : 'rgba(208, 215, 222, 0.55)';
+      ctx.strokeStyle = grid;
       ctx.lineWidth = 1;
-      const gridSize = 40;
-
+      const gridSize = 32;
       for (let x = 0; x < width; x += gridSize) {
         ctx.beginPath();
         ctx.moveTo(x, 0);
         ctx.lineTo(x, height);
         ctx.stroke();
       }
-
       for (let y = 0; y < height; y += gridSize) {
         ctx.beginPath();
         ctx.moveTo(0, y);
@@ -128,39 +104,49 @@ export const AnimatedBackground: React.FC<AnimatedBackgroundProps> = ({ containe
         ctx.stroke();
       }
 
-      // Render floating subtle geometric cubes drifting left-to-right
-      cubes.forEach((cube) => {
-        cube.x += cube.speed;
-        if (cube.x > width + 40) {
-          cube.x = -40;
-          cube.y = Math.random() * height;
-        }
+      const padY = height * 0.18;
+      const usable = Math.max(height - padY * 2, 80);
 
-        ctx.fillStyle = cube.color;
-        ctx.globalAlpha = cube.opacity;
+      lanes.forEach((lane, i) => {
+        const y = padY + (usable / (lanes.length - 1 || 1)) * i;
+        ctx.strokeStyle = dark ? 'rgba(88, 166, 255, 0.18)' : 'rgba(9, 105, 218, 0.12)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 8]);
         ctx.beginPath();
-        ctx.roundRect(cube.x, cube.y, cube.size, cube.size, 4);
-        ctx.fill();
-        ctx.strokeStyle = cube.color;
+        ctx.moveTo(24, y);
+        ctx.lineTo(width - 24, y);
         ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.font = '600 10px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+        ctx.fillStyle = lane.color;
+        ctx.globalAlpha = dark ? 0.55 : 0.35;
+        ctx.fillText(lane.label, 28, y - 8);
+        ctx.globalAlpha = 1;
       });
 
-      // Render floating code streams
-      ctx.font = '12px ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace';
-      items.forEach((item) => {
-        item.x += item.speed;
-        if (item.x > width + 200) {
-          item.x = -250;
-          item.y = Math.random() * height;
-          item.text = tokens[Math.floor(Math.random() * tokens.length)];
-        }
-
-        ctx.fillStyle = item.color;
-        ctx.globalAlpha = item.opacity;
-        ctx.fillText(item.text, item.x, item.y);
+      packets.forEach((p) => {
+        const y = padY + (usable / (lanes.length - 1 || 1)) * p.lane;
+        p.x += p.speed;
+        if (p.x > width + 12) p.x = -12;
+        ctx.beginPath();
+        ctx.fillStyle = lanes[p.lane].color;
+        ctx.globalAlpha = dark ? 0.7 : 0.28;
+        ctx.arc(p.x, y, p.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
       });
 
-      ctx.globalAlpha = 1.0;
+      if (dark) {
+        scanX = (scanX + 0.9) % (width + 80);
+        const grad = ctx.createLinearGradient(scanX - 40, 0, scanX + 40, 0);
+        grad.addColorStop(0, 'rgba(88, 166, 255, 0)');
+        grad.addColorStop(0.5, 'rgba(88, 166, 255, 0.07)');
+        grad.addColorStop(1, 'rgba(88, 166, 255, 0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(scanX - 40, 0, 80, height);
+      }
+
       animationFrameId = requestAnimationFrame(render);
     };
 
@@ -168,9 +154,10 @@ export const AnimatedBackground: React.FC<AnimatedBackgroundProps> = ({ containe
 
     return () => {
       window.removeEventListener('resize', handleResize);
+      ro?.disconnect();
       cancelAnimationFrame(animationFrameId);
     };
-  }, []);
+  }, [contained]);
 
   return (
     <div
