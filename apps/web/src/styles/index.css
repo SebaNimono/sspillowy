@@ -745,6 +745,21 @@ html {
   background: var(--bg-canvas);
 }
 
+.site-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 2px;
+  background: #0969da;
+  z-index: 60;
+  pointer-events: none;
+}
+
+.site-nav-links a.is-active {
+  color: var(--fg-default);
+  box-shadow: inset 0 -2px 0 #0969da;
+}
+
 .site-nav {
   position: sticky;
   top: 0;
@@ -785,6 +800,7 @@ html {
   text-decoration: none;
   font-size: 0.85rem;
   font-weight: 600;
+  padding-bottom: 0.2rem;
 }
 
 .site-nav-links a:hover {
@@ -900,6 +916,7 @@ html {
   border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+  transition: transform 0.18s ease;
 }
 
 .site-terminal-bar {

@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ArrowRight, BookOpen, UserRound, LogOut, ChevronDown } from 'lucide-react';
 import { AnimatedBackground } from '../components/AnimatedBackground';
 import { Reveal } from '../components/Reveal';
 import { StackMarquee } from '../components/StackMarquee';
+import { CountUp } from '../components/CountUp';
+import { ScrollProgress } from '../components/ScrollProgress';
+import { ScanTerminal } from '../components/ScanTerminal';
 
 interface LandingPageProps {
   user: { email: string; name: string } | null;
@@ -59,11 +62,11 @@ const modules = [
   },
 ];
 
-const facts = [
-  { value: '4', label: 'Motores OSS', hint: 'Semgrep, Trivy, GitLeaks, ZAP' },
-  { value: 'HITL', label: 'Cierre humano', hint: 'La IA no firma FIXED' },
-  { value: 'ISO', label: 'Evidencia 27001', hint: 'Paquete JSON de controles' },
-  { value: 'SSO', label: 'GitHub · GitLab · Google · Microsoft', hint: 'Misma cuenta, sin alta extra' },
+const facts: Array<{ count?: number; text?: string; label: string; hint: string }> = [
+  { count: 4, label: 'Motores OSS', hint: 'Semgrep, Trivy, GitLeaks, ZAP' },
+  { count: 5, label: 'Estados HITL', hint: 'OPEN hasta riesgo aceptado' },
+  { count: 4, label: 'Proveedores SSO', hint: 'GitHub, GitLab, Google, Microsoft' },
+  { text: 'ISO', label: 'Evidencia 27001', hint: 'Paquete JSON de controles' },
 ];
 
 const principles = [
@@ -98,6 +101,27 @@ const faqs = [
 export const LandingPage: React.FC<LandingPageProps> = ({ user, onCuenta, onOpenConsole, onLogout }) => {
   const [accountOpen, setAccountOpen] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [factsOn, setFactsOn] = useState(false);
+  const [activeNav, setActiveNav] = useState('plataforma');
+
+  useEffect(() => {
+    const ids = ['plataforma', 'servicios', 'documentacion', 'faq'];
+    const nodes = ids
+      .map((id) => document.getElementById(id))
+      .filter((el): el is HTMLElement => Boolean(el));
+    if (!nodes.length) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        if (visible?.target.id) setActiveNav(visible.target.id);
+      },
+      { rootMargin: '-28% 0px -55% 0px', threshold: [0.1, 0.25, 0.5] },
+    );
+    nodes.forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  }, []);
 
   const handleCuenta = () => {
     if (user) {
@@ -109,6 +133,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ user, onCuenta, onOpen
 
   return (
     <div className="site">
+      <ScrollProgress />
       <header className="site-nav">
         <div className="site-nav-inner">
           <a href="#inicio" className="site-brand">
@@ -117,10 +142,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ user, onCuenta, onOpen
           </a>
 
           <nav className="site-nav-links">
-            <a href="#plataforma">Plataforma</a>
-            <a href="#servicios">Módulos</a>
-            <a href="#documentacion">Documentación</a>
-            <a href="#faq">FAQ</a>
+            <a href="#plataforma" className={activeNav === 'plataforma' ? 'is-active' : ''}>Plataforma</a>
+            <a href="#servicios" className={activeNav === 'servicios' ? 'is-active' : ''}>Módulos</a>
+            <a href="#documentacion" className={activeNav === 'documentacion' ? 'is-active' : ''}>Documentación</a>
+            <a href="#faq" className={activeNav === 'faq' ? 'is-active' : ''}>FAQ</a>
           </nav>
 
           <div className="site-nav-actions">
@@ -194,36 +219,19 @@ export const LandingPage: React.FC<LandingPageProps> = ({ user, onCuenta, onOpen
             </div>
           </div>
 
-          <div className="site-terminal" aria-hidden="true">
-            <div className="site-terminal-bar">
-              <span />
-              <span />
-              <span />
-              <em>sspillowy scan</em>
-            </div>
-            <pre>
-{`$ sspillowy scan --repo payment-gateway \\
-    --engines semgrep,trivy,gitleaks
-
- GitLeaks   CRITICAL  CWE-798   secret in history
- Semgrep    CRITICAL  CWE-89    sql concat  [AI 94%]
- Trivy      HIGH      CVE-2024  runc in base image
-
- SecurityGate  BLOCKED  max_critical=0
- HITL          waiting  auditor must confirm`}
-              <span className="site-cursor">█</span>
-            </pre>
-          </div>
+          <ScanTerminal />
         </div>
       </section>
 
       <StackMarquee />
 
-      <Reveal as="section" className="site-facts" aria-label="Hechos de la plataforma">
+      <Reveal as="section" className="site-facts" aria-label="Hechos de la plataforma" onInView={() => setFactsOn(true)}>
         <div className="site-shell site-facts-row">
           {facts.map((fact) => (
             <div key={fact.label} className="site-fact">
-              <strong>{fact.value}</strong>
+              <strong>
+                {fact.count != null ? <CountUp to={fact.count} active={factsOn} /> : fact.text}
+              </strong>
               <span>{fact.label}</span>
               <em>{fact.hint}</em>
             </div>
@@ -234,7 +242,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ user, onCuenta, onOpen
       <section className="site-shell" id="plataforma">
         <Reveal>
         <div className="site-kicker">Regla de producto</div>
-        <h2 className="site-h2">Quién hace qué. Sin ambigüedad.</h2>
+        <h2 className="site-h2">Quién hace qué</h2>
         <ol className="site-principles">
           {principles.map((item, i) => (
             <li key={item.k}>
