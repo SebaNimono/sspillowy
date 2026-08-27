@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { ArrowRight, BookOpen, UserRound, LogOut, ChevronDown } from 'lucide-react';
 import { AnimatedBackground } from '../components/AnimatedBackground';
+import { Reveal } from '../components/Reveal';
+import { StackMarquee } from '../components/StackMarquee';
 
 interface LandingPageProps {
   user: { email: string; name: string } | null;
@@ -215,7 +217,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ user, onCuenta, onOpen
         </div>
       </section>
 
-      <section className="site-facts" aria-label="Hechos de la plataforma">
+      <StackMarquee />
+
+      <Reveal as="section" className="site-facts" aria-label="Hechos de la plataforma">
         <div className="site-shell site-facts-row">
           {facts.map((fact) => (
             <div key={fact.label} className="site-fact">
@@ -225,9 +229,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ user, onCuenta, onOpen
             </div>
           ))}
         </div>
-      </section>
+      </Reveal>
 
       <section className="site-shell" id="plataforma">
+        <Reveal>
         <div className="site-kicker">Regla de producto</div>
         <h2 className="site-h2">Quién hace qué. Sin ambigüedad.</h2>
         <ol className="site-principles">
@@ -272,10 +277,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ user, onCuenta, onOpen
             </p>
           </article>
         </div>
+        </Reveal>
       </section>
 
       <section className="site-band" id="servicios">
         <div className="site-shell">
+          <Reveal>
           <div className="site-kicker">Módulos</div>
           <h2 className="site-h2">Una consola. Varias capas. El mismo criterio.</h2>
           <p className="site-lead">
@@ -290,10 +297,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ user, onCuenta, onOpen
               </article>
             ))}
           </div>
+          </Reveal>
         </div>
       </section>
 
       <section className="site-shell" id="motores">
+        <Reveal>
         <div className="site-kicker">Detección determinista</div>
         <h2 className="site-h2">Quién detecta. Quién interpreta.</h2>
         <p className="site-lead">
@@ -319,9 +328,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ user, onCuenta, onOpen
             </tbody>
           </table>
         </div>
+        </Reveal>
       </section>
 
       <section className="site-shell" id="documentacion">
+        <Reveal>
         <div className="site-kicker">Documentación</div>
         <h2 className="site-h2">Contratos, reglas y stack</h2>
         <div className="site-docs">
@@ -345,10 +356,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ user, onCuenta, onOpen
             <p>FastAPI 3.12, PostgreSQL 16, Redis + ARQ, React + TypeScript. Observabilidad prevista: Prometheus, Grafana, Sentry. Calidad interna: Pytest, SonarQube, JMeter.</p>
           </article>
         </div>
+        </Reveal>
       </section>
 
       <section className="site-band" id="faq">
         <div className="site-shell">
+          <Reveal>
           <div className="site-kicker">FAQ</div>
           <h2 className="site-h2">Preguntas frecuentes</h2>
           <div className="site-faq">
@@ -373,11 +386,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({ user, onCuenta, onOpen
               );
             })}
           </div>
+          </Reveal>
         </div>
       </section>
 
       <section className="site-cta" id="cuenta-cta">
         <div className="site-shell">
+          <Reveal>
           <div className="site-kicker">Siguiente paso</div>
           <h2>El cierre lo firma un auditor. Empieza por la consola.</h2>
           <p>
@@ -390,10 +405,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ user, onCuenta, onOpen
             </button>
             <a href="#faq" className="btn btn-secondary site-hero-docs">FAQ</a>
           </div>
+          </Reveal>
         </div>
       </section>
 
       <section className="site-shell" id="privacidad">
+        <Reveal>
         <div className="site-kicker">Legal</div>
         <h2 className="site-h2">Privacidad y cookies</h2>
         <div className="site-privacy">
@@ -418,6 +435,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ user, onCuenta, onOpen
             </button>
           </article>
         </div>
+        </Reveal>
       </section>
 
       <footer className="site-footer">
