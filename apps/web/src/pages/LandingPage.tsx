@@ -6,6 +6,7 @@ import { StackMarquee } from '../components/StackMarquee';
 import { CountUp } from '../components/CountUp';
 import { ScrollProgress } from '../components/ScrollProgress';
 import { ScanTerminal } from '../components/ScanTerminal';
+import { HubPreview } from '../components/HubPreview';
 
 interface LandingPageProps {
   user: { email: string; name: string } | null;
@@ -239,52 +240,39 @@ export const LandingPage: React.FC<LandingPageProps> = ({ user, onCuenta, onOpen
         </div>
       </Reveal>
 
-      <section className="site-shell" id="plataforma">
-        <Reveal>
-        <div className="site-kicker">Regla de producto</div>
-        <h2 className="site-h2">Quién hace qué</h2>
-        <ol className="site-principles">
-          {principles.map((item, i) => (
-            <li key={item.k}>
-              <span className="site-principle-n">0{i + 1}</span>
-              <div>
-                <strong>{item.k}</strong>
-                <p>{item.v}</p>
-              </div>
-            </li>
-          ))}
-        </ol>
-
-        <div className="site-kicker site-kicker-spaced">Flujo</div>
-        <h2 className="site-h2">De un push a una decisión auditada</h2>
-        <ol className="site-steps">
-          {steps.map((step) => (
-            <li key={step.n}>
-              <span className="site-step-n">{step.n}</span>
-              <div>
-                <strong>{step.title}</strong>
-                <p>{step.text}</p>
-              </div>
-            </li>
-          ))}
-        </ol>
-
-        <div className="site-split">
-          <article>
-            <h3>Web Hub</h3>
-            <p>
-              Auditoría: repositorios, matriz de hallazgos, mapa de calor, Security Gates,
-              notificaciones y paquete de evidencia ISO/IEC 27001:2022.
-            </p>
-          </article>
-          <article>
-            <h3>Pulse</h3>
-            <p>
-              Centro de comando móvil. Bypass de pipeline con biometría y push cuando hay
-              crítica o secreto filtrado. Todavía en construcción; el Hub ya habla con esa capa.
-            </p>
-          </article>
+      <section className="site-stage" id="plataforma">
+        <div className="site-shell">
+          <Reveal>
+            <div className="site-kicker">Flujo</div>
+            <h2 className="site-h2 site-h2-dark">De un push a una decisión auditada</h2>
+            <ol className="site-pipeline">
+              {steps.map((step) => (
+                <li key={step.n}>
+                  <span>{step.n}</span>
+                  <strong>{step.title}</strong>
+                  <p>{step.text}</p>
+                </li>
+              ))}
+            </ol>
+            <div className="site-kicker site-kicker-spaced">Quién hace qué</div>
+            <ol className="site-principles site-principles-dark">
+              {principles.map((item, i) => (
+                <li key={item.k}>
+                  <span className="site-principle-n">0{i + 1}</span>
+                  <div>
+                    <strong>{item.k}</strong>
+                    <p>{item.v}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </Reveal>
         </div>
+      </section>
+
+      <section className="site-shell">
+        <Reveal>
+          <HubPreview />
         </Reveal>
       </section>
 
@@ -299,6 +287,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ user, onCuenta, onOpen
           <div className="site-modules">
             {modules.map((item) => (
               <article key={item.name}>
+                <div className="site-module-viz" aria-hidden="true">
+                  <i /><i /><i /><i /><i />
+                </div>
                 <span>{item.layer}</span>
                 <h3>{item.name}</h3>
                 <p>{item.text}</p>
@@ -316,25 +307,33 @@ export const LandingPage: React.FC<LandingPageProps> = ({ user, onCuenta, onOpen
         <p className="site-lead">
           Los motores no alucinan. La IA no abre ni cierra tickets. Ese corte es el producto.
         </p>
-        <div className="table-container site-table">
-          <table className="custom-table">
-            <thead>
-              <tr>
-                <th>Motor</th>
-                <th>Capa</th>
-                <th>Qué cubre</th>
-              </tr>
-            </thead>
-            <tbody>
-              {engines.map((engine) => (
-                <tr key={engine.name}>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700 }}>{engine.name}</td>
-                  <td><span className="badge badge-engine">{engine.layer}</span></td>
-                  <td style={{ color: 'var(--fg-muted)' }}>{engine.role}</td>
+        <div className="site-frame site-frame-light">
+          <div className="site-frame-bar">
+            <span />
+            <span />
+            <span />
+            <em>engines · detection</em>
+          </div>
+          <div className="table-container site-table">
+            <table className="custom-table">
+              <thead>
+                <tr>
+                  <th>Motor</th>
+                  <th>Capa</th>
+                  <th>Qué cubre</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {engines.map((engine) => (
+                  <tr key={engine.name}>
+                    <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700 }}>{engine.name}</td>
+                    <td><span className="badge badge-engine">{engine.layer}</span></td>
+                    <td style={{ color: 'var(--fg-muted)' }}>{engine.role}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
         </Reveal>
       </section>
