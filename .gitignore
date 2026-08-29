@@ -1,3 +1,6 @@
+# Local working branches / cloned sub-workspaces
+app_demian_branch/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
