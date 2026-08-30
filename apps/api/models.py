@@ -1,8 +1,43 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Integer, Boolean, Float, DateTime, ForeignKey, Text
+
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
+
 from database import Base
+
+
+class User(Base):
+    """Usuario provisionado por SSO (Google, GitHub, GitLab, Microsoft)."""
+
+    __tablename__ = "users"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    email = Column(String, nullable=False, unique=True, index=True)
+    name = Column(String, nullable=False)
+    avatar_url = Column(String, nullable=True)
+    provider = Column(String, nullable=False, index=True)  # google | github | gitlab | microsoft
+    provider_subject = Column(String, nullable=True)  # id externo del proveedor
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    last_login_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    sessions = relationship("AuthSession", back_populates="user", cascade="all, delete-orphan")
+
+
+class AuthSession(Base):
+    """Sesión corta tras OAuth (el front guarda el id y consulta /auth/session/{id})."""
+
+    __tablename__ = "auth_sessions"
+
+    id = Column(String, primary_key=True, default=lambda: uuid.uuid4().hex)
+    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    provider = Column(String, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    user = relationship("User", back_populates="sessions")
+
 
 class Repository(Base):
     __tablename__ = "repositories"
@@ -18,6 +53,7 @@ class Repository(Base):
     total_findings = Column(Integer, default=0)
     last_scan_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    owner_user_id = Column(String, ForeignKey("users.id"), nullable=True, index=True)
 
     scans = relationship("Scan", back_populates="repository", cascade="all, delete-orphan")
     findings = relationship("Finding", back_populates="repository", cascade="all, delete-orphan")
@@ -79,3 +115,14 @@ class SecurityGate(Base):
     block_on_secrets = Column(Boolean, default=True)
     require_ciso_approval_for_bypass = Column(Boolean, default=True)
     enabled = Column(Boolean, default=True)
+
+
+class AuditEvent(Base):
+    __tablename__ = "audit_events"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    action = Column(String, nullable=False, index=True)
+    target = Column(String, nullable=True)
+    detail = Column(Text, nullable=True)
+    actor_email = Column(String, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

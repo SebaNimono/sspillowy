@@ -1,6 +1,11 @@
 import os
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, DeclarativeBase
+from pathlib import Path
+
+from dotenv import load_dotenv
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
+
+load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 POSTGRES_USER = os.getenv("POSTGRES_USER", "postgres")
 POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "postgres")
@@ -8,37 +13,54 @@ POSTGRES_SERVER = os.getenv("POSTGRES_SERVER", "localhost")
 POSTGRES_PORT = os.getenv("POSTGRES_PORT", "5432")
 POSTGRES_DB = os.getenv("POSTGRES_DB", "sspillowy_db")
 
-# Fallback DB configuration: Uses PostgreSQL if available, otherwise SQLite for local dev
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_SERVER}:{POSTGRES_PORT}/{POSTGRES_DB}"
-)
+# Prefer DATABASE_URL (Supabase / Railway). Example Supabase:
+# postgresql://postgres.xxx:PASSWORD@aws-0-us-east-1.pooler.supabase.com:6543/postgres?sslmode=require
+_raw_url = os.getenv("DATABASE_URL", "").strip()
+if not _raw_url:
+    _raw_url = (
+        f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}"
+        f"@{POSTGRES_SERVER}:{POSTGRES_PORT}/{POSTGRES_DB}"
+    )
 
-# Connect args configuration based on database dialect
+# SQLAlchemy + psycopg2
+if _raw_url.startswith("postgres://"):
+    _raw_url = _raw_url.replace("postgres://", "postgresql://", 1)
+
+DATABASE_URL = _raw_url
+USING_SQLITE = False
+
+connect_args: dict = {}
 if "sqlite" in DATABASE_URL:
     connect_args = {"check_same_thread": False}
-else:
-    connect_args = {"connect_timeout": 3}
+    USING_SQLITE = True
+elif "postgresql" in DATABASE_URL and "sslmode=" not in DATABASE_URL:
+    # Supabase / cloud Postgres need TLS
+    if "supabase" in DATABASE_URL or "pooler" in DATABASE_URL:
+        sep = "&" if "?" in DATABASE_URL else "?"
+        DATABASE_URL = f"{DATABASE_URL}{sep}sslmode=require"
 
 try:
     engine = create_engine(
         DATABASE_URL,
         pool_pre_ping=True,
-        connect_args=connect_args
+        pool_size=5,
+        max_overflow=5,
+        connect_args=connect_args,
     )
 except Exception:
-    # Safe local fallback to SQLite if PostgreSQL fails to initialize
-    FALLBACK_URL = "sqlite:///./sspillowy.db"
+    USING_SQLITE = True
     engine = create_engine(
-        FALLBACK_URL,
-        connect_args={"check_same_thread": False}
+        "sqlite:///./sspillowy.db",
+        connect_args={"check_same_thread": False},
     )
+
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Modern SQLAlchemy 2.0 Base class
+
 class Base(DeclarativeBase):
     pass
+
 
 def get_db():
     db = SessionLocal()
@@ -46,3 +68,26 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def init_db() -> bool:
+    """Create tables if missing. Returns True if DB is reachable."""
+    import models  # noqa: F401 — register models on Base.metadata
+
+    try:
+        Base.metadata.create_all(bind=engine)
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return True
+    except Exception as exc:
+        print(f"[sspillowy] DB init failed: {exc}")
+        return False
+
+
+def db_ping() -> bool:
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return True
+    except Exception:
+        return False

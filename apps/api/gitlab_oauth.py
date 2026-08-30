@@ -76,6 +76,6 @@ async def gitlab_callback(code: str | None = None, state: str | None = None, err
         name=profile.get("name") or username,
         avatar_url=profile.get("avatar_url"),
         provider="gitlab",
-        gitlab_username=username,
+        provider_subject=str(profile.get("id") or username),
     )
     return frontend_redirect(f"sspillowy_session={session_id}")

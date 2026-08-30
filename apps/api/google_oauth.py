@@ -91,5 +91,6 @@ async def google_callback(code: str | None = None, state: str | None = None, err
         name=profile.get("name") or email.split("@")[0],
         avatar_url=profile.get("picture"),
         provider="google",
+        provider_subject=str(profile.get("sub") or ""),
     )
     return frontend_redirect(f"sspillowy_session={session_id}")

@@ -19,6 +19,7 @@ load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173").rstrip("/")
 SECRET_KEY = os.getenv("SECRET_KEY", "supersecretkey_change_me_in_production_123456789").strip()
 
+# Fallback en RAM si Postgres no está disponible
 SESSIONS: dict[str, dict] = {}
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Auth"])
@@ -60,14 +61,118 @@ def consume_state(state: str | None) -> bool:
     return datetime.now(timezone.utc) - issued <= timedelta(minutes=10)
 
 
-def save_session(**payload: object) -> str:
+def save_session(
+    *,
+    email: str,
+    name: str,
+    provider: str,
+    avatar_url: str | None = None,
+    provider_subject: str | None = None,
+    **_extra: object,
+) -> str:
+    """Upsert usuario en Supabase/Postgres + sesión. Fallback a RAM si falla la DB."""
     session_id = uuid.uuid4().hex
-    SESSIONS[session_id] = {
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=12)
+    payload = {
         "id": session_id,
+        "email": email,
+        "name": name,
+        "avatar_url": avatar_url,
+        "provider": provider,
         "created_at": datetime.now(timezone.utc).isoformat(),
-        **payload,
+        "expires_at": expires_at.isoformat(),
     }
+
+    try:
+        from database import SessionLocal
+        from models import AuthSession, User
+
+        db = SessionLocal()
+        try:
+            user = db.query(User).filter(User.email == email).first()
+            now = datetime.now(timezone.utc)
+            if user:
+                user.name = name or user.name
+                user.avatar_url = avatar_url or user.avatar_url
+                user.provider = provider
+                if provider_subject:
+                    user.provider_subject = provider_subject
+                user.last_login_at = now
+            else:
+                user = User(
+                    id=str(uuid.uuid4()),
+                    email=email,
+                    name=name,
+                    avatar_url=avatar_url,
+                    provider=provider,
+                    provider_subject=provider_subject,
+                    created_at=now,
+                    last_login_at=now,
+                )
+                db.add(user)
+                db.flush()
+
+            db.add(
+                AuthSession(
+                    id=session_id,
+                    user_id=user.id,
+                    provider=provider,
+                    expires_at=expires_at,
+                    created_at=now,
+                )
+            )
+            db.commit()
+            payload["user_id"] = user.id
+        finally:
+            db.close()
+    except Exception as exc:
+        print(f"[sspillowy] save_session DB fallback: {exc}")
+
+    SESSIONS[session_id] = payload
     return session_id
+
+
+def load_session(session_id: str) -> dict | None:
+    mem = SESSIONS.get(session_id)
+    if mem:
+        return mem
+
+    try:
+        from database import SessionLocal
+        from models import AuthSession, User
+
+        db = SessionLocal()
+        try:
+            row = (
+                db.query(AuthSession, User)
+                .join(User, User.id == AuthSession.user_id)
+                .filter(AuthSession.id == session_id)
+                .first()
+            )
+            if not row:
+                return None
+            auth, user = row
+            exp = auth.expires_at
+            if exp.tzinfo is None:
+                exp = exp.replace(tzinfo=timezone.utc)
+            if exp < datetime.now(timezone.utc):
+                return None
+            data = {
+                "id": auth.id,
+                "email": user.email,
+                "name": user.name,
+                "avatar_url": user.avatar_url,
+                "provider": auth.provider,
+                "user_id": user.id,
+                "created_at": (auth.created_at or datetime.now(timezone.utc)).isoformat(),
+            }
+            SESSIONS[session_id] = data
+            return data
+        finally:
+            db.close()
+    except Exception as exc:
+        print(f"[sspillowy] load_session DB error: {exc}")
+        return None
 
 
 def map_google_token_error(response: httpx.Response) -> tuple[str, str]:
@@ -120,7 +225,7 @@ async def list_auth_providers():
 
 @router.get("/session/{session_id}")
 async def get_auth_session(session_id: str):
-    session = SESSIONS.get(session_id)
+    session = load_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Sesión OAuth no encontrada o expirada")
     return session

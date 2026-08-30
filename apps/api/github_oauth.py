@@ -87,6 +87,6 @@ async def github_callback(code: str | None = None, state: str | None = None, err
         name=profile.get("name") or profile.get("login") or email.split("@")[0],
         avatar_url=profile.get("avatar_url"),
         provider="github",
-        github_login=profile.get("login"),
+        provider_subject=str(profile.get("id") or profile.get("login") or ""),
     )
     return frontend_redirect(f"sspillowy_session={session_id}")

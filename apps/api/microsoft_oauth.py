@@ -95,6 +95,6 @@ async def microsoft_callback(code: str | None = None, state: str | None = None, 
         email=email,
         name=profile.get("displayName") or email.split("@")[0],
         provider="microsoft",
-        microsoft_id=profile.get("id"),
+        provider_subject=str(profile.get("id") or ""),
     )
     return frontend_redirect(f"sspillowy_session={session_id}")

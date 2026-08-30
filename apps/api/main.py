@@ -40,6 +40,7 @@ from gitlab_oauth import router as gitlab_auth_router
 from google_oauth import router as google_auth_router
 from microsoft_oauth import router as microsoft_auth_router
 from oauth_common import router as auth_meta_router
+from database import init_db, db_ping
 
 app = FastAPI(
     title="SSPILLOWY API Core",
@@ -48,6 +49,11 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc"
 )
+
+@app.on_event("startup")
+async def on_startup():
+    ok = init_db()
+    print(f"[sspillowy] database ready={ok}")
 
 app.add_middleware(
     CORSMiddleware,
@@ -482,11 +488,12 @@ def _heatmap_level(count: int) -> int:
 
 @app.get("/health", tags=["Health"])
 async def health_check():
+    db_ok = db_ping()
     return {
-        "status": "healthy",
+        "status": "healthy" if db_ok else "degraded",
         "service": "SSPILLOWY Core API",
         "version": "0.1.0",
-        "database": "postgresql (healthy)",
+        "database": "postgresql (ok)" if db_ok else "unavailable (using memory fallback for auth)",
         "redis_worker": "arq (ready)"
     }
 
