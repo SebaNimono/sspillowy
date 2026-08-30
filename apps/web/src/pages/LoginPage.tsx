@@ -8,9 +8,11 @@ interface LoginPageProps {
   onLoginSuccess: (email: string, name: string) => void;
   onBack?: () => void;
   oauthError?: string | null;
+  oauthDetail?: string | null;
 }
 
-const oauthErrorMessage = (code: string) => {
+const oauthErrorMessage = (code: string, detail?: string | null) => {
+  const extra = detail ? ` Detalle: ${detail}` : '';
   switch (code) {
     case 'github_not_configured':
       return 'Falta GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET en el .env.';
@@ -20,29 +22,47 @@ const oauthErrorMessage = (code: string) => {
       return 'Cancelaste el acceso en el proveedor.';
     case 'invalid_state':
     case 'state_expired':
-      return 'La sesión OAuth expiró. Vuelve a intentar.';
+      return 'La sesión OAuth expiró. Vuelve a intentar (no abras dos pestañas a la vez).';
     case 'session_expired':
-      return 'No se pudo leer la sesión. Intenta de nuevo.';
+      return 'No se pudo leer la sesión en Railway. Redeploy reciente: intenta login otra vez.';
     case 'gitlab_http':
       return 'GitLab no respondió. Revisa el Redirect URI y reinicia uvicorn.';
     case 'google_not_configured':
-      return 'Falta GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET en el .env.';
+      return 'Falta GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET en Railway.';
+    case 'google_redirect_mismatch':
+      return 'Google: redirect URI no coincide. Debe ser idéntico en Railway y Google Cloud.' + extra;
+    case 'google_invalid_client':
+      return 'Google: Client ID o Client Secret incorrectos en Railway.' + extra;
+    case 'google_invalid_grant':
+      return 'Google: código expirado o Gmail no autorizado (Test users). Usa zoechispitas@gmail.com.' + extra;
     case 'google_http':
-      return 'Google no respondió. Revisa el redirect URI y que tu Gmail esté en Test users.';
+      return 'Google no respondió. Revisa redirect URI y Test users.' + extra;
+    case 'google_profile_http':
+      return 'Google devolvió token pero falló el perfil.' + extra;
     case 'google_no_email':
       return 'Google no devolvió el correo. Activa el scope email en la pantalla de consentimiento.';
     case 'microsoft_not_configured':
-      return 'Falta MICROSOFT_CLIENT_ID / MICROSOFT_CLIENT_SECRET en el .env.';
+      return 'Falta MICROSOFT_CLIENT_ID / MICROSOFT_CLIENT_SECRET en Railway.';
+    case 'microsoft_redirect_mismatch':
+      return 'Microsoft: redirect URI no coincide con Azure (pestaña Web).' + extra;
+    case 'microsoft_invalid_secret':
+      return 'Microsoft: Client Secret inválido o caducado. Crea uno nuevo en Azure y pega el Valor en Railway.' + extra;
+    case 'microsoft_invalid_client':
+      return 'Microsoft: Client ID o Secret incorrectos en Railway.' + extra;
+    case 'microsoft_accounts':
+      return 'Microsoft: la app no permite cuentas personales. En Azure → Supported accounts elige personal + work/school.' + extra;
     case 'microsoft_http':
-      return 'Microsoft no respondió. Revisa el redirect URI (tipo Web) y el tenant common.';
+      return 'Microsoft no respondió. Revisa redirect URI (Web) y tenant common.' + extra;
+    case 'microsoft_profile_http':
+      return 'Microsoft devolvió token pero falló Graph /me. Revisa permiso User.Read.' + extra;
     case 'microsoft_no_email':
       return 'Microsoft no devolvió el correo. Revisa que la app pida email y User.Read.';
     default:
-      return 'El proveedor no autorizó el inicio de sesión. Revisa el callback URL y el .env.';
+      return 'El proveedor no autorizó el inicio de sesión.' + extra;
   }
 };
 
-export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oauthError }) => {
+export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oauthError, oauthDetail }) => {
   const [isRegister, setIsRegister] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -55,9 +75,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oa
       id: 'oauth-error',
       type: 'error',
       title: 'Inicio de sesión',
-      message: oauthErrorMessage(oauthError),
+      message: oauthErrorMessage(oauthError, oauthDetail),
     });
-  }, [oauthError]);
+  }, [oauthError, oauthDetail]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

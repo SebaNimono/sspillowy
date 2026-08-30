@@ -21,6 +21,7 @@ export const App: React.FC = () => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [bootstrapping, setBootstrapping] = useState(true);
   const [oauthError, setOauthError] = useState<string | null>(null);
+  const [oauthDetail, setOauthDetail] = useState<string | null>(null);
 
   const [user, setUser] = useState<{ email: string; name: string } | null>(() => {
     try {
@@ -57,6 +58,7 @@ export const App: React.FC = () => {
     const params = new URLSearchParams(window.location.search);
     const sessionId = params.get('sspillowy_session');
     const error = params.get('oauth_error');
+    const detail = params.get('oauth_detail');
 
     const clearQuery = () => {
       window.history.replaceState({}, '', window.location.pathname);
@@ -64,6 +66,7 @@ export const App: React.FC = () => {
 
     if (error) {
       setOauthError(error);
+      setOauthDetail(detail);
       setView('login');
       clearQuery();
       setBootstrapping(false);
@@ -158,8 +161,9 @@ export const App: React.FC = () => {
       <>
         <LoginPage
           onLoginSuccess={handleLoginSuccess}
-          onBack={() => { setOauthError(null); setView('site'); }}
+          onBack={() => { setOauthError(null); setOauthDetail(null); setView('site'); }}
           oauthError={oauthError}
+          oauthDetail={oauthDetail}
         />
         <CookieBanner
           onPrivacy={() => {

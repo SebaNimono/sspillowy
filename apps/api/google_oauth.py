@@ -5,7 +5,14 @@ import httpx
 from fastapi import APIRouter
 from fastapi.responses import RedirectResponse
 
-from oauth_common import consume_state, frontend_redirect, issue_state, save_session
+from oauth_common import (
+    consume_state,
+    frontend_redirect,
+    issue_state,
+    map_google_token_error,
+    redirect_oauth_error,
+    save_session,
+)
 
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "").strip()
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "").strip()
@@ -20,7 +27,7 @@ router = APIRouter(prefix="/api/v1/auth", tags=["Auth"])
 @router.get("/google")
 async def google_login():
     if not (GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET):
-        return frontend_redirect("oauth_error=google_not_configured")
+        return redirect_oauth_error("google_not_configured")
 
     params = urlencode(
         {
@@ -39,9 +46,9 @@ async def google_login():
 @router.get("/google/callback")
 async def google_callback(code: str | None = None, state: str | None = None, error: str | None = None):
     if error:
-        return frontend_redirect(f"oauth_error={error}")
+        return redirect_oauth_error(error)
     if not code or not consume_state(state):
-        return frontend_redirect("oauth_error=invalid_state")
+        return redirect_oauth_error("invalid_state")
 
     try:
         async with httpx.AsyncClient(timeout=20.0) as client:
@@ -56,23 +63,28 @@ async def google_callback(code: str | None = None, state: str | None = None, err
                 },
                 headers={"Accept": "application/json"},
             )
-            token_res.raise_for_status()
+            if token_res.is_error:
+                code_key, detail = map_google_token_error(token_res)
+                return redirect_oauth_error(code_key, detail)
+
             access_token = token_res.json().get("access_token")
             if not access_token:
-                return frontend_redirect("oauth_error=no_access_token")
+                return redirect_oauth_error("no_access_token")
 
             user_res = await client.get(
                 "https://www.googleapis.com/oauth2/v3/userinfo",
                 headers={"Authorization": f"Bearer {access_token}"},
             )
-            user_res.raise_for_status()
+            if user_res.is_error:
+                return redirect_oauth_error("google_profile_http", user_res.text[:120])
+
             profile = user_res.json()
-    except httpx.HTTPError:
-        return frontend_redirect("oauth_error=google_http")
+    except httpx.HTTPError as exc:
+        return redirect_oauth_error("google_http", str(exc)[:120])
 
     email = profile.get("email")
     if not email:
-        return frontend_redirect("oauth_error=google_no_email")
+        return redirect_oauth_error("google_no_email")
 
     session_id = save_session(
         email=email,
