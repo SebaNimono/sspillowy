@@ -64,11 +64,13 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoginTab = true;
+  bool _isLoadingSocial = false;
 
-  // Rutas locales de los assets con sus nombres de archivo exactos
+  // Rutas locales de assets
   static const String _mainLogoAsset = 'assets/sspillowy_logo.png';
   static const String _innerLogoAsset = 'assets/logo_2.png';
   static const String _googleAsset = 'assets/Google.png';
@@ -83,21 +85,59 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  // Validación e inicio de sesión seguro
   void _handleLogin() {
-    final email = _emailController.text.trim();
-    final userEmail = email.isEmpty ? 'usuario@sspillowy.com' : email;
-    final initialName = userEmail.split('@').first;
+    if (_formKey.currentState?.validate() ?? false) {
+      final email = _emailController.text.trim();
+      final initialName = email.split('@').first;
+      final capitalizedName = initialName.isNotEmpty
+          ? '${initialName[0].toUpperCase()}${initialName.substring(1)}'
+          : 'Usuario';
 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (context) => MainDashboardScreen(
-          userName: initialName,
-          userNickname: initialName.toLowerCase(),
-          userEmail: userEmail,
-          onToggleTheme: widget.onToggleTheme,
-          currentMode: widget.currentMode,
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => MainDashboardScreen(
+            userName: capitalizedName,
+            userNickname: initialName.toLowerCase(),
+            userEmail: email,
+            onToggleTheme: widget.onToggleTheme,
+            currentMode: widget.currentMode,
+          ),
         ),
+      );
+    }
+  }
+
+  // Simulación de OAuth SSO en lugar de paso directo
+  void _handleSocialSSO(String provider) async {
+    setState(() => _isLoadingSocial = true);
+
+    await Future.delayed(const Duration(seconds: 1));
+
+    if (!mounted) return;
+    setState(() => _isLoadingSocial = false);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.security, color: Color(0xFF4A3E85)),
+            const SizedBox(width: 8),
+            Text('Autenticación $provider'),
+          ],
+        ),
+        content: Text(
+          'Se requiere vincular la cuenta corporativa de $provider para acceder a la consola DevSecOps.\n\n'
+          'Ingresa tu correo en el formulario principal para continuar.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Entendido'),
+          ),
+        ],
       ),
     );
   }
@@ -133,7 +173,11 @@ class _LoginScreenState extends State<LoginScreen> {
                             SizedBox(
                               width: 18,
                               height: 18,
-                              child: Image.asset(_innerLogoAsset, fit: BoxFit.contain),
+                              child: Image.asset(
+                                _innerLogoAsset,
+                                fit: BoxFit.contain,
+                                errorBuilder: (_, __, ___) => const Icon(Icons.shield, size: 16, color: Color(0xFF4A3E85)),
+                              ),
                             ),
                             const SizedBox(width: 8),
                             const Text('SSPILLOWY Console', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
@@ -143,7 +187,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       IconButton(
                         icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode_outlined),
                         onPressed: widget.onToggleTheme,
-                        tooltip: 'Cambiar Modo Oscuro/Claro',
+                        tooltip: 'Cambiar Modo',
                       ),
                     ],
                   ),
@@ -152,186 +196,221 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Center(
                     child: SingleChildScrollView(
                       padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          // Logo Principal corregido para mantener la proporción original
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 8.0),
-                            child: SizedBox(
-                              height: 110,
-                              child: Image.asset(
-                                _mainLogoAsset,
-                                fit: BoxFit.contain,
-                                errorBuilder: (context, error, stackTrace) => Image.asset(
-                                  _innerLogoAsset,
+                      child: Form(
+                        key: _formKey,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            // 1. LOGO PRINCIPAL CON ASPECT RATIO NATURAL
+                            Container(
+                              margin: const EdgeInsets.only(bottom: 16.0),
+                              constraints: const BoxConstraints(maxWidth: 280, maxHeight: 120),
+                              child: AspectRatio(
+                                aspectRatio: 2.2, // Proporción natural de la serpiente en la almohada
+                                child: Image.asset(
+                                  _mainLogoAsset,
                                   fit: BoxFit.contain,
+                                  alignment: Alignment.center,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Image.asset(_innerLogoAsset, fit: BoxFit.contain);
+                                  },
                                 ),
                               ),
                             ),
-                          ),
-                          Text(
-                            _isLoginTab ? 'Iniciar sesión en SSPILLOWY' : 'Crear tu cuenta en SSPILLOWY',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: isDark ? Colors.white70 : Colors.black87,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          const Text('Plataforma Integral de Gobernanza DevSecOps', style: TextStyle(color: Colors.grey, fontSize: 12)),
-                          const SizedBox(height: 20),
 
-                          // Card Principal
-                          Container(
-                            constraints: const BoxConstraints(maxWidth: 420),
-                            padding: const EdgeInsets.all(22),
-                            decoration: BoxDecoration(
-                              color: isDark ? const Color(0xFF1E293B) : Colors.white,
-                              borderRadius: BorderRadius.circular(16),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05),
-                                  blurRadius: 20,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
+                            Text(
+                              _isLoginTab ? 'Iniciar sesión en SSPILLOWY' : 'Crear tu cuenta en SSPILLOWY',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: isDark ? Colors.white70 : Colors.black87,
+                              ),
                             ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Container(
-                                  decoration: BoxDecoration(
-                                    color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
-                                    borderRadius: BorderRadius.circular(8),
+                            const SizedBox(height: 2),
+                            const Text('Plataforma Integral de Gobernanza DevSecOps', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                            const SizedBox(height: 20),
+
+                            // Card Principal Formulario
+                            Container(
+                              constraints: const BoxConstraints(maxWidth: 420),
+                              padding: const EdgeInsets.all(22),
+                              decoration: BoxDecoration(
+                                color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05),
+                                    blurRadius: 20,
+                                    offset: const Offset(0, 4),
                                   ),
-                                  child: Row(
-                                    children: [
-                                      Expanded(
-                                        child: GestureDetector(
-                                          onTap: () => setState(() => _isLoginTab = true),
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(vertical: 10),
-                                            decoration: BoxDecoration(
-                                              color: _isLoginTab
-                                                  ? (isDark ? const Color(0xFF334155) : Colors.white)
-                                                  : Colors.transparent,
-                                              borderRadius: BorderRadius.circular(8),
-                                            ),
-                                            child: const Center(
-                                              child: Text('Iniciar Sesión', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      Expanded(
-                                        child: GestureDetector(
-                                          onTap: () => setState(() => _isLoginTab = false),
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(vertical: 10),
-                                            decoration: BoxDecoration(
-                                              color: !_isLoginTab
-                                                  ? (isDark ? const Color(0xFF334155) : Colors.white)
-                                                  : Colors.transparent,
-                                              borderRadius: BorderRadius.circular(8),
-                                            ),
-                                            child: const Center(
-                                              child: Text('Crear Cuenta', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(height: 18),
-                                const Text('Correo electrónico o Gmail', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
-                                const SizedBox(height: 6),
-                                TextField(
-                                  controller: _emailController,
-                                  decoration: InputDecoration(
-                                    hintText: 'usuario@ejemplo.com',
-                                    prefixIcon: const Icon(Icons.email_outlined, size: 18),
-                                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                                  ),
-                                ),
-                                const SizedBox(height: 14),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    const Text('Contraseña', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
-                                    if (_isLoginTab)
-                                      GestureDetector(
-                                        onTap: () {},
-                                        child: const Text('¿Olvidaste tu clave?', style: TextStyle(color: Colors.blue, fontSize: 11)),
-                                      ),
-                                  ],
-                                ),
-                                const SizedBox(height: 6),
-                                TextField(
-                                  controller: _passwordController,
-                                  obscureText: true,
-                                  decoration: InputDecoration(
-                                    hintText: '••••••••',
-                                    prefixIcon: const Icon(Icons.lock_outline, size: 18),
-                                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                                  ),
-                                ),
-                                const SizedBox(height: 18),
-                                ElevatedButton(
-                                  onPressed: _handleLogin,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF1E8E3E),
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Text(
-                                        _isLoginTab ? 'Ingresar a la Consola' : 'Registrar Cuenta',
-                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      const Icon(Icons.arrow_forward, size: 16),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                                Row(
-                                  children: [
-                                    Expanded(child: Divider(color: isDark ? Colors.white12 : Colors.grey.shade300)),
-                                    Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                                      child: Text('O INGRESAR CON', style: TextStyle(color: Colors.grey.shade500, fontSize: 10, fontWeight: FontWeight.w500)),
+                                ],
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  // Tab Switcher
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+                                      borderRadius: BorderRadius.circular(8),
                                     ),
-                                    Expanded(child: Divider(color: isDark ? Colors.white12 : Colors.grey.shade300)),
-                                  ],
-                                ),
-                                const SizedBox(height: 14),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: GestureDetector(
+                                            onTap: () => setState(() => _isLoginTab = true),
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(vertical: 10),
+                                              decoration: BoxDecoration(
+                                                color: _isLoginTab
+                                                    ? (isDark ? const Color(0xFF334155) : Colors.white)
+                                                    : Colors.transparent,
+                                                borderRadius: BorderRadius.circular(8),
+                                              ),
+                                              child: const Center(
+                                                child: Text('Iniciar Sesión', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        Expanded(
+                                          child: GestureDetector(
+                                            onTap: () => setState(() => _isLoginTab = false),
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(vertical: 10),
+                                              decoration: BoxDecoration(
+                                                color: !_isLoginTab
+                                                    ? (isDark ? const Color(0xFF334155) : Colors.white)
+                                                    : Colors.transparent,
+                                                borderRadius: BorderRadius.circular(8),
+                                              ),
+                                              child: const Center(
+                                                child: Text('Crear Cuenta', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 18),
 
-                                // Botones con assets locales
-                                GridView.count(
-                                  crossAxisCount: 2,
-                                  shrinkWrap: true,
-                                  physics: const NeverScrollableScrollPhysics(),
-                                  childAspectRatio: 3.2,
-                                  crossAxisSpacing: 8,
-                                  mainAxisSpacing: 8,
-                                  children: [
-                                    _socialNetworkButton(context, 'Google', _googleAsset),
-                                    _socialNetworkButton(context, 'GitHub', _githubAsset),
-                                    _socialNetworkButton(context, 'GitLab', _gitlabAsset),
-                                    _socialNetworkButton(context, 'Microsoft', _microsoftAsset),
-                                  ],
-                                ),
-                              ],
+                                  // Campo Correo
+                                  const Text('Correo electrónico', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+                                  const SizedBox(height: 6),
+                                  TextFormField(
+                                    controller: _emailController,
+                                    keyboardType: TextInputType.emailAddress,
+                                    validator: (value) {
+                                      if (value == null || value.trim().isEmpty) {
+                                        return 'Por favor ingresa tu correo';
+                                      }
+                                      if (!value.contains('@') || !value.contains('.')) {
+                                        return 'Ingresa un correo válido (ej: usuario@empresa.com)';
+                                      }
+                                      return null;
+                                    },
+                                    decoration: InputDecoration(
+                                      hintText: 'usuario@sspillowy.com',
+                                      prefixIcon: const Icon(Icons.email_outlined, size: 18),
+                                      contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 14),
+
+                                  // Campo Contraseña
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      const Text('Contraseña', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+                                      if (_isLoginTab)
+                                        GestureDetector(
+                                          onTap: () {},
+                                          child: const Text('¿Olvidaste tu clave?', style: TextStyle(color: Colors.blue, fontSize: 11)),
+                                        ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  TextFormField(
+                                    controller: _passwordController,
+                                    obscureText: true,
+                                    validator: (value) {
+                                      if (value == null || value.trim().isEmpty) {
+                                        return 'Por favor ingresa tu contraseña';
+                                      }
+                                      if (value.length < 4) {
+                                        return 'La contraseña debe tener al menos 4 caracteres';
+                                      }
+                                      return null;
+                                    },
+                                    decoration: InputDecoration(
+                                      hintText: '••••••••',
+                                      prefixIcon: const Icon(Icons.lock_outline, size: 18),
+                                      contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 18),
+
+                                  // Botón Entrar
+                                  ElevatedButton(
+                                    onPressed: _handleLogin,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF1E8E3E),
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(vertical: 12),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Text(
+                                          _isLoginTab ? 'Ingresar a la Consola' : 'Registrar Cuenta',
+                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        const Icon(Icons.arrow_forward, size: 16),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+
+                                  Row(
+                                    children: [
+                                      Expanded(child: Divider(color: isDark ? Colors.white12 : Colors.grey.shade300)),
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                                        child: Text('O SSO PROVIDERS', style: TextStyle(color: Colors.grey.shade500, fontSize: 10, fontWeight: FontWeight.w500)),
+                                      ),
+                                      Expanded(child: Divider(color: isDark ? Colors.white12 : Colors.grey.shade300)),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 14),
+
+                                  // Botones SSO con Fallback Garantizado
+                                  if (_isLoadingSocial)
+                                    const Center(child: Padding(padding: EdgeInsets.all(8.0), child: CircularProgressIndicator()))
+                                  else
+                                    GridView.count(
+                                      crossAxisCount: 2,
+                                      shrinkWrap: true,
+                                      physics: const NeverScrollableScrollPhysics(),
+                                      childAspectRatio: 3.2,
+                                      crossAxisSpacing: 8,
+                                      mainAxisSpacing: 8,
+                                      children: [
+                                        _socialButton(context, 'Google', _googleAsset, Colors.red, Icons.g_mobiledata),
+                                        _socialButton(context, 'GitHub', _githubAsset, isDark ? Colors.white : Colors.black, Icons.code),
+                                        _socialButton(context, 'GitLab', _gitlabAsset, Colors.orange, Icons.alt_route),
+                                        _socialButton(context, 'Microsoft', _microsoftAsset, Colors.blue, Icons.window),
+                                      ],
+                                    ),
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -348,15 +427,15 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _socialNetworkButton(BuildContext context, String label, String assetPath) {
+  Widget _socialButton(BuildContext context, String label, String assetPath, Color fallbackColor, IconData fallbackIcon) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return OutlinedButton(
-      onPressed: _handleLogin,
+      onPressed: () => _handleSocialSSO(label),
       style: OutlinedButton.styleFrom(
         backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
         side: BorderSide(color: isDark ? Colors.white12 : Colors.grey.shade300),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        padding: const EdgeInsets.symmetric(horizontal: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 6),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -367,11 +446,17 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Image.asset(
               assetPath,
               fit: BoxFit.contain,
-              errorBuilder: (context, error, stackTrace) => const Icon(Icons.link, size: 16),
+              errorBuilder: (_, __, ___) => Icon(fallbackIcon, size: 18, color: fallbackColor),
             ),
           ),
-          const SizedBox(width: 8),
-          Text(label, style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 12, fontWeight: FontWeight.w600)),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+          ),
         ],
       ),
     );
@@ -441,6 +526,61 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
     userNickname = widget.userNickname;
   }
 
+  // 5. MODAL PARA EDITAR PERFIL / NICKNAME Y NOMBRE DE USUARIO
+  void _editUserProfile() {
+    final nameController = TextEditingController(text: userName);
+    final nicknameController = TextEditingController(text: userNickname);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.edit, color: Color(0xFF4A3E85)),
+            SizedBox(width: 8),
+            Text('Editar Perfil', style: TextStyle(fontSize: 16)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(labelText: 'Nombre de usuario', prefixIcon: Icon(Icons.person)),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: nicknameController,
+              decoration: const InputDecoration(labelText: 'Nickname / Aliases', prefixIcon: Icon(Icons.alternate_email)),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (nameController.text.trim().isNotEmpty && nicknameController.text.trim().isNotEmpty) {
+                setState(() {
+                  userName = nameController.text.trim();
+                  userNickname = nicknameController.text.trim();
+                });
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Perfil actualizado correctamente')),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4A3E85), foregroundColor: Colors.white),
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _runInteractiveScan(String type) async {
     if (_isScanning) return;
 
@@ -480,7 +620,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Auditoría $type finalizada. Vulnerabilidades detectadas agregadas al tablero.'),
+          content: Text('Auditoría $type finalizada. Hallazgos cargados al tablero.'),
           backgroundColor: const Color(0xFF1E8E3E),
         ),
       );
@@ -505,12 +645,12 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
         title: Row(
           children: [
             SizedBox(
-              width: 28,
-              height: 28,
-              child: Image.asset('assets/logo_2.png', fit: BoxFit.contain),
+              width: 24,
+              height: 24,
+              child: Image.asset('assets/logo_2.png', fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Icon(Icons.shield, size: 20)),
             ),
             const SizedBox(width: 8),
-            const Text('SSPILLOWY Console', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            const Text('SSPILLOWY Console', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           ],
         ),
         actions: [
@@ -537,6 +677,15 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
               ),
             ),
             ListTile(
+              leading: const Icon(Icons.edit_outlined, color: Color(0xFF4A3E85)),
+              title: const Text('Editar Nickname y Perfil'),
+              onTap: () {
+                Navigator.pop(context);
+                _editUserProfile();
+              },
+            ),
+            const Divider(),
+            ListTile(
               leading: const Icon(Icons.logout, color: Colors.red),
               title: const Text('Cerrar Sesión', style: TextStyle(color: Colors.red)),
               onTap: () {
@@ -559,6 +708,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Perfil Card
             Card(
               elevation: 1,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -584,12 +734,18 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                         ],
                       ),
                     ),
+                    IconButton(
+                      icon: const Icon(Icons.edit_note, color: Color(0xFF4A3E85)),
+                      onPressed: _editUserProfile,
+                      tooltip: 'Editar Nombre / Nickname',
+                    ),
                   ],
                 ),
               ),
             ),
             const SizedBox(height: 18),
 
+            // Card Escaneos
             Card(
               elevation: 1,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -664,11 +820,13 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
         ),
       ),
 
-      floatingActionButton: FloatingActionButton.extended(
+      // 4. BURBUJA IA PEQUEÑA Y CIRCULAR (NO UN RECTÁNGULO)
+      floatingActionButton: FloatingActionButton(
         onPressed: _openAIChat,
         backgroundColor: const Color(0xFF4A3E85),
-        icon: const Icon(Icons.auto_awesome, color: Colors.amber),
-        label: const Text('Asistente IA', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        mini: false,
+        tooltip: 'Asistente IA',
+        child: const Icon(Icons.auto_awesome, color: Colors.amber),
       ),
     );
   }
@@ -704,7 +862,7 @@ class IAChatModal extends StatefulWidget {
 class _IAChatModalState extends State<IAChatModal> {
   final TextEditingController _msgController = TextEditingController();
   final List<Map<String, String>> _messages = [
-    {'sender': 'ai', 'text': '¡Hola! Soy el asistente IA de SSPILLOWY. Haz un escaneo para analizar tus vulnerabilidades.'},
+    {'sender': 'ai', 'text': '¡Hola! Soy el asistente IA de SSPILLOWY. ¿En qué te puedo ayudar hoy?'},
   ];
 
   void _sendMessage(String text) {
@@ -721,7 +879,7 @@ class _IAChatModalState extends State<IAChatModal> {
       setState(() {
         _messages.add({
           'sender': 'ai',
-          'text': 'Análisis procesado. Se sugiere aplicar parches de seguridad en dependencias críticas de tu proyecto.'
+          'text': 'Análisis procesado. Recuerda mantener tus dependencias actualizadas en el repositorio.'
         });
       });
     });
@@ -732,7 +890,7 @@ class _IAChatModalState extends State<IAChatModal> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
-      height: MediaQuery.of(context).size.height * 0.75,
+      height: MediaQuery.of(context).size.height * 0.70,
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1E293B) : Colors.white,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
@@ -774,7 +932,13 @@ class _IAChatModalState extends State<IAChatModal> {
                       color: isUser ? const Color(0xFF1E88E5) : (isDark ? const Color(0xFF334155) : Colors.grey.shade200),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Text(msg['text']!, style: const TextStyle(fontSize: 13)),
+                    child: Text(
+                      msg['text']!,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: isUser ? Colors.white : (isDark ? Colors.white : Colors.black87),
+                      ),
+                    ),
                   ),
                 );
               },
