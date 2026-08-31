@@ -159,13 +159,13 @@ class _LoginScreenState extends State<LoginScreen> {
       final initialName = email.split('@').first;
       final capitalizedName = initialName.isNotEmpty
           ? '${initialName[0].toUpperCase()}${initialName.substring(1)}'
-          : 'Usuario';
+          : 'Pedro Rodriguez';
 
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
           builder: (context) => MainDashboardScreen(
-            userName: capitalizedName,
+            userName: capitalizedName.contains('Pedro') ? capitalizedName : 'Pedro Rodriguez',
             userNickname: initialName.toLowerCase(),
             userEmail: email,
             onToggleTheme: widget.onToggleTheme,
@@ -556,21 +556,14 @@ class MainDashboardScreen extends StatefulWidget {
 }
 
 class _MainDashboardScreenState extends State<MainDashboardScreen> {
+  int _selectedNavIndex = 0;
+
   late String userName;
   late String userNickname;
   String userRole = 'DevSecOps Lead';
   String userDept = 'Ingeniería & Ciberseguridad';
   String avatarUrl = '';
-  int selectedPresetAvatar = 0; // 0 = Iniciales, 1 = Shield, 2 = Code, 3 = Terminal, 4 = Lock
-
-  bool _isScanning = false;
-  double _scanProgress = 0.0;
-  String _scanStatusText = 'Presiona un botón para realizar un escaneo.';
-
-  int _vulnSast = 0;
-  int _vulnSca = 0;
-  int _vulnDast = 0;
-  int _compliance = 100;
+  int selectedPresetAvatar = 0;
 
   @override
   void initState() {
@@ -579,7 +572,6 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
     userNickname = widget.userNickname;
   }
 
-  // MODAL EXTENDIDO: Personalización de Avatar y Perfil
   void _editUserProfile() {
     final nameController = TextEditingController(text: userName);
     final nicknameController = TextEditingController(text: userNickname);
@@ -752,7 +744,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
     );
   }
 
-  Widget _buildAvatarWidget({double radius = 24, double fontSize = 18}) {
+  Widget _buildAvatarWidget({double radius = 20, double fontSize = 16}) {
     if (avatarUrl.isNotEmpty) {
       return CircleAvatar(
         radius: radius,
@@ -778,9 +770,9 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
       default:
         return CircleAvatar(
           radius: radius,
-          backgroundColor: const Color(0xFF4A3E85),
+          backgroundColor: const Color(0xFF1E88E5),
           child: Text(
-            userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
+            userName.isNotEmpty ? userName[0].toUpperCase() : 'P',
             style: TextStyle(color: Colors.white, fontSize: fontSize, fontWeight: FontWeight.bold),
           ),
         );
@@ -788,55 +780,9 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
 
     return CircleAvatar(
       radius: radius,
-      backgroundColor: const Color(0xFF4A3E85),
+      backgroundColor: const Color(0xFF1E88E5),
       child: Icon(icon, color: Colors.white, size: radius * 1.1),
     );
-  }
-
-  void _runInteractiveScan(String type) async {
-    if (_isScanning) return;
-
-    setState(() {
-      _isScanning = true;
-      _scanProgress = 0.1;
-      _scanStatusText = 'Analizando infraestructura ($type)...';
-    });
-
-    for (int i = 1; i <= 10; i++) {
-      await Future.delayed(const Duration(milliseconds: 250));
-      if (!mounted) return;
-      setState(() {
-        _scanProgress = i / 10;
-        _scanStatusText = 'Escaneando repositorio ($type) - ${(i * 10)}%';
-      });
-    }
-
-    setState(() {
-      _isScanning = false;
-      _scanStatusText = '¡Escaneo $type completado! Se han actualizado los hallazgos.';
-
-      if (type == 'SAST') {
-        _vulnSast += 3;
-        _compliance -= 2;
-      }
-      if (type == 'SCA') {
-        _vulnSca += 2;
-        _compliance -= 1;
-      }
-      if (type == 'DAST') {
-        _vulnDast += 1;
-        _compliance -= 2;
-      }
-    });
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Auditoría $type finalizada. Hallazgos cargados al tablero.'),
-          backgroundColor: const Color(0xFF1E8E3E),
-        ),
-      );
-    }
   }
 
   void _openAIChat() {
@@ -852,49 +798,132 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    final navItems = [
+      {'icon': Icons.grid_view_rounded, 'title': 'Dashboard General'},
+      {'icon': Icons.folder_open_rounded, 'title': 'Repositorios'},
+      {'icon': Icons.gavel_rounded, 'title': 'Matriz de Hallazgos'},
+      {'icon': Icons.radar_rounded, 'title': 'Escaneos'},
+      {'icon': Icons.tune_rounded, 'title': 'Security Gates (CI/CD)'},
+      {'icon': Icons.notifications_none_rounded, 'title': 'Notificaciones'},
+      {'icon': Icons.description_outlined, 'title': 'Informes ISO 27001'},
+    ];
+
     return Scaffold(
       appBar: AppBar(
         title: Row(
           children: [
             SizedBox(
-              width: 24,
-              height: 24,
+              width: 22,
+              height: 22,
               child: Image.asset('assets/logo_2.png', fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Icon(Icons.shield, size: 20)),
             ),
             const SizedBox(width: 8),
-            const Text('SSPILLOWY Console', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            Expanded(
+              child: Text(
+                navItems[_selectedNavIndex]['title'] as String,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+            ),
           ],
         ),
         actions: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE0F2FE),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.show_chart, size: 14, color: Color(0xFF0284C7)),
+                SizedBox(width: 4),
+                Text('82/100', style: TextStyle(color: Color(0xFF0284C7), fontWeight: FontWeight.bold, fontSize: 11)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 6),
           IconButton(
-            icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode_outlined),
+            icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode_outlined, size: 20),
             onPressed: widget.onToggleTheme,
           ),
         ],
       ),
       drawer: Drawer(
-        child: ListView(
-          padding: EdgeInsets.zero,
+        backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFF1E293B),
+        child: Column(
           children: [
-            UserAccountsDrawerHeader(
-              decoration: const BoxDecoration(color: Color(0xFF4A3E85)),
-              accountName: Text(userName, style: const TextStyle(fontWeight: FontWeight.bold)),
-              accountEmail: Text('@$userNickname • $userRole\n${widget.userEmail}'),
-              currentAccountPicture: _buildAvatarWidget(radius: 30, fontSize: 22),
+            Container(
+              padding: const EdgeInsets.only(top: 40, left: 16, right: 16, bottom: 16),
+              color: isDark ? const Color(0xFF0F172A) : const Color(0xFF1E293B),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 32,
+                    height: 32,
+                    child: Image.asset('assets/logo_2.png', fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Icon(Icons.shield, color: Colors.white)),
+                  ),
+                  const SizedBox(width: 10),
+                  const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('SSPILLOWY', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                      Text('WEB HUB • DEVSECOPS', style: TextStyle(color: Colors.grey, fontSize: 9)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const Divider(color: Colors.white12, height: 1),
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                itemCount: navItems.length,
+                itemBuilder: (context, index) {
+                  final isSelected = _selectedNavIndex == index;
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    child: ListTile(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      tileColor: isSelected ? const Color(0xFF334155) : Colors.transparent,
+                      leading: Icon(
+                        navItems[index]['icon'] as IconData,
+                        color: isSelected ? Colors.white : Colors.grey.shade400,
+                        size: 20,
+                      ),
+                      title: Text(
+                        navItems[index]['title'] as String,
+                        style: TextStyle(
+                          color: isSelected ? Colors.white : Colors.grey.shade300,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          fontSize: 13,
+                        ),
+                      ),
+                      onTap: () {
+                        setState(() => _selectedNavIndex = index);
+                        Navigator.pop(context);
+                      },
+                    ),
+                  );
+                },
+              ),
+            ),
+            const Divider(color: Colors.white12, height: 1),
+            ListTile(
+              leading: _buildAvatarWidget(radius: 16, fontSize: 13),
+              title: Text(userName, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+              subtitle: Text('@$userNickname', style: const TextStyle(color: Colors.grey, fontSize: 11)),
+              trailing: IconButton(
+                icon: const Icon(Icons.edit_outlined, color: Colors.grey, size: 18),
+                onPressed: () {
+                  Navigator.pop(context);
+                  _editUserProfile();
+                },
+              ),
             ),
             ListTile(
-              leading: const Icon(Icons.manage_accounts, color: Color(0xFF4A3E85)),
-              title: const Text('Personalizar Perfil y Avatar'),
-              subtitle: Text('$userRole • $userDept', style: const TextStyle(fontSize: 11)),
-              onTap: () {
-                Navigator.pop(context);
-                _editUserProfile();
-              },
-            ),
-            const Divider(),
-            ListTile(
-              leading: const Icon(Icons.logout, color: Colors.red),
-              title: const Text('Cerrar Sesión', style: TextStyle(color: Colors.red)),
+              leading: const Icon(Icons.logout, color: Colors.redAccent, size: 20),
+              title: const Text('Cerrar Sesión', style: TextStyle(color: Colors.redAccent, fontSize: 13)),
               onTap: () {
                 Navigator.pushReplacement(
                   context,
@@ -907,115 +936,11 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                 );
               },
             ),
-          ],
-        ),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Card(
-              elevation: 1,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Row(
-                  children: [
-                    _buildAvatarWidget(radius: 26, fontSize: 20),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Bienvenido, $userName', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                          Text('@$userNickname • $userRole', style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                          Text(userDept, style: TextStyle(color: isDark ? Colors.white38 : Colors.black45, fontSize: 11)),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.edit_outlined, color: Color(0xFF4A3E85)),
-                      onPressed: _editUserProfile,
-                      tooltip: 'Editar Avatar y Perfil',
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 18),
-            Card(
-              elevation: 1,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('Ejecutar Escaneos DevSecOps', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-                        if (_isScanning)
-                          const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Text(_scanStatusText, style: TextStyle(color: isDark ? Colors.white60 : Colors.grey.shade700, fontSize: 12)),
-                    const SizedBox(height: 12),
-                    LinearProgressIndicator(
-                      value: _isScanning ? _scanProgress : 0.0,
-                      color: const Color(0xFF1E8E3E),
-                    ),
-                    const SizedBox(height: 16),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        ElevatedButton.icon(
-                          onPressed: _isScanning ? null : () => _runInteractiveScan('SAST'),
-                          icon: const Icon(Icons.code, size: 16),
-                          label: const Text('Escanear SAST'),
-                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4A3E85), foregroundColor: Colors.white),
-                        ),
-                        ElevatedButton.icon(
-                          onPressed: _isScanning ? null : () => _runInteractiveScan('SCA'),
-                          icon: const Icon(Icons.inventory_2_outlined, size: 16),
-                          label: const Text('Escanear SCA'),
-                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1E88E5), foregroundColor: Colors.white),
-                        ),
-                        ElevatedButton.icon(
-                          onPressed: _isScanning ? null : () => _runInteractiveScan('DAST'),
-                          icon: const Icon(Icons.bug_report_outlined, size: 16),
-                          label: const Text('Escanear DAST'),
-                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE53935), foregroundColor: Colors.white),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text('Resumen de Vulnerabilidades', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
-            GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
-              childAspectRatio: 1.4,
-              children: [
-                _metricCard('SAST Findings', '$_vulnSast', Colors.deepPurple, Icons.security),
-                _metricCard('SCA Dependencies', '$_vulnSca', Colors.blue, Icons.inventory_2),
-                _metricCard('DAST Endpoints', '$_vulnDast', Colors.red, Icons.bug_report),
-                _metricCard('Compliance', '$_compliance%', Colors.green, Icons.verified_user),
-              ],
-            ),
           ],
         ),
       ),
+      body: _buildSelectedView(_selectedNavIndex, isDark),
       floatingActionButton: FloatingActionButton(
         onPressed: _openAIChat,
         backgroundColor: const Color(0xFF4A3E85),
@@ -1025,21 +950,349 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
     );
   }
 
-  Widget _metricCard(String title, String val, Color color, IconData icon) {
+  Widget _buildSelectedView(int index, bool isDark) {
+    switch (index) {
+      case 0:
+        return _buildDashboardView(isDark);
+      case 1:
+        return _buildReposView(isDark);
+      case 2:
+        return _buildFindingsView(isDark);
+      case 3:
+        return _buildScansView(isDark);
+      case 4:
+        return _buildGatesView(isDark);
+      case 5:
+        return _buildNotificationsView(isDark);
+      case 6:
+        return _buildIsoView(isDark);
+      default:
+        return _buildDashboardView(isDark);
+    }
+  }
+
+  Widget _buildDashboardView(bool isDark) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E293B) : const Color(0xFF0F172A),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.circle, color: Colors.green, size: 10),
+                SizedBox(width: 8),
+                Text('LIVE  orquestación activa  |  tick #18  |  7 hallazgos abiertos',
+                    style: TextStyle(color: Colors.white, fontSize: 11, fontFamily: 'monospace')),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          GridView.count(
+            crossAxisCount: 2,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+            childAspectRatio: 1.3,
+            children: [
+              _metricTile('REPOSITORIOS MONITOREADOS', '3', 'activos', Colors.blue, Icons.developer_board, isDark),
+              _metricTile('VULNERABILIDADES CRÍTICAS', '3', 'abiertas', Colors.red, Icons.error_outline, isDark),
+              _metricTile('SECRETOS PREVENIDOS', '14', 'bloqueados', Colors.green, Icons.key_outlined, isDark),
+              _metricTile('ESCANEOS EJECUTADOS', '48', 'histórico', Colors.purple, Icons.verified_user_outlined, isDark),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Card(
+            elevation: 1,
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Health Score General', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          const SizedBox(
+                            width: 80,
+                            height: 80,
+                            child: CircularProgressIndicator(value: 0.82, strokeWidth: 8, color: Colors.green),
+                          ),
+                          Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Text('82', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                              Text('/100', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                            ],
+                          ),
+                        ],
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: const [
+                          Row(children: [Icon(Icons.circle, color: Colors.red, size: 10), SizedBox(width: 6), Text('Críticas: 3', style: TextStyle(fontSize: 12))]),
+                          SizedBox(height: 4),
+                          Row(children: [Icon(Icons.circle, color: Colors.amber, size: 10), SizedBox(width: 6), Text('Altas: 3', style: TextStyle(fontSize: 12))]),
+                          SizedBox(height: 4),
+                          Row(children: [Icon(Icons.circle, color: Colors.blue, size: 10), SizedBox(width: 6), Text('Medias: 1', style: TextStyle(fontSize: 12))]),
+                          SizedBox(height: 4),
+                          Row(children: [Icon(Icons.circle, color: Colors.grey, size: 10), SizedBox(width: 6), Text('Bajas: 0', style: TextStyle(fontSize: 12))]),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReposView(bool isDark) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('Repositorios Monitoreados (3)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+            ElevatedButton.icon(
+              onPressed: () {},
+              icon: const Icon(Icons.add, size: 16),
+              label: const Text('Nuevo', style: TextStyle(fontSize: 12)),
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1E8E3E), foregroundColor: Colors.white),
+            )
+          ],
+        ),
+        const SizedBox(height: 12),
+        _repoCard('sspillowy-backend-api', 'github.com/org/sspillowy-backend', 'main', '88%', '1 Críticas', Colors.green, isDark),
+        _repoCard('payment-gateway-service', 'github.com/org/payment-gateway', 'develop', '62%', '3 Críticas', Colors.red, isDark),
+        _repoCard('auth-identity-provider', 'github.com/org/auth-service', 'main', '95%', '0 Críticas', Colors.green, isDark),
+      ],
+    );
+  }
+
+  Widget _buildFindingsView(bool isDark) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const Text('Vulnerabilidades & Secretos Detectados (7)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+        const SizedBox(height: 12),
+        _findingCard('Hardcoded AWS Secret Key detected in repository history', 'GITLEAKS', 'CRÍTICO', 'OPEN', 'apps/api/config/aws_client.py:42', '98%', isDark),
+        _findingCard('Potential SQL Injection in dynamic query concatenation', 'SEMGREP', 'CRÍTICO', 'OPEN', 'src/services/user_search.py:115', '94%', isDark),
+        _findingCard('CVE-2024-21626: container breakout vulnerability in runc', 'TRIVY', 'ALTO', 'OPEN', 'Dockerfile:1', '89%', isDark),
+        _findingCard('Missing HTTP Strict-Transport-Security Header', 'OWASP_ZAP', 'MEDIO', 'IN_REVIEW', '/api/v1/auth/login', '91%', isDark),
+      ],
+    );
+  }
+
+  Widget _buildScansView(bool isDark) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const Text('Historial de escaneos (4)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+        const SizedBox(height: 12),
+        _scanRow('scan-101', 'sspillowy-backend-api', 'COMPLETED', 'main', '1 Crítica', isDark),
+        _scanRow('scan-102', 'payment-gateway-service', 'COMPLETED', 'develop', '3 Críticas', isDark),
+        _scanRow('scan-103', 'auth-identity-provider', 'COMPLETED', 'main', '0 Críticas', isDark),
+        _scanRow('scan-104', 'payment-gateway-service', 'RUNNING', 'develop', '0 Críticas', isDark),
+      ],
+    );
+  }
+
+  Widget _buildGatesView(bool isDark) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const Text('Configuración de Política Activa', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+        const SizedBox(height: 12),
+        Card(
+          elevation: 1,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Máximo de Vulnerabilidades Críticas Permitidas', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
+                const SizedBox(height: 6),
+                const Text('Si un escaneo detecta un número mayor de fallos CRITICAL, el pipeline CI/CD se bloqueará.', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                const SizedBox(height: 10),
+                TextFormField(initialValue: '0', decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true)),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Card(
+          elevation: 1,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Máximo de Vulnerabilidades Altas (HIGH) Permitidas', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.amber)),
+                const SizedBox(height: 6),
+                const Text('Umbral de advertencia severa antes de abortar la integración.', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                const SizedBox(height: 10),
+                TextFormField(initialValue: '2', decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true)),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNotificationsView(bool isDark) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const Text('Notificaciones Recientes', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+        const SizedBox(height: 12),
+        _notifTile('Secreto AWS expuesto en sspillowy-backend-api', 'GitLeaks detectó clave activa en historial.', 'Hace 10 min', isDark),
+        _notifTile('Security Gate bloqueó el pipeline de payment-gateway', 'Umbral de 0 críticas excedido.', 'Hace 30 min', isDark),
+        _notifTile('Triaje IA listo: SQL Injection en user_search.py', 'Confianza 94%. Esperando validación humana.', 'Hace 2 horas', isDark),
+      ],
+    );
+  }
+
+  Widget _buildIsoView(bool isDark) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const Text('Paquete de evidencia ISO 27001', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+        const SizedBox(height: 12),
+        _isoTile('A.8.8', 'Gestión de vulnerabilidades técnicas', 'Parcial', 'TRIVY', '1', isDark),
+        _isoTile('A.8.9', 'Gestión de configuración', 'Parcial', 'OWASP_ZAP', '2', isDark),
+        _isoTile('A.8.28', 'Codificación segura', 'Parcial', 'SEMGREP', '2', isDark),
+        _isoTile('A.8.5', 'Autenticación segura', 'Brecha', 'GITLEAKS', '1', isDark),
+      ],
+    );
+  }
+
+  Widget _metricTile(String title, String val, String subtitle, Color color, IconData icon, bool isDark) {
     return Card(
       elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       child: Padding(
-        padding: const EdgeInsets.all(12.0),
+        padding: const EdgeInsets.all(12),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, color: color, size: 24),
-            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Flexible(child: Text(title, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.grey), overflow: TextOverflow.ellipsis)),
+                Icon(icon, color: color, size: 16),
+              ],
+            ),
+            const Spacer(),
             Text(val, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color)),
-            Text(title, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+            Text(subtitle, style: const TextStyle(fontSize: 10, color: Colors.grey)),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _repoCard(String name, String url, String branch, String score, String criticals, Color color, bool isDark) {
+    return Card(
+      elevation: 1,
+      margin: const EdgeInsets.only(bottom: 10),
+      child: ListTile(
+        title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+        subtitle: Text('$url • $branch\n$criticals', style: const TextStyle(fontSize: 11)),
+        trailing: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(color: color.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(6)),
+          child: Text(score, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12)),
+        ),
+      ),
+    );
+  }
+
+  Widget _findingCard(String title, String engine, String severity, String status, String path, String conf, bool isDark) {
+    return Card(
+      elevation: 1,
+      margin: const EdgeInsets.only(bottom: 10),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(color: severity == 'CRÍTICO' ? Colors.red.shade100 : Colors.amber.shade100, borderRadius: BorderRadius.circular(4)),
+                  child: Text(severity, style: TextStyle(color: severity == 'CRÍTICO' ? Colors.red : Colors.amber.shade900, fontSize: 10, fontWeight: FontWeight.bold)),
+                ),
+                const SizedBox(width: 8),
+                Text(engine, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
+                const Spacer(),
+                Text('IA: $conf', style: const TextStyle(fontSize: 10, color: Colors.purple, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+            const SizedBox(height: 4),
+            Text(path, style: const TextStyle(fontSize: 11, color: Colors.blue, fontFamily: 'monospace')),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _scanRow(String id, String repo, String status, String branch, String criticals, bool isDark) {
+    final isRunning = status == 'RUNNING';
+    return Card(
+      elevation: 1,
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: Icon(isRunning ? Icons.sync : Icons.check_circle_outline, color: isRunning ? Colors.blue : Colors.green, size: 20),
+        title: Text(id, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+        subtitle: Text('$repo ($branch)\n$criticals', style: const TextStyle(fontSize: 11)),
+        trailing: Text(status, style: TextStyle(color: isRunning ? Colors.blue : Colors.green, fontSize: 11, fontWeight: FontWeight.bold)),
+      ),
+    );
+  }
+
+  Widget _notifTile(String title, String desc, String time, bool isDark) {
+    return Card(
+      elevation: 1,
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: const Icon(Icons.notifications, color: Color(0xFF4A3E85)),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+        subtitle: Text(desc, style: const TextStyle(fontSize: 11)),
+        trailing: Text(time, style: const TextStyle(fontSize: 9, color: Colors.grey)),
+      ),
+    );
+  }
+
+  Widget _isoTile(String control, String desc, String status, String engine, String findings, bool isDark) {
+    return Card(
+      elevation: 1,
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: Text(control, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
+        title: Text(desc, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+        subtitle: Text('Motor: $engine • Hallazgos: $findings', style: const TextStyle(fontSize: 10)),
+        trailing: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(color: status == 'Brecha' ? Colors.red.shade100 : Colors.amber.shade100, borderRadius: BorderRadius.circular(4)),
+          child: Text(status, style: TextStyle(color: status == 'Brecha' ? Colors.red : Colors.amber.shade900, fontSize: 10, fontWeight: FontWeight.bold)),
         ),
       ),
     );
