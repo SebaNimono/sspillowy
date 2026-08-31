@@ -1,9 +1,9 @@
 ﻿workflows:
   ios-release-workflow:
-    name: SSPILLOWY iOS Release Build & Deploy to TestFlight
+    name: iOS Release Build & Deploy to TestFlight
     max_build_duration: 120
     instance_type: mac_mini_m1
-    working_directory: apps/mobile
+    working_directory: ticasistente
     integrations:
       app_store_connect: Codemagic Key
     environment:
@@ -36,10 +36,11 @@
           find . -name "*.ipa" -exec cp {} ./ \; || true
     artifacts:
       - "*.ipa"
-      - apps/mobile/build/ios/ipa/*.ipa
-      - apps/mobile/build/ios/archive/*.xcarchive
+      - build/ios/ipa/*.ipa
+      - build/ios/archive/*.xcarchive
     publishing:
       app_store_connect:
         auth: integration
-        apple_id: programador1@ticmega.cl
         submit_to_testflight: true
+        beta_groups:
+          - internal
