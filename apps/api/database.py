@@ -78,6 +78,9 @@ def init_db() -> bool:
         Base.metadata.create_all(bind=engine)
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
+            # Migración suave: columna de login manual (proyectos ya creados)
+            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT"))
+            conn.commit()
         return True
     except Exception as exc:
         print(f"[sspillowy] DB init failed: {exc}")

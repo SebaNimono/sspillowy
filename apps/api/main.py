@@ -40,6 +40,7 @@ from gitlab_oauth import router as gitlab_auth_router
 from google_oauth import router as google_auth_router
 from microsoft_oauth import router as microsoft_auth_router
 from oauth_common import router as auth_meta_router
+from password_auth import router as password_auth_router
 from database import init_db, db_ping
 
 app = FastAPI(
@@ -64,6 +65,7 @@ app.add_middleware(
 )
 
 app.include_router(auth_meta_router)
+app.include_router(password_auth_router)
 app.include_router(github_auth_router)
 app.include_router(gitlab_auth_router)
 app.include_router(google_auth_router)

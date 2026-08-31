@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Lock, Mail, ArrowRight, Github, Chrome, Code2, Globe } from 'lucide-react';
 import { Toast, ToastMessage } from '../components/Toast';
 import { AnimatedBackground } from '../components/AnimatedBackground';
-import { apiUrl, fetchAuthProviders } from '../api/client';
+import { apiUrl, fetchAuthProviders, loginWithPassword, registerWithPassword } from '../api/client';
 
 interface LoginPageProps {
   onLoginSuccess: (email: string, name: string) => void;
@@ -68,6 +68,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oa
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [toast, setToast] = useState<ToastMessage | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!oauthError) return;
@@ -79,7 +80,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oa
     });
   }, [oauthError, oauthDetail]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
       setToast({
@@ -90,9 +91,32 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oa
       });
       return;
     }
+    if (isRegister && password.length < 8) {
+      setToast({
+        id: Date.now().toString(),
+        type: 'error',
+        title: 'Contraseña corta',
+        message: 'La contraseña debe tener al menos 8 caracteres.',
+      });
+      return;
+    }
 
-    const name = isRegister ? fullName || email.split('@')[0] : email.split('@')[0];
-    onLoginSuccess(email, name);
+    setSubmitting(true);
+    try {
+      const result = isRegister
+        ? await registerWithPassword(email.trim(), password, fullName.trim() || undefined)
+        : await loginWithPassword(email.trim(), password);
+      onLoginSuccess(result.email, result.name);
+    } catch (err) {
+      setToast({
+        id: Date.now().toString(),
+        type: 'error',
+        title: isRegister ? 'Registro' : 'Inicio de sesión',
+        message: err instanceof Error ? err.message : 'No se pudo completar la solicitud.',
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const startOAuth = async (provider: 'github' | 'gitlab' | 'google' | 'microsoft') => {
@@ -312,7 +336,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oa
                       id: Date.now().toString(),
                       type: 'info',
                       title: 'Recuperación de clave',
-                      message: 'El alta y el acceso van por Google, GitHub, GitLab o Microsoft. El formulario de correo es solo demo.',
+                      message:
+                        'Si entraste solo con Google/GitHub, usa «Crear cuenta» con el mismo correo para definir una contraseña (sirve para Pulse).',
                     });
                   }}
                   style={{ fontSize: '0.75rem', color: '#0969da', textDecoration: 'none' }}
@@ -346,15 +371,23 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oa
           <button
             type="submit"
             className="btn btn-primary"
+            disabled={submitting}
             style={{
               width: '100%',
               justifyContent: 'center',
               padding: '0.65rem',
               fontSize: '0.9rem',
               fontWeight: 600,
+              opacity: submitting ? 0.7 : 1,
             }}
           >
-            <span>{isRegister ? 'Registrarse en SSPILLOWY' : 'Ingresar a la Consola'}</span>
+            <span>
+              {submitting
+                ? 'Espera…'
+                : isRegister
+                  ? 'Registrarse en SSPILLOWY'
+                  : 'Ingresar a la Consola'}
+            </span>
             <ArrowRight size={16} />
           </button>
         </form>

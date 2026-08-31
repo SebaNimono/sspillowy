@@ -8,7 +8,7 @@ from database import Base
 
 
 class User(Base):
-    """Usuario provisionado por SSO (Google, GitHub, GitLab, Microsoft)."""
+    """Usuario SSO (Google/…) o registro manual (email + contraseña)."""
 
     __tablename__ = "users"
 
@@ -16,8 +16,9 @@ class User(Base):
     email = Column(String, nullable=False, unique=True, index=True)
     name = Column(String, nullable=False)
     avatar_url = Column(String, nullable=True)
-    provider = Column(String, nullable=False, index=True)  # google | github | gitlab | microsoft
-    provider_subject = Column(String, nullable=True)  # id externo del proveedor
+    provider = Column(String, nullable=False, index=True)  # google | github | gitlab | microsoft | password
+    provider_subject = Column(String, nullable=True)
+    password_hash = Column(String, nullable=True)  # solo cuentas con login manual / Pulse
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     last_login_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

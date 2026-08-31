@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS users (
   avatar_url TEXT,
   provider TEXT NOT NULL,
   provider_subject TEXT,
+  password_hash TEXT,
   is_active BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   last_login_at TIMESTAMPTZ DEFAULT NOW()
@@ -100,3 +101,6 @@ CREATE TABLE IF NOT EXISTS audit_events (
 INSERT INTO security_gates (id)
 VALUES ('default-policy')
 ON CONFLICT (id) DO NOTHING;
+
+-- Migración si la tabla users ya existía sin password_hash:
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;

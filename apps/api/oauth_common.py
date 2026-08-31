@@ -94,7 +94,9 @@ def save_session(
             if user:
                 user.name = name or user.name
                 user.avatar_url = avatar_url or user.avatar_url
-                user.provider = provider
+                # No pisar google/github si solo están definiendo password para Pulse
+                if provider != "password" or not user.provider:
+                    user.provider = provider
                 if provider_subject:
                     user.provider_subject = provider_subject
                 user.last_login_at = now

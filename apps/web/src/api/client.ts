@@ -238,3 +238,37 @@ export async function fetchAuthProviders(): Promise<{
 export async function fetchAuthSession(sessionId: string): Promise<AuthSession> {
   return request(`/auth/session/${sessionId}`);
 }
+
+export interface PasswordAuthResult {
+  session_id: string;
+  email: string;
+  name: string;
+  provider: string;
+  user_id?: string;
+}
+
+async function passwordAuthRequest(path: string, body: object): Promise<PasswordAuthResult> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const detail = typeof data.detail === 'string' ? data.detail : `Error de API (${res.status})`;
+    throw new Error(detail);
+  }
+  return data as PasswordAuthResult;
+}
+
+export async function registerWithPassword(
+  email: string,
+  password: string,
+  name?: string,
+): Promise<PasswordAuthResult> {
+  return passwordAuthRequest('/auth/register', { email, password, name: name || undefined });
+}
+
+export async function loginWithPassword(email: string, password: string): Promise<PasswordAuthResult> {
+  return passwordAuthRequest('/auth/login', { email, password });
+}
