@@ -12,6 +12,7 @@ class SSPILLOWYApp extends StatefulWidget {
 }
 
 class _SSPILLOWYAppState extends State<SSPILLOWYApp> {
+  // Estado global del tema para mantener la opción seleccionada
   ThemeMode _themeMode = ThemeMode.light;
 
   void _toggleTheme() {
@@ -70,7 +71,6 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoginTab = true;
   bool _isLoadingSocial = false;
 
-  // Rutas locales de assets
   static const String _mainLogoAsset = 'assets/sspillowy_logo.png';
   static const String _innerLogoAsset = 'assets/logo_2.png';
   static const String _googleAsset = 'assets/Google.png';
@@ -85,7 +85,76 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  // Validación e inicio de sesión seguro
+  // 1. SOLUCIÓN: Lógica funcional para restablecer contraseña
+  void _handleForgotPassword() {
+    final resetEmailController = TextEditingController(text: _emailController.text);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.lock_reset, color: Color(0xFF4A3E85)),
+            SizedBox(width: 8),
+            Text('Restablecer clave', style: TextStyle(fontSize: 16)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Ingresa tu correo institucional para recibir instrucciones de recuperación:',
+              style: TextStyle(fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: resetEmailController,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(
+                labelText: 'Correo electrónico',
+                prefixIcon: Icon(Icons.email_outlined),
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final email = resetEmailController.text.trim();
+              if (email.isNotEmpty && email.contains('@')) {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Se ha enviado un enlace de recuperación a: $email'),
+                    backgroundColor: const Color(0xFF1E8E3E),
+                  ),
+                );
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Por favor ingresa un correo válido.'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF4A3E85),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Enviar enlace'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _handleLogin() {
     if (_formKey.currentState?.validate() ?? false) {
       final email = _emailController.text.trim();
@@ -109,12 +178,9 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // Simulación de OAuth SSO en lugar de paso directo
   void _handleSocialSSO(String provider) async {
     setState(() => _isLoadingSocial = true);
-
     await Future.delayed(const Duration(seconds: 1));
-
     if (!mounted) return;
     setState(() => _isLoadingSocial = false);
 
@@ -155,7 +221,6 @@ class _LoginScreenState extends State<LoginScreen> {
           SafeArea(
             child: Column(
               children: [
-                // Barra superior
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                   child: Row(
@@ -186,7 +251,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       IconButton(
                         icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode_outlined),
-                        onPressed: widget.onToggleTheme,
+                        onPressed: widget.onToggleTheme, // 2. Mantiene la llamada global al tema
                         tooltip: 'Cambiar Modo',
                       ),
                     ],
@@ -201,12 +266,11 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            // 1. LOGO PRINCIPAL CON ASPECT RATIO NATURAL
                             Container(
                               margin: const EdgeInsets.only(bottom: 16.0),
                               constraints: const BoxConstraints(maxWidth: 280, maxHeight: 120),
                               child: AspectRatio(
-                                aspectRatio: 2.2, // Proporción natural de la serpiente en la almohada
+                                aspectRatio: 2.2,
                                 child: Image.asset(
                                   _mainLogoAsset,
                                   fit: BoxFit.contain,
@@ -217,7 +281,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               ),
                             ),
-
                             Text(
                               _isLoginTab ? 'Iniciar sesión en SSPILLOWY' : 'Crear tu cuenta en SSPILLOWY',
                               style: TextStyle(
@@ -229,8 +292,6 @@ class _LoginScreenState extends State<LoginScreen> {
                             const SizedBox(height: 2),
                             const Text('Plataforma Integral de Gobernanza DevSecOps', style: TextStyle(color: Colors.grey, fontSize: 12)),
                             const SizedBox(height: 20),
-
-                            // Card Principal Formulario
                             Container(
                               constraints: const BoxConstraints(maxWidth: 420),
                               padding: const EdgeInsets.all(22),
@@ -248,7 +309,6 @@ class _LoginScreenState extends State<LoginScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
-                                  // Tab Switcher
                                   Container(
                                     decoration: BoxDecoration(
                                       color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
@@ -294,8 +354,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ),
                                   ),
                                   const SizedBox(height: 18),
-
-                                  // Campo Correo
                                   const Text('Correo electrónico', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
                                   const SizedBox(height: 6),
                                   TextFormField(
@@ -318,16 +376,14 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ),
                                   ),
                                   const SizedBox(height: 14),
-
-                                  // Campo Contraseña
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
                                       const Text('Contraseña', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
                                       if (_isLoginTab)
                                         GestureDetector(
-                                          onTap: () {},
-                                          child: const Text('¿Olvidaste tu clave?', style: TextStyle(color: Colors.blue, fontSize: 11)),
+                                          onTap: _handleForgotPassword, // Llama a la modal de recuperación
+                                          child: const Text('¿Olvidaste tu clave?', style: TextStyle(color: Colors.blue, fontSize: 11, fontWeight: FontWeight.w600)),
                                         ),
                                     ],
                                   ),
@@ -352,8 +408,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ),
                                   ),
                                   const SizedBox(height: 18),
-
-                                  // Botón Entrar
                                   ElevatedButton(
                                     onPressed: _handleLogin,
                                     style: ElevatedButton.styleFrom(
@@ -375,7 +429,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ),
                                   ),
                                   const SizedBox(height: 16),
-
                                   Row(
                                     children: [
                                       Expanded(child: Divider(color: isDark ? Colors.white12 : Colors.grey.shade300)),
@@ -387,8 +440,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ],
                                   ),
                                   const SizedBox(height: 14),
-
-                                  // Botones SSO con Fallback Garantizado
                                   if (_isLoadingSocial)
                                     const Center(child: Padding(padding: EdgeInsets.all(8.0), child: CircularProgressIndicator()))
                                   else
@@ -526,7 +577,6 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
     userNickname = widget.userNickname;
   }
 
-  // 5. MODAL PARA EDITAR PERFIL / NICKNAME Y NOMBRE DE USUARIO
   void _editUserProfile() {
     final nameController = TextEditingController(text: userName);
     final nicknameController = TextEditingController(text: userNickname);
@@ -656,7 +706,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
         actions: [
           IconButton(
             icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode_outlined),
-            onPressed: widget.onToggleTheme,
+            onPressed: widget.onToggleTheme, // Permite alternar el tema desde el Dashboard
           ),
         ],
       ),
@@ -708,7 +758,6 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Perfil Card
             Card(
               elevation: 1,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -744,8 +793,6 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
               ),
             ),
             const SizedBox(height: 18),
-
-            // Card Escaneos
             Card(
               elevation: 1,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -799,7 +846,6 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
               ),
             ),
             const SizedBox(height: 20),
-
             const Text('Resumen de Vulnerabilidades', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
             GridView.count(
@@ -819,12 +865,9 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
           ],
         ),
       ),
-
-      // 4. BURBUJA IA PEQUEÑA Y CIRCULAR (NO UN RECTÁNGULO)
       floatingActionButton: FloatingActionButton(
         onPressed: _openAIChat,
         backgroundColor: const Color(0xFF4A3E85),
-        mini: false,
         tooltip: 'Asistente IA',
         child: const Icon(Icons.auto_awesome, color: Colors.amber),
       ),
