@@ -1,6 +1,6 @@
 import React from 'react';
 
-/** Textos legales públicos (Google OAuth / transparencia). Enlaces: #privacidad #terminos #cookies */
+/** Textos legales públicos (Google OAuth / transparencia). Rutas: /privacidad /terminos /cookies */
 export const LegalPrivacy: React.FC = () => (
   <div className="site-legal-prose">
     <p className="site-legal-meta">
@@ -22,7 +22,7 @@ export const LegalPrivacy: React.FC = () => (
       La presente Política describe qué datos se recogen, con qué finalidad, durante cuánto tiempo se conservan
       y qué derechos asisten a las personas usuarias del sitio web público, de la consola Web Hub y de los
       servicios de autenticación asociados. El uso de la plataforma implica el conocimiento de esta Política
-      y de los <a href="#terminos">Términos y Condiciones</a>.
+      y de los <a href="/terminos">Términos y Condiciones</a>.
     </p>
 
     <h3>3. Datos que tratamos</h3>
@@ -102,7 +102,7 @@ export const LegalPrivacy: React.FC = () => (
       Utilizamos almacenamiento en el navegador estrictamente necesario para el funcionamiento del servicio
       (sesión, preferencia de cookies y, en la consola, preferencias de interfaz). En la actualidad no se emplean
       cookies de publicidad ni redes de analítica de terceros. Puede gestionar su preferencia en la sección de
-      <a href="#cookies">Cookies</a> o mediante el aviso de cookies del sitio.
+      <a href="/cookies">Cookies</a> o mediante el aviso de cookies del sitio.
     </p>
 
     <h3>10. Derechos de las personas usuarias</h3>
@@ -145,7 +145,7 @@ export const LegalTerms: React.FC = () => (
     <h3>1. Aceptación</h3>
     <p>
       Al acceder o utilizar SSPILLOWY (sitio web, consola Web Hub, API u otros componentes publicados por el
-      proyecto), usted acepta estos Términos y Condiciones y la <a href="#privacidad">Política de Privacidad</a>.
+      proyecto), usted acepta estos Términos y Condiciones y la <a href="/privacidad">Política de Privacidad</a>.
       Si no está de acuerdo, no utilice el servicio.
     </p>
 

@@ -20,8 +20,7 @@ export const HeroMotion: React.FC<HeroMotionProps> = ({ user, onCuenta, onOpenCo
       Gobernanza de seguridad de software, sin mezclar detección e interpretación.
     </motion.h1>
     <motion.p variants={fadeUp}>
-      SSPILLOWY orquesta Semgrep, Trivy, GitLeaks y OWASP ZAP, unifica los hallazgos y deja el cierre en
-      manos humanas. La IA sugiere. No decide.
+      SSPILLOWY orquesta Semgrep, Trivy, GitLeaks y OWASP ZAP, unifica los hallazgos. Impulsado con IA.
     </motion.p>
     <motion.ul className="site-hero-chips" variants={fadeUp}>
       {CHIPS.map((chip) => (

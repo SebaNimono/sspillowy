@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Sidebar, SidebarState } from './components/Sidebar';
 import { LoginPage } from './pages/LoginPage';
 import { LandingPage } from './pages/LandingPage';
+import { LegalPage, LegalDoc } from './pages/LegalPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { RepositoriesPage } from './pages/RepositoriesPage';
 import { FindingsPage } from './pages/FindingsPage';
@@ -13,10 +14,39 @@ import { fetchNotifications, fetchAuthSession } from './api/client';
 import { FALLBACK_NOTIFICATIONS } from './api/fallbacks';
 import { CookieBanner } from './components/CookieBanner';
 
-type AppView = 'site' | 'login' | 'console';
+type AppView = 'site' | 'login' | 'console' | LegalDoc;
+
+const LEGAL_PATHS: Record<string, LegalDoc> = {
+  '/privacidad': 'privacidad',
+  '/terminos': 'terminos',
+  '/cookies': 'cookies',
+};
+
+const HASH_TO_LEGAL: Record<string, LegalDoc> = {
+  '#privacidad': 'privacidad',
+  '#terminos': 'terminos',
+  '#cookies': 'cookies',
+};
+
+function normalizePath(pathname: string): string {
+  if (!pathname || pathname === '/') return '/';
+  return pathname.replace(/\/+$/, '') || '/';
+}
+
+function legalFromLocation(): LegalDoc | null {
+  const path = normalizePath(window.location.pathname);
+  if (LEGAL_PATHS[path]) return LEGAL_PATHS[path];
+  const hash = window.location.hash.toLowerCase();
+  return HASH_TO_LEGAL[hash] ?? null;
+}
+
+function pathForView(view: AppView): string {
+  if (view === 'privacidad' || view === 'terminos' || view === 'cookies') return `/${view}`;
+  return '/';
+}
 
 export const App: React.FC = () => {
-  const [view, setView] = useState<AppView>('site');
+  const [view, setView] = useState<AppView>(() => legalFromLocation() ?? 'site');
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [unreadCount, setUnreadCount] = useState(0);
   const [bootstrapping, setBootstrapping] = useState(true);
@@ -32,6 +62,12 @@ export const App: React.FC = () => {
     }
     return null;
   });
+
+  const goHome = () => {
+    window.history.pushState({}, '', '/');
+    setView('site');
+    window.scrollTo(0, 0);
+  };
 
   const refreshUnread = () => {
     fetchNotifications()
@@ -55,13 +91,32 @@ export const App: React.FC = () => {
   };
 
   useEffect(() => {
+    // Legacy #privacidad → /privacidad (Google / enlaces viejos)
+    const hashLegal = HASH_TO_LEGAL[window.location.hash.toLowerCase()];
+    if (hashLegal) {
+      window.history.replaceState({}, '', `/${hashLegal}`);
+      setView(hashLegal);
+    }
+
+    const onPop = () => {
+      const legal = legalFromLocation();
+      if (legal) {
+        setView(legal);
+        return;
+      }
+      if (normalizePath(window.location.pathname) === '/') {
+        setView((current) => (current === 'login' || current === 'console' ? current : 'site'));
+      }
+    };
+    window.addEventListener('popstate', onPop);
+
     const params = new URLSearchParams(window.location.search);
     const sessionId = params.get('sspillowy_session');
     const error = params.get('oauth_error');
     const detail = params.get('oauth_detail');
 
     const clearQuery = () => {
-      window.history.replaceState({}, '', window.location.pathname);
+      window.history.replaceState({}, '', pathForView(legalFromLocation() ?? 'site'));
     };
 
     if (error) {
@@ -70,7 +125,7 @@ export const App: React.FC = () => {
       setView('login');
       clearQuery();
       setBootstrapping(false);
-      return;
+      return () => window.removeEventListener('popstate', onPop);
     }
 
     if (sessionId) {
@@ -86,15 +141,17 @@ export const App: React.FC = () => {
           clearQuery();
           setBootstrapping(false);
         });
-      return;
+      return () => window.removeEventListener('popstate', onPop);
     }
 
     setBootstrapping(false);
+    return () => window.removeEventListener('popstate', onPop);
   }, []);
 
   const handleLogout = () => {
     setUser(null);
     setView('site');
+    window.history.pushState({}, '', '/');
     try {
       localStorage.removeItem('sspillowy_user');
     } catch {
@@ -142,6 +199,10 @@ export const App: React.FC = () => {
     );
   }
 
+  if (view === 'privacidad' || view === 'terminos' || view === 'cookies') {
+    return <LegalPage doc={view} onHome={goHome} />;
+  }
+
   if (view === 'site') {
     return (
       <>
@@ -151,7 +212,7 @@ export const App: React.FC = () => {
           onOpenConsole={() => setView('console')}
           onLogout={handleLogout}
         />
-        <CookieBanner onPrivacy={() => setView('site')} />
+        <CookieBanner />
       </>
     );
   }
@@ -165,15 +226,7 @@ export const App: React.FC = () => {
           oauthError={oauthError}
           oauthDetail={oauthDetail}
         />
-        <CookieBanner
-          onPrivacy={() => {
-            setOauthError(null);
-            setView('site');
-            window.setTimeout(() => {
-              document.getElementById('privacidad')?.scrollIntoView({ behavior: 'smooth' });
-            }, 50);
-          }}
-        />
+        <CookieBanner />
       </>
     );
   }
@@ -185,7 +238,10 @@ export const App: React.FC = () => {
     onLogout: handleLogout,
     onNavigate: setActiveTab,
     unreadCount,
-    onGoToSite: () => setView('site'),
+    onGoToSite: () => {
+      window.history.pushState({}, '', '/');
+      setView('site');
+    },
   };
 
   const renderContent = () => {
@@ -226,14 +282,7 @@ export const App: React.FC = () => {
       >
         {renderContent()}
       </main>
-      <CookieBanner
-        onPrivacy={() => {
-          setView('site');
-          window.setTimeout(() => {
-            document.getElementById('privacidad')?.scrollIntoView({ behavior: 'smooth' });
-          }, 50);
-        }}
-      />
+      <CookieBanner />
     </div>
   );
 };

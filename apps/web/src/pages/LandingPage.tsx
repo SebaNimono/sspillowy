@@ -12,7 +12,6 @@ import { PipelineScrollScene } from '../components/PipelineScrollScene';
 import { EngineOrchestrator } from '../components/EngineOrchestrator';
 import { ModuleMotionGrid } from '../components/ModuleMotionGrid';
 import { PrinciplesScene } from '../components/PrinciplesScene';
-import { LegalPrivacy, LegalTerms, LegalCookies } from '../components/LegalDocuments';
 import { motion, MotionConfig } from 'framer-motion';
 
 interface LandingPageProps {
@@ -120,7 +119,7 @@ const faqs = [
   },
   {
     q: '¿Usáis cookies de publicidad?',
-    a: 'No. Solo las necesarias para la sesión SSO o de cuenta, y recordar si aceptaste o no el aviso. No hay Google Analytics ni redes de anuncios. Detalle en Privacidad, Términos y Cookies del pie. Puedes cambiarlo en el pie (Preferencias) o en Cookies.',
+    a: 'No. Solo las necesarias para la sesión SSO o de cuenta, y recordar si aceptaste o no el aviso. No hay Google Analytics ni redes de anuncios. Detalle en Privacidad, Términos y Cookies (páginas legales del pie). Puedes cambiarlo en Preferencias.',
   },
 ];
 
@@ -374,47 +373,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ user, onCuenta, onOpen
         </div>
       </section>
 
-      <section className="site-shell site-legal-section" id="privacidad">
-        <Reveal>
-          <div className="site-kicker">Legal</div>
-          <h2 className="site-h2">Política de Privacidad</h2>
-          <p className="site-lead">
-            Documento público exigido para el uso de proveedores de identidad (p. ej. Google OAuth) y para
-            informar a las personas usuarias del Web Hub.
-          </p>
-          <LegalPrivacy />
-        </Reveal>
-      </section>
-
-      <section className="site-band site-legal-section" id="terminos">
-        <div className="site-shell">
-          <Reveal>
-            <div className="site-kicker">Legal</div>
-            <h2 className="site-h2">Términos y Condiciones</h2>
-            <p className="site-lead">
-              Condiciones de uso de SSPILLOWY. Al utilizar la plataforma acepta estas normas junto con la Política de Privacidad.
-            </p>
-            <LegalTerms />
-          </Reveal>
-        </div>
-      </section>
-
-      <section className="site-shell site-legal-section" id="cookies">
-        <Reveal>
-          <div className="site-kicker">Legal</div>
-          <h2 className="site-h2">Cookies</h2>
-          <LegalCookies />
-          <button
-            type="button"
-            className="site-footer-link"
-            style={{ marginTop: '1rem' }}
-            onClick={() => window.dispatchEvent(new Event('sspillowy-cookie-open'))}
-          >
-            Cambiar preferencia de cookies
-          </button>
-        </Reveal>
-      </section>
-
       <footer className="site-footer">
         <div className="site-shell site-footer-grid">
           <div>
@@ -435,9 +393,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ user, onCuenta, onOpen
           </div>
           <div>
             <span>Legal</span>
-            <a href="#privacidad">Privacidad</a>
-            <a href="#terminos">Términos</a>
-            <a href="#cookies">Cookies</a>
+            <a href="/privacidad">Privacidad</a>
+            <a href="/terminos">Términos</a>
+            <a href="/cookies">Cookies</a>
             <button type="button" onClick={() => window.dispatchEvent(new Event('sspillowy-cookie-open'))}>Preferencias</button>
           </div>
         </div>
