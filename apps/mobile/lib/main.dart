@@ -16,8 +16,7 @@ class _SSPILLOWYAppState extends State<SSPILLOWYApp> {
 
   void _toggleTheme() {
     setState(() {
-      _themeMode =
-          _themeMode == ThemeMode.light ? ThemeMode.dark : ThemeMode.light;
+      _themeMode = _themeMode == ThemeMode.light ? ThemeMode.dark : ThemeMode.light;
     });
   }
 
@@ -118,42 +117,31 @@ class _LoginScreenState extends State<LoginScreen> {
               children: [
                 // Barra superior
                 Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16.0, vertical: 8.0),
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color:
-                              isDark ? const Color(0xFF1E293B) : Colors.white,
+                          color: isDark ? const Color(0xFF1E293B) : Colors.white,
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                              color: isDark
-                                  ? Colors.white12
-                                  : Colors.grey.shade300),
+                          border: Border.all(color: isDark ? Colors.white12 : Colors.grey.shade300),
                         ),
                         child: Row(
                           children: [
                             SizedBox(
                               width: 18,
                               height: 18,
-                              child: Image.asset(_innerLogoAsset,
-                                  fit: BoxFit.contain),
+                              child: Image.asset(_innerLogoAsset, fit: BoxFit.contain),
                             ),
                             const SizedBox(width: 8),
-                            const Text('SSPILLOWY Console',
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold, fontSize: 12)),
+                            const Text('SSPILLOWY Console', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                           ],
                         ),
                       ),
                       IconButton(
-                        icon: Icon(isDark
-                            ? Icons.light_mode
-                            : Icons.dark_mode_outlined),
+                        icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode_outlined),
                         onPressed: widget.onToggleTheme,
                         tooltip: 'Cambiar Modo Oscuro/Claro',
                       ),
@@ -167,30 +155,23 @@ class _LoginScreenState extends State<LoginScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          // Logo Principal
+                          // Logo Principal corregido para mantener la proporción original
                           Padding(
                             padding: const EdgeInsets.only(bottom: 8.0),
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(
-                                maxHeight: 110,
-                                maxWidth: 280,
-                              ),
-                              child: AspectRatio(
-                                aspectRatio: 16 / 9,
-                                child: Image.asset(
-                                  _mainLogoAsset,
+                            child: SizedBox(
+                              height: 110,
+                              child: Image.asset(
+                                _mainLogoAsset,
+                                fit: BoxFit.contain,
+                                errorBuilder: (context, error, stackTrace) => Image.asset(
+                                  _innerLogoAsset,
                                   fit: BoxFit.contain,
-                                  errorBuilder: (context, error, stackTrace) =>
-                                      Image.asset(_innerLogoAsset,
-                                          fit: BoxFit.contain),
                                 ),
                               ),
                             ),
                           ),
                           Text(
-                            _isLoginTab
-                                ? 'Iniciar sesión en SSPILLOWY'
-                                : 'Crear tu cuenta en SSPILLOWY',
+                            _isLoginTab ? 'Iniciar sesión en SSPILLOWY' : 'Crear tu cuenta en SSPILLOWY',
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
@@ -198,10 +179,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                           const SizedBox(height: 2),
-                          const Text(
-                              'Plataforma Integral de Gobernanza DevSecOps',
-                              style:
-                                  TextStyle(color: Colors.grey, fontSize: 12)),
+                          const Text('Plataforma Integral de Gobernanza DevSecOps', style: TextStyle(color: Colors.grey, fontSize: 12)),
                           const SizedBox(height: 20),
 
                           // Card Principal
@@ -209,14 +187,11 @@ class _LoginScreenState extends State<LoginScreen> {
                             constraints: const BoxConstraints(maxWidth: 420),
                             padding: const EdgeInsets.all(22),
                             decoration: BoxDecoration(
-                              color: isDark
-                                  ? const Color(0xFF1E293B)
-                                  : Colors.white,
+                              color: isDark ? const Color(0xFF1E293B) : Colors.white,
                               borderRadius: BorderRadius.circular(16),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black
-                                      .withValues(alpha: isDark ? 0.3 : 0.05),
+                                  color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05),
                                   blurRadius: 20,
                                   offset: const Offset(0, 4),
                                 ),
@@ -227,61 +202,41 @@ class _LoginScreenState extends State<LoginScreen> {
                               children: [
                                 Container(
                                   decoration: BoxDecoration(
-                                    color: isDark
-                                        ? const Color(0xFF0F172A)
-                                        : const Color(0xFFF1F5F9),
+                                    color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: Row(
                                     children: [
                                       Expanded(
                                         child: GestureDetector(
-                                          onTap: () => setState(
-                                              () => _isLoginTab = true),
+                                          onTap: () => setState(() => _isLoginTab = true),
                                           child: Container(
-                                            padding: const EdgeInsets.symmetric(
-                                                vertical: 10),
+                                            padding: const EdgeInsets.symmetric(vertical: 10),
                                             decoration: BoxDecoration(
                                               color: _isLoginTab
-                                                  ? (isDark
-                                                      ? const Color(0xFF334155)
-                                                      : Colors.white)
+                                                  ? (isDark ? const Color(0xFF334155) : Colors.white)
                                                   : Colors.transparent,
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
+                                              borderRadius: BorderRadius.circular(8),
                                             ),
                                             child: const Center(
-                                              child: Text('Iniciar Sesión',
-                                                  style: TextStyle(
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                      fontSize: 13)),
+                                              child: Text('Iniciar Sesión', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                                             ),
                                           ),
                                         ),
                                       ),
                                       Expanded(
                                         child: GestureDetector(
-                                          onTap: () => setState(
-                                              () => _isLoginTab = false),
+                                          onTap: () => setState(() => _isLoginTab = false),
                                           child: Container(
-                                            padding: const EdgeInsets.symmetric(
-                                                vertical: 10),
+                                            padding: const EdgeInsets.symmetric(vertical: 10),
                                             decoration: BoxDecoration(
                                               color: !_isLoginTab
-                                                  ? (isDark
-                                                      ? const Color(0xFF334155)
-                                                      : Colors.white)
+                                                  ? (isDark ? const Color(0xFF334155) : Colors.white)
                                                   : Colors.transparent,
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
+                                              borderRadius: BorderRadius.circular(8),
                                             ),
                                             child: const Center(
-                                              child: Text('Crear Cuenta',
-                                                  style: TextStyle(
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                      fontSize: 13)),
+                                              child: Text('Crear Cuenta', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                                             ),
                                           ),
                                         ),
@@ -290,40 +245,26 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                 ),
                                 const SizedBox(height: 18),
-                                const Text('Correo electrónico o Gmail',
-                                    style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w500)),
+                                const Text('Correo electrónico o Gmail', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
                                 const SizedBox(height: 6),
                                 TextField(
                                   controller: _emailController,
                                   decoration: InputDecoration(
                                     hintText: 'usuario@ejemplo.com',
-                                    prefixIcon: const Icon(Icons.email_outlined,
-                                        size: 18),
-                                    contentPadding: const EdgeInsets.symmetric(
-                                        vertical: 10),
-                                    border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(8)),
+                                    prefixIcon: const Icon(Icons.email_outlined, size: 18),
+                                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                                   ),
                                 ),
                                 const SizedBox(height: 14),
                                 Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    const Text('Contraseña',
-                                        style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w500)),
+                                    const Text('Contraseña', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
                                     if (_isLoginTab)
                                       GestureDetector(
                                         onTap: () {},
-                                        child: const Text(
-                                            '¿Olvidaste tu clave?',
-                                            style: TextStyle(
-                                                color: Colors.blue,
-                                                fontSize: 11)),
+                                        child: const Text('¿Olvidaste tu clave?', style: TextStyle(color: Colors.blue, fontSize: 11)),
                                       ),
                                   ],
                                 ),
@@ -333,12 +274,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                   obscureText: true,
                                   decoration: InputDecoration(
                                     hintText: '••••••••',
-                                    prefixIcon: const Icon(Icons.lock_outline,
-                                        size: 18),
-                                    contentPadding: const EdgeInsets.symmetric(
-                                        vertical: 10),
-                                    border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(8)),
+                                    prefixIcon: const Icon(Icons.lock_outline, size: 18),
+                                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                                   ),
                                 ),
                                 const SizedBox(height: 18),
@@ -347,21 +285,15 @@ class _LoginScreenState extends State<LoginScreen> {
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: const Color(0xFF1E8E3E),
                                     foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 12),
-                                    shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(8)),
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                   ),
                                   child: Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
                                       Text(
-                                        _isLoginTab
-                                            ? 'Ingresar a la Consola'
-                                            : 'Registrar Cuenta',
-                                        style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 14),
+                                        _isLoginTab ? 'Ingresar a la Consola' : 'Registrar Cuenta',
+                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                                       ),
                                       const SizedBox(width: 8),
                                       const Icon(Icons.arrow_forward, size: 16),
@@ -371,25 +303,12 @@ class _LoginScreenState extends State<LoginScreen> {
                                 const SizedBox(height: 16),
                                 Row(
                                   children: [
-                                    Expanded(
-                                        child: Divider(
-                                            color: isDark
-                                                ? Colors.white12
-                                                : Colors.grey.shade300)),
+                                    Expanded(child: Divider(color: isDark ? Colors.white12 : Colors.grey.shade300)),
                                     Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 8.0),
-                                      child: Text('O INGRESAR CON',
-                                          style: TextStyle(
-                                              color: Colors.grey.shade500,
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.w500)),
+                                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                                      child: Text('O INGRESAR CON', style: TextStyle(color: Colors.grey.shade500, fontSize: 10, fontWeight: FontWeight.w500)),
                                     ),
-                                    Expanded(
-                                        child: Divider(
-                                            color: isDark
-                                                ? Colors.white12
-                                                : Colors.grey.shade300)),
+                                    Expanded(child: Divider(color: isDark ? Colors.white12 : Colors.grey.shade300)),
                                   ],
                                 ),
                                 const SizedBox(height: 14),
@@ -403,14 +322,10 @@ class _LoginScreenState extends State<LoginScreen> {
                                   crossAxisSpacing: 8,
                                   mainAxisSpacing: 8,
                                   children: [
-                                    _socialNetworkButton(
-                                        context, 'Google', _googleAsset),
-                                    _socialNetworkButton(
-                                        context, 'GitHub', _githubAsset),
-                                    _socialNetworkButton(
-                                        context, 'GitLab', _gitlabAsset),
-                                    _socialNetworkButton(
-                                        context, 'Microsoft', _microsoftAsset),
+                                    _socialNetworkButton(context, 'Google', _googleAsset),
+                                    _socialNetworkButton(context, 'GitHub', _githubAsset),
+                                    _socialNetworkButton(context, 'GitLab', _gitlabAsset),
+                                    _socialNetworkButton(context, 'Microsoft', _microsoftAsset),
                                   ],
                                 ),
                               ],
@@ -423,9 +338,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 Padding(
                   padding: const EdgeInsets.only(bottom: 12.0),
-                  child: Text('SSPILLOWY Security Governance Platform • 2026',
-                      style:
-                          TextStyle(color: Colors.grey.shade500, fontSize: 11)),
+                  child: Text('SSPILLOWY Security Governance Platform • 2026', style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
                 ),
               ],
             ),
@@ -435,14 +348,12 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _socialNetworkButton(
-      BuildContext context, String label, String assetPath) {
+  Widget _socialNetworkButton(BuildContext context, String label, String assetPath) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return OutlinedButton(
       onPressed: _handleLogin,
       style: OutlinedButton.styleFrom(
-        backgroundColor:
-            isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+        backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
         side: BorderSide(color: isDark ? Colors.white12 : Colors.grey.shade300),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -456,16 +367,11 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Image.asset(
               assetPath,
               fit: BoxFit.contain,
-              errorBuilder: (context, error, stackTrace) =>
-                  const Icon(Icons.link, size: 16),
+              errorBuilder: (context, error, stackTrace) => const Icon(Icons.link, size: 16),
             ),
           ),
           const SizedBox(width: 8),
-          Text(label,
-              style: TextStyle(
-                  color: isDark ? Colors.white : Colors.black87,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600)),
+          Text(label, style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 12, fontWeight: FontWeight.w600)),
         ],
       ),
     );
@@ -479,8 +385,7 @@ class GridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color =
-          isDark ? Colors.white.withValues(alpha: 0.03) : Colors.grey.shade200
+      ..color = isDark ? Colors.white.withValues(alpha: 0.03) : Colors.grey.shade200
       ..strokeWidth = 1.0;
 
     const double step = 24.0;
@@ -556,8 +461,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
 
     setState(() {
       _isScanning = false;
-      _scanStatusText =
-          '¡Escaneo $type completado! Se han actualizado los hallazgos.';
+      _scanStatusText = '¡Escaneo $type completado! Se han actualizado los hallazgos.';
 
       if (type == 'SAST') {
         _vulnSast += 3;
@@ -576,8 +480,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-              'Auditoría $type finalizada. Vulnerabilidades detectadas agregadas al tablero.'),
+          content: Text('Auditoría $type finalizada. Vulnerabilidades detectadas agregadas al tablero.'),
           backgroundColor: const Color(0xFF1E8E3E),
         ),
       );
@@ -607,8 +510,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
               child: Image.asset('assets/logo_2.png', fit: BoxFit.contain),
             ),
             const SizedBox(width: 8),
-            const Text('SSPILLOWY Console',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            const Text('SSPILLOWY Console', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
           ],
         ),
         actions: [
@@ -624,24 +526,19 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
           children: [
             UserAccountsDrawerHeader(
               decoration: const BoxDecoration(color: Color(0xFF4A3E85)),
-              accountName: Text(userName,
-                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              accountName: Text(userName, style: const TextStyle(fontWeight: FontWeight.bold)),
               accountEmail: Text('@$userNickname • ${widget.userEmail}'),
               currentAccountPicture: CircleAvatar(
                 backgroundColor: Colors.white,
                 child: Text(
                   userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
-                  style: const TextStyle(
-                      fontSize: 24,
-                      color: Color(0xFF4A3E85),
-                      fontWeight: FontWeight.bold),
+                  style: const TextStyle(fontSize: 24, color: Color(0xFF4A3E85), fontWeight: FontWeight.bold),
                 ),
               ),
             ),
             ListTile(
               leading: const Icon(Icons.logout, color: Colors.red),
-              title: const Text('Cerrar Sesión',
-                  style: TextStyle(color: Colors.red)),
+              title: const Text('Cerrar Sesión', style: TextStyle(color: Colors.red)),
               onTap: () {
                 Navigator.pushReplacement(
                   context,
@@ -664,8 +561,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
           children: [
             Card(
               elevation: 1,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Row(
@@ -675,10 +571,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                       backgroundColor: const Color(0xFF4A3E85),
                       child: Text(
                         userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold),
+                        style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                     ),
                     const SizedBox(width: 14),
@@ -686,12 +579,8 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Bienvenido, $userName',
-                              style: const TextStyle(
-                                  fontSize: 16, fontWeight: FontWeight.bold)),
-                          Text('@$userNickname',
-                              style: const TextStyle(
-                                  color: Colors.grey, fontSize: 13)),
+                          Text('Bienvenido, $userName', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                          Text('@$userNickname', style: const TextStyle(color: Colors.grey, fontSize: 13)),
                         ],
                       ),
                     ),
@@ -700,10 +589,10 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
               ),
             ),
             const SizedBox(height: 18),
+
             Card(
               elevation: 1,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
@@ -712,22 +601,13 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Ejecutar Escaneos DevSecOps',
-                            style: TextStyle(
-                                fontSize: 15, fontWeight: FontWeight.bold)),
+                        const Text('Ejecutar Escaneos DevSecOps', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
                         if (_isScanning)
-                          const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2)),
+                          const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
                       ],
                     ),
                     const SizedBox(height: 6),
-                    Text(_scanStatusText,
-                        style: TextStyle(
-                            color:
-                                isDark ? Colors.white60 : Colors.grey.shade700,
-                            fontSize: 12)),
+                    Text(_scanStatusText, style: TextStyle(color: isDark ? Colors.white60 : Colors.grey.shade700, fontSize: 12)),
                     const SizedBox(height: 12),
                     LinearProgressIndicator(
                       value: _isScanning ? _scanProgress : 0.0,
@@ -739,35 +619,22 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                       runSpacing: 8,
                       children: [
                         ElevatedButton.icon(
-                          onPressed: _isScanning
-                              ? null
-                              : () => _runInteractiveScan('SAST'),
+                          onPressed: _isScanning ? null : () => _runInteractiveScan('SAST'),
                           icon: const Icon(Icons.code, size: 16),
                           label: const Text('Escanear SAST'),
-                          style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF4A3E85),
-                              foregroundColor: Colors.white),
+                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4A3E85), foregroundColor: Colors.white),
                         ),
                         ElevatedButton.icon(
-                          onPressed: _isScanning
-                              ? null
-                              : () => _runInteractiveScan('SCA'),
-                          icon:
-                              const Icon(Icons.inventory_2_outlined, size: 16),
+                          onPressed: _isScanning ? null : () => _runInteractiveScan('SCA'),
+                          icon: const Icon(Icons.inventory_2_outlined, size: 16),
                           label: const Text('Escanear SCA'),
-                          style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF1E88E5),
-                              foregroundColor: Colors.white),
+                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1E88E5), foregroundColor: Colors.white),
                         ),
                         ElevatedButton.icon(
-                          onPressed: _isScanning
-                              ? null
-                              : () => _runInteractiveScan('DAST'),
+                          onPressed: _isScanning ? null : () => _runInteractiveScan('DAST'),
                           icon: const Icon(Icons.bug_report_outlined, size: 16),
                           label: const Text('Escanear DAST'),
-                          style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFE53935),
-                              foregroundColor: Colors.white),
+                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE53935), foregroundColor: Colors.white),
                         ),
                       ],
                     ),
@@ -776,8 +643,8 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
               ),
             ),
             const SizedBox(height: 20),
-            const Text('Resumen de Vulnerabilidades',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+
+            const Text('Resumen de Vulnerabilidades', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
             GridView.count(
               crossAxisCount: 2,
@@ -787,25 +654,21 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
               mainAxisSpacing: 10,
               childAspectRatio: 1.4,
               children: [
-                _metricCard('SAST Findings', '$_vulnSast', Colors.deepPurple,
-                    Icons.security),
-                _metricCard('SCA Dependencies', '$_vulnSca', Colors.blue,
-                    Icons.inventory_2),
-                _metricCard('DAST Endpoints', '$_vulnDast', Colors.red,
-                    Icons.bug_report),
-                _metricCard('Compliance', '$_compliance%', Colors.green,
-                    Icons.verified_user),
+                _metricCard('SAST Findings', '$_vulnSast', Colors.deepPurple, Icons.security),
+                _metricCard('SCA Dependencies', '$_vulnSca', Colors.blue, Icons.inventory_2),
+                _metricCard('DAST Endpoints', '$_vulnDast', Colors.red, Icons.bug_report),
+                _metricCard('Compliance', '$_compliance%', Colors.green, Icons.verified_user),
               ],
             ),
           ],
         ),
       ),
+
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openAIChat,
         backgroundColor: const Color(0xFF4A3E85),
         icon: const Icon(Icons.auto_awesome, color: Colors.amber),
-        label: const Text('Asistente IA',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        label: const Text('Asistente IA', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
     );
   }
@@ -822,11 +685,8 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
           children: [
             Icon(icon, color: color, size: 24),
             const SizedBox(height: 6),
-            Text(val,
-                style: TextStyle(
-                    fontSize: 22, fontWeight: FontWeight.bold, color: color)),
-            Text(title,
-                style: const TextStyle(fontSize: 11, color: Colors.grey)),
+            Text(val, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color)),
+            Text(title, style: const TextStyle(fontSize: 11, color: Colors.grey)),
           ],
         ),
       ),
@@ -844,11 +704,7 @@ class IAChatModal extends StatefulWidget {
 class _IAChatModalState extends State<IAChatModal> {
   final TextEditingController _msgController = TextEditingController();
   final List<Map<String, String>> _messages = [
-    {
-      'sender': 'ai',
-      'text':
-          '¡Hola! Soy el asistente IA de SSPILLOWY. Haz un escaneo para analizar tus vulnerabilidades.'
-    },
+    {'sender': 'ai', 'text': '¡Hola! Soy el asistente IA de SSPILLOWY. Haz un escaneo para analizar tus vulnerabilidades.'},
   ];
 
   void _sendMessage(String text) {
@@ -865,8 +721,7 @@ class _IAChatModalState extends State<IAChatModal> {
       setState(() {
         _messages.add({
           'sender': 'ai',
-          'text':
-              'Análisis procesado. Se sugiere aplicar parches de seguridad en dependencias críticas de tu proyecto.'
+          'text': 'Análisis procesado. Se sugiere aplicar parches de seguridad en dependencias críticas de tu proyecto.'
         });
       });
     });
@@ -894,9 +749,7 @@ class _IAChatModalState extends State<IAChatModal> {
               children: [
                 const Icon(Icons.auto_awesome, color: Colors.amber, size: 20),
                 const SizedBox(width: 8),
-                const Text('SSPILLOWY AI Copilot',
-                    style: TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.bold)),
+                const Text('SSPILLOWY AI Copilot', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 const Spacer(),
                 IconButton(
                   icon: const Icon(Icons.close, color: Colors.white),
@@ -913,22 +766,15 @@ class _IAChatModalState extends State<IAChatModal> {
                 final msg = _messages[index];
                 final isUser = msg['sender'] == 'user';
                 return Align(
-                  alignment:
-                      isUser ? Alignment.centerRight : Alignment.centerLeft,
+                  alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
                   child: Container(
                     margin: const EdgeInsets.symmetric(vertical: 4),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
-                      color: isUser
-                          ? const Color(0xFF1E88E5)
-                          : (isDark
-                              ? const Color(0xFF334155)
-                              : Colors.grey.shade200),
+                      color: isUser ? const Color(0xFF1E88E5) : (isDark ? const Color(0xFF334155) : Colors.grey.shade200),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Text(msg['text']!,
-                        style: const TextStyle(fontSize: 13)),
+                    child: Text(msg['text']!, style: const TextStyle(fontSize: 13)),
                   ),
                 );
               },
@@ -948,10 +794,8 @@ class _IAChatModalState extends State<IAChatModal> {
                     controller: _msgController,
                     decoration: InputDecoration(
                       hintText: 'Escribe tu consulta...',
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 10),
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                   ),
                 ),
