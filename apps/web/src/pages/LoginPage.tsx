@@ -279,7 +279,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oa
               </label>
               <input
                 type="text"
-                placeholder="ej. Sebastián Tralma"
+                placeholder="ej. Ana Pérez"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 style={{
