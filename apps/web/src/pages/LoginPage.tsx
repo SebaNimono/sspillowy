@@ -69,6 +69,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oa
   const [fullName, setFullName] = useState('');
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   useEffect(() => {
     if (!oauthError) return;
@@ -80,8 +81,20 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oa
     });
   }, [oauthError, oauthDetail]);
 
+  const requireTerms = () => {
+    if (acceptedTerms) return true;
+    setToast({
+      id: Date.now().toString(),
+      type: 'error',
+      title: 'Términos pendientes',
+      message: 'Debes aceptar los Términos y Condiciones y la Política de Privacidad para continuar.',
+    });
+    return false;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!requireTerms()) return;
     if (!email || !password) {
       setToast({
         id: Date.now().toString(),
@@ -120,6 +133,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oa
   };
 
   const startOAuth = async (provider: 'github' | 'gitlab' | 'google' | 'microsoft') => {
+    if (!requireTerms()) return;
     const labels = { github: 'GitHub', gitlab: 'GitLab', google: 'Google', microsoft: 'Microsoft' };
     try {
       const providers = await fetchAuthProviders();
@@ -368,10 +382,29 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oa
             </div>
           </div>
 
+          <label className="login-terms">
+            <input
+              type="checkbox"
+              checked={acceptedTerms}
+              onChange={(e) => setAcceptedTerms(e.target.checked)}
+            />
+            <span>
+              Acepto los{' '}
+              <a href="/terminos" target="_blank" rel="noopener noreferrer">
+                Términos y Condiciones
+              </a>{' '}
+              y la{' '}
+              <a href="/privacidad" target="_blank" rel="noopener noreferrer">
+                Política de Privacidad
+              </a>
+              .
+            </span>
+          </label>
+
           <button
             type="submit"
             className="btn btn-primary"
-            disabled={submitting}
+            disabled={submitting || !acceptedTerms}
             style={{
               width: '100%',
               justifyContent: 'center',

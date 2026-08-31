@@ -747,6 +747,34 @@ html {
   border-color: #8c959f;
 }
 
+.login-terms {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  margin: 0 0 1.1rem;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: #656d76;
+  cursor: pointer;
+}
+
+.login-terms input {
+  margin-top: 0.15rem;
+  flex-shrink: 0;
+  accent-color: #0969da;
+  cursor: pointer;
+}
+
+.login-terms a {
+  color: #0969da;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.login-terms a:hover {
+  text-decoration: underline;
+}
+
 .site {
   min-height: 100vh;
   background: var(--bg-canvas);
