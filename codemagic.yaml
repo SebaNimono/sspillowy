@@ -1,0 +1,45 @@
+﻿workflows:
+  ios-release-workflow:
+    name: SSPILLOWY iOS Release Build & Deploy to TestFlight
+    max_build_duration: 120
+    instance_type: mac_mini_m1
+    working_directory: apps/mobile
+    integrations:
+      app_store_connect: Codemagic Key
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+      ios_signing:
+        provisioning_profiles:
+          - TicAsistente_AppStore
+        certificates:
+          - LexyLegal
+    scripts:
+      - name: Set up code signing settings on Xcode project
+        script: |
+          xcode-project use-profiles
+      - name: Get Flutter packages and iOS configuration
+        script: |
+          flutter config --no-enable-swift-package-manager
+          flutter packages pub get
+          flutter build ios --config-only
+      - name: Install CocoaPods
+        script: |
+          cd ios && pod install
+      - name: Build ipa for App Store Distribution
+        script: |
+          AUTO_BUILD=$(($BUILD_NUMBER + 5))
+          flutter build ipa --release \
+            --build-number=$AUTO_BUILD \
+            --export-options-plist=/Users/builder/export_options.plist
+          find . -name "*.ipa" -exec cp {} ./ \; || true
+    artifacts:
+      - "*.ipa"
+      - apps/mobile/build/ios/ipa/*.ipa
+      - apps/mobile/build/ios/archive/*.xcarchive
+    publishing:
+      app_store_connect:
+        auth: integration
+        apple_id: programador1@ticmega.cl
+        submit_to_testflight: true
