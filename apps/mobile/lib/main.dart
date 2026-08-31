@@ -12,7 +12,6 @@ class SSPILLOWYApp extends StatefulWidget {
 }
 
 class _SSPILLOWYAppState extends State<SSPILLOWYApp> {
-  // Estado global del tema para mantener la opción seleccionada
   ThemeMode _themeMode = ThemeMode.light;
 
   void _toggleTheme() {
@@ -85,7 +84,6 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  // 1. SOLUCIÓN: Lógica funcional para restablecer contraseña
   void _handleForgotPassword() {
     final resetEmailController = TextEditingController(text: _emailController.text);
 
@@ -251,7 +249,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       IconButton(
                         icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode_outlined),
-                        onPressed: widget.onToggleTheme, // 2. Mantiene la llamada global al tema
+                        onPressed: widget.onToggleTheme,
                         tooltip: 'Cambiar Modo',
                       ),
                     ],
@@ -382,7 +380,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                       const Text('Contraseña', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
                                       if (_isLoginTab)
                                         GestureDetector(
-                                          onTap: _handleForgotPassword, // Llama a la modal de recuperación
+                                          onTap: _handleForgotPassword,
                                           child: const Text('¿Olvidaste tu clave?', style: TextStyle(color: Colors.blue, fontSize: 11, fontWeight: FontWeight.w600)),
                                         ),
                                     ],
@@ -560,6 +558,10 @@ class MainDashboardScreen extends StatefulWidget {
 class _MainDashboardScreenState extends State<MainDashboardScreen> {
   late String userName;
   late String userNickname;
+  String userRole = 'DevSecOps Lead';
+  String userDept = 'Ingeniería & Ciberseguridad';
+  String avatarUrl = '';
+  int selectedPresetAvatar = 0; // 0 = Iniciales, 1 = Shield, 2 = Code, 3 = Terminal, 4 = Lock
 
   bool _isScanning = false;
   double _scanProgress = 0.0;
@@ -577,57 +579,217 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
     userNickname = widget.userNickname;
   }
 
+  // MODAL EXTENDIDO: Personalización de Avatar y Perfil
   void _editUserProfile() {
     final nameController = TextEditingController(text: userName);
     final nicknameController = TextEditingController(text: userNickname);
+    final roleController = TextEditingController(text: userRole);
+    final deptController = TextEditingController(text: userDept);
+    final urlController = TextEditingController(text: avatarUrl);
+    int tempPreset = selectedPresetAvatar;
 
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.edit, color: Color(0xFF4A3E85)),
-            SizedBox(width: 8),
-            Text('Editar Perfil', style: TextStyle(fontSize: 16)),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(labelText: 'Nombre de usuario', prefixIcon: Icon(Icons.person)),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: nicknameController,
-              decoration: const InputDecoration(labelText: 'Nickname / Aliases', prefixIcon: Icon(Icons.alternate_email)),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).brightness == Brightness.dark
+          ? const Color(0xFF1E293B)
+          : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                top: 20,
+                left: 20,
+                right: 20,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.manage_accounts, color: Color(0xFF4A3E85)),
+                            SizedBox(width: 8),
+                            Text('Personalizar Perfil y Avatar',
+                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ],
+                    ),
+                    const Divider(),
+                    const SizedBox(height: 10),
+                    const Text('Selecciona tu Avatar:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 10),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _avatarOption(0, Icons.person, 'Inicial', tempPreset, (val) => setModalState(() => tempPreset = val)),
+                        _avatarOption(1, Icons.shield, 'Escudo', tempPreset, (val) => setModalState(() => tempPreset = val)),
+                        _avatarOption(2, Icons.code, 'Dev', tempPreset, (val) => setModalState(() => tempPreset = val)),
+                        _avatarOption(3, Icons.terminal, 'Cli', tempPreset, (val) => setModalState(() => tempPreset = val)),
+                        _avatarOption(4, Icons.security, 'Sec', tempPreset, (val) => setModalState(() => tempPreset = val)),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: urlController,
+                      decoration: const InputDecoration(
+                        labelText: 'O pega la URL de tu foto/avatar',
+                        prefixIcon: Icon(Icons.link),
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: nameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Nombre completo',
+                        prefixIcon: Icon(Icons.person),
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: nicknameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Nickname / User ID',
+                        prefixIcon: Icon(Icons.alternate_email),
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: roleController,
+                      decoration: const InputDecoration(
+                        labelText: 'Cargo / Rol',
+                        prefixIcon: Icon(Icons.badge_outlined),
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: deptController,
+                      decoration: const InputDecoration(
+                        labelText: 'Departamento / Área',
+                        prefixIcon: Icon(Icons.business),
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          if (nameController.text.trim().isNotEmpty) {
+                            setState(() {
+                              userName = nameController.text.trim();
+                              userNickname = nicknameController.text.trim();
+                              userRole = roleController.text.trim();
+                              userDept = deptController.text.trim();
+                              avatarUrl = urlController.text.trim();
+                              selectedPresetAvatar = tempPreset;
+                            });
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('¡Perfil actualizado correctamente!'),
+                                backgroundColor: Color(0xFF1E8E3E),
+                              ),
+                            );
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF4A3E85),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        child: const Text('Guardar Cambios'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _avatarOption(int index, IconData icon, String label, int currentSelected, Function(int) onSelect) {
+    final isSelected = currentSelected == index;
+    return GestureDetector(
+      onTap: () => onSelect(index),
+      child: Column(
+        children: [
+          CircleAvatar(
+            radius: 20,
+            backgroundColor: isSelected ? const Color(0xFF4A3E85) : Colors.grey.shade300,
+            child: Icon(icon, size: 20, color: isSelected ? Colors.white : Colors.black87),
           ),
-          ElevatedButton(
-            onPressed: () {
-              if (nameController.text.trim().isNotEmpty && nicknameController.text.trim().isNotEmpty) {
-                setState(() {
-                  userName = nameController.text.trim();
-                  userNickname = nicknameController.text.trim();
-                });
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Perfil actualizado correctamente')),
-                );
-              }
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4A3E85), foregroundColor: Colors.white),
-            child: const Text('Guardar'),
-          ),
+          const SizedBox(height: 4),
+          Text(label, style: TextStyle(fontSize: 10, color: isSelected ? const Color(0xFF4A3E85) : Colors.grey)),
         ],
       ),
+    );
+  }
+
+  Widget _buildAvatarWidget({double radius = 24, double fontSize = 18}) {
+    if (avatarUrl.isNotEmpty) {
+      return CircleAvatar(
+        radius: radius,
+        backgroundImage: NetworkImage(avatarUrl),
+        backgroundColor: Colors.transparent,
+      );
+    }
+
+    IconData icon = Icons.person;
+    switch (selectedPresetAvatar) {
+      case 1:
+        icon = Icons.shield;
+        break;
+      case 2:
+        icon = Icons.code;
+        break;
+      case 3:
+        icon = Icons.terminal;
+        break;
+      case 4:
+        icon = Icons.security;
+        break;
+      default:
+        return CircleAvatar(
+          radius: radius,
+          backgroundColor: const Color(0xFF4A3E85),
+          child: Text(
+            userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
+            style: TextStyle(color: Colors.white, fontSize: fontSize, fontWeight: FontWeight.bold),
+          ),
+        );
+    }
+
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: const Color(0xFF4A3E85),
+      child: Icon(icon, color: Colors.white, size: radius * 1.1),
     );
   }
 
@@ -706,7 +868,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
         actions: [
           IconButton(
             icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode_outlined),
-            onPressed: widget.onToggleTheme, // Permite alternar el tema desde el Dashboard
+            onPressed: widget.onToggleTheme,
           ),
         ],
       ),
@@ -717,18 +879,13 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
             UserAccountsDrawerHeader(
               decoration: const BoxDecoration(color: Color(0xFF4A3E85)),
               accountName: Text(userName, style: const TextStyle(fontWeight: FontWeight.bold)),
-              accountEmail: Text('@$userNickname • ${widget.userEmail}'),
-              currentAccountPicture: CircleAvatar(
-                backgroundColor: Colors.white,
-                child: Text(
-                  userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
-                  style: const TextStyle(fontSize: 24, color: Color(0xFF4A3E85), fontWeight: FontWeight.bold),
-                ),
-              ),
+              accountEmail: Text('@$userNickname • $userRole\n${widget.userEmail}'),
+              currentAccountPicture: _buildAvatarWidget(radius: 30, fontSize: 22),
             ),
             ListTile(
-              leading: const Icon(Icons.edit_outlined, color: Color(0xFF4A3E85)),
-              title: const Text('Editar Nickname y Perfil'),
+              leading: const Icon(Icons.manage_accounts, color: Color(0xFF4A3E85)),
+              title: const Text('Personalizar Perfil y Avatar'),
+              subtitle: Text('$userRole • $userDept', style: const TextStyle(fontSize: 11)),
               onTap: () {
                 Navigator.pop(context);
                 _editUserProfile();
@@ -765,28 +922,22 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                 padding: const EdgeInsets.all(16.0),
                 child: Row(
                   children: [
-                    CircleAvatar(
-                      radius: 24,
-                      backgroundColor: const Color(0xFF4A3E85),
-                      child: Text(
-                        userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
-                        style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                    ),
+                    _buildAvatarWidget(radius: 26, fontSize: 20),
                     const SizedBox(width: 14),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text('Bienvenido, $userName', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                          Text('@$userNickname', style: const TextStyle(color: Colors.grey, fontSize: 13)),
+                          Text('@$userNickname • $userRole', style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                          Text(userDept, style: TextStyle(color: isDark ? Colors.white38 : Colors.black45, fontSize: 11)),
                         ],
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.edit_note, color: Color(0xFF4A3E85)),
+                      icon: const Icon(Icons.edit_outlined, color: Color(0xFF4A3E85)),
                       onPressed: _editUserProfile,
-                      tooltip: 'Editar Nombre / Nickname',
+                      tooltip: 'Editar Avatar y Perfil',
                     ),
                   ],
                 ),
