@@ -61,16 +61,27 @@ export const CookieBanner: React.FC<CookieBannerProps> = ({ onPrivacy }) => {
             Usamos las estrictamente necesarias para la sesión SSO y recordar esta elección.
             No hay publicidad ni analítica de terceros. Puedes aceptar esa preferencia o dejar solo las necesarias.
             {' '}
-            <button
-              type="button"
-              className="cookie-inline"
-              onClick={() => {
-                onPrivacy?.();
-                document.getElementById('privacidad')?.scrollIntoView({ behavior: 'smooth' });
-              }}
-            >
-              Privacidad
-            </button>
+              <button
+                type="button"
+                className="cookie-inline"
+                onClick={() => {
+                  onPrivacy?.();
+                  document.getElementById('privacidad')?.scrollIntoView({ behavior: 'smooth' });
+                }}
+              >
+                Privacidad
+              </button>
+              {' · '}
+              <button
+                type="button"
+                className="cookie-inline"
+                onClick={() => {
+                  onPrivacy?.();
+                  document.getElementById('terminos')?.scrollIntoView({ behavior: 'smooth' });
+                }}
+              >
+                Términos
+              </button>
           </p>
         </div>
         <div className="cookie-banner-actions">
