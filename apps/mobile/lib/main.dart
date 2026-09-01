@@ -794,159 +794,6 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
     );
   }
 
-  // --- BOTONERA PRINCIPAL RESTAURADA TAL COMO SE MOSTRABA EN LA IMAGEN ---
-  Widget _buildBotoneraWebHub(bool isDark) {
-    final navItems = [
-      {'icon': Icons.grid_view_rounded, 'title': 'Dashboard General', 'index': 0},
-      {'icon': Icons.folder_copy_outlined, 'title': 'Repositorios', 'index': 1},
-      {'icon': Icons.shield_outlined, 'title': 'Matriz de Hallazgos', 'index': 2},
-      {'icon': Icons.radar_outlined, 'title': 'Escaneos', 'index': 3},
-      {'icon': Icons.tune_rounded, 'title': 'Security Gates (CI/CD)', 'index': 4},
-      {'icon': Icons.notifications_none_rounded, 'title': 'Notificaciones', 'index': 5},
-      {'icon': Icons.insert_drive_file_outlined, 'title': 'Informes ISO 27001', 'index': 6},
-    ];
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF0D1117) : Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFF38BDF8).withValues(alpha: 0.5), width: 1.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Encabezado de la Botonera
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-            decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: const Color(0xFF38BDF8).withValues(alpha: 0.3))),
-            ),
-            child: const Center(
-              child: Text(
-                'SSPILLOWY Web Hub',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ),
-          ),
-          IntrinsicHeight(
-            child: Row(
-              children: [
-                // Etiqueta vertical "WEB"
-                Container(
-                  width: 36,
-                  decoration: const BoxDecoration(
-                    border: Border(right: BorderSide(color: Color(0xFF38BDF8), width: 2)),
-                  ),
-                  child: const Center(
-                    child: Text(
-                      'W\nE\nB',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Color(0xFF00B4D8),
-                        fontWeight: FontWeight.w900,
-                        fontSize: 18,
-                        height: 1.2,
-                      ),
-                    ),
-                  ),
-                ),
-                // Botonera dividida en 2 Columnas
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Columna Izquierda
-                        Expanded(
-                          child: Column(
-                            children: [
-                              _botoneraItem(navItems[0], isDark),
-                              _botoneraItem(navItems[1], isDark),
-                              _botoneraItem(navItems[2], isDark),
-                              _botoneraItem(navItems[3], isDark),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        // Columna Derecha
-                        Expanded(
-                          child: Column(
-                            children: [
-                              _botoneraItem(navItems[4], isDark),
-                              _botoneraItem(navItems[5], isDark),
-                              _botoneraItem(navItems[6], isDark),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _botoneraItem(Map<String, dynamic> item, bool isDark) {
-    final int itemIndex = item['index'] as int;
-    final isSelected = _selectedNavIndex == itemIndex;
-
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 2),
-      decoration: BoxDecoration(
-        color: isSelected
-            ? const Color(0xFF1E2638)
-            : (isDark ? const Color(0xFF161B22) : const Color(0xFFF1F5F9)),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(
-          color: isSelected ? const Color(0xFF38BDF8) : Colors.transparent,
-          width: 1,
-        ),
-      ),
-      child: InkWell(
-        onTap: () {
-          setState(() {
-            _selectedNavIndex = itemIndex;
-          });
-        },
-        borderRadius: BorderRadius.circular(6),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          child: Row(
-            children: [
-              Icon(
-                item['icon'] as IconData,
-                size: 18,
-                color: isSelected ? const Color(0xFF38BDF8) : const Color(0xFF94A3B8),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  item['title'] as String,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                    color: isSelected ? Colors.white : (isDark ? Colors.white70 : Colors.black87),
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -1006,8 +853,9 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
         backgroundColor: isDark ? const Color(0xFF121620) : const Color(0xFF1E293B),
         child: Column(
           children: [
+            // Header del Menú Lateral
             Container(
-              padding: const EdgeInsets.only(top: 40, left: 20, right: 16, bottom: 20),
+              padding: const EdgeInsets.only(top: 40, left: 20, right: 16, bottom: 16),
               color: isDark ? const Color(0xFF121620) : const Color(0xFF1E293B),
               child: Row(
                 children: [
@@ -1027,7 +875,35 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 8),
+
+            // Perfil de Usuario arriba en el drawer
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF161B22) : const Color(0xFF0F172A).withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                leading: _buildAvatarWidget(radius: 18, fontSize: 14),
+                title: Text(userName, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                subtitle: Text('@$userNickname', style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11)),
+                trailing: IconButton(
+                  icon: const Icon(Icons.edit_outlined, color: Colors.grey, size: 18),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _editUserProfile();
+                  },
+                ),
+              ),
+            ),
+
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              child: Divider(color: Colors.white12, height: 1),
+            ),
+
+            // Vistas de Navegación debajo del Usuario
             Expanded(
               child: ListView.builder(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -1057,14 +933,14 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                                 leading: Icon(
                                   navItems[index]['icon'] as IconData,
                                   color: isSelected ? const Color(0xFF38BDF8) : const Color(0xFF94A3B8),
-                                  size: 22,
+                                  size: 20,
                                 ),
                                 title: Text(
                                   navItems[index]['title'] as String,
                                   style: TextStyle(
                                     color: isSelected ? Colors.white : const Color(0xFF94A3B8),
                                     fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                                    fontSize: 14,
+                                    fontSize: 13,
                                   ),
                                 ),
                                 onTap: () {
@@ -1081,19 +957,10 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                 },
               ),
             ),
+
             const Divider(color: Colors.white12, height: 1),
-            ListTile(
-              leading: _buildAvatarWidget(radius: 16, fontSize: 13),
-              title: Text(userName, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-              subtitle: Text('@$userNickname', style: const TextStyle(color: Colors.grey, fontSize: 11)),
-              trailing: IconButton(
-                icon: const Icon(Icons.edit_outlined, color: Colors.grey, size: 18),
-                onPressed: () {
-                  Navigator.pop(context);
-                  _editUserProfile();
-                },
-              ),
-            ),
+
+            // Opción de Cerrar Sesión al final
             ListTile(
               leading: const Icon(Icons.logout, color: Colors.redAccent, size: 20),
               title: const Text('Cerrar Sesión', style: TextStyle(color: Colors.redAccent, fontSize: 13)),
@@ -1115,13 +982,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            // Botonera visible en la parte superior del Dashboard / Vista Principal
-            _buildBotoneraWebHub(isDark),
-            _buildSelectedView(_selectedNavIndex, isDark),
-          ],
-        ),
+        child: _buildSelectedView(_selectedNavIndex, isDark),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _openAIChat,
