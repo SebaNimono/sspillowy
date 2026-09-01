@@ -12,7 +12,7 @@
       cocoapods: default
       ios_signing:
         provisioning_profiles:
-          - TicAsistente_AppStore
+          - sspillowy
         certificates:
           - LexyLegal
     scripts:
