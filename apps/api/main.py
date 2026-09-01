@@ -43,6 +43,7 @@ from oauth_common import router as auth_meta_router
 from password_auth import router as password_auth_router
 from email_verification import router as email_verification_router
 from database import init_db, db_ping
+from email_service import mailer_status
 
 app = FastAPI(
     title="SSPILLOWY API Core",
@@ -498,7 +499,8 @@ async def health_check():
         "service": "SSPILLOWY Core API",
         "version": "0.1.0",
         "database": "postgresql (ok)" if db_ok else "unavailable (using memory fallback for auth)",
-        "redis_worker": "arq (ready)"
+        "redis_worker": "arq (ready)",
+        "email_mailer": mailer_status(),
     }
 
 @app.get("/api/v1/stats", response_model=DashboardStats, tags=["Dashboard"])

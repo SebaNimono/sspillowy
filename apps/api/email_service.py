@@ -13,17 +13,32 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
-EMAIL_FROM = os.getenv("EMAIL_FROM", "SSPILLOWY <noreply@sspillowy.com>").strip()
-RESEND_API_KEY = os.getenv("RESEND_API_KEY", "").strip()
-SMTP_HOST = os.getenv("SMTP_HOST", "").strip()
-SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
-SMTP_USER = os.getenv("SMTP_USER", "").strip()
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "").strip()
-SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() in ("1", "true", "yes")
+def _resend_key() -> str:
+    return os.getenv("RESEND_API_KEY", "").strip()
+
+
+def _smtp_ready() -> bool:
+    return bool(
+        os.getenv("SMTP_HOST", "").strip()
+        and os.getenv("SMTP_USER", "").strip()
+        and os.getenv("SMTP_PASSWORD", "").strip()
+    )
 
 
 def mailer_configured() -> bool:
-    return bool(RESEND_API_KEY or (SMTP_HOST and SMTP_USER and SMTP_PASSWORD))
+    return bool(_resend_key() or _smtp_ready())
+
+
+def mailer_status() -> str:
+    if _resend_key():
+        return "resend"
+    if _smtp_ready():
+        return "smtp"
+    return "none"
+
+
+def email_from() -> str:
+    return os.getenv("EMAIL_FROM", "SSPILLOWY <noreply@sspillowy.com>").strip()
 
 
 def _verification_html(name: str, verify_url: str) -> str:
@@ -46,13 +61,13 @@ async def send_verification_email(*, to: str, name: str, verify_url: str) -> boo
     html = _verification_html(name, verify_url)
     text = f"Hola {name},\n\nVerifica tu cuenta: {verify_url}\n\nEl enlace caduca en 24 horas."
 
-    if RESEND_API_KEY:
+    if _resend_key():
         try:
             async with httpx.AsyncClient(timeout=20.0) as client:
                 res = await client.post(
                     "https://api.resend.com/emails",
-                    headers={"Authorization": f"Bearer {RESEND_API_KEY}"},
-                    json={"from": EMAIL_FROM, "to": [to], "subject": subject, "html": html, "text": text},
+                    headers={"Authorization": f"Bearer {_resend_key()}"},
+                    json={"from": email_from(), "to": [to], "subject": subject, "html": html, "text": text},
                 )
             if res.status_code in (200, 201):
                 return True
@@ -61,20 +76,26 @@ async def send_verification_email(*, to: str, name: str, verify_url: str) -> boo
             print(f"[sspillowy] Resend failed: {exc}")
         return False
 
-    if SMTP_HOST and SMTP_USER and SMTP_PASSWORD:
+    smtp_host = os.getenv("SMTP_HOST", "").strip()
+    smtp_user = os.getenv("SMTP_USER", "").strip()
+    smtp_password = os.getenv("SMTP_PASSWORD", "").strip()
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_use_tls = os.getenv("SMTP_USE_TLS", "true").lower() in ("1", "true", "yes")
+
+    if smtp_host and smtp_user and smtp_password:
         try:
             msg = MIMEMultipart("alternative")
             msg["Subject"] = subject
-            msg["From"] = EMAIL_FROM
+            msg["From"] = email_from()
             msg["To"] = to
             msg.attach(MIMEText(text, "plain", "utf-8"))
             msg.attach(MIMEText(html, "html", "utf-8"))
 
-            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=20) as server:
-                if SMTP_USE_TLS:
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as server:
+                if smtp_use_tls:
                     server.starttls()
-                server.login(SMTP_USER, SMTP_PASSWORD)
-                server.sendmail(SMTP_USER, [to], msg.as_string())
+                server.login(smtp_user, smtp_password)
+                server.sendmail(smtp_user, [to], msg.as_string())
             return True
         except Exception as exc:
             print(f"[sspillowy] SMTP failed: {exc}")
