@@ -76,6 +76,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oa
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [termsHint, setTermsHint] = useState(false);
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null);
 
   useEffect(() => {
@@ -103,12 +104,16 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oa
   }, [oauthError, oauthDetail]);
 
   const requireTerms = () => {
-    if (acceptedTerms) return true;
+    if (acceptedTerms) {
+      setTermsHint(false);
+      return true;
+    }
+    setTermsHint(true);
     setToast({
       id: Date.now().toString(),
       type: 'error',
       title: 'Términos pendientes',
-      message: 'Debes aceptar los Términos y Condiciones y la Política de Privacidad para continuar.',
+      message: 'Marca la casilla: debes aceptar los Términos y Condiciones y la Política de Privacidad para continuar.',
     });
     return false;
   };
@@ -457,11 +462,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oa
             </div>
           </div>
 
-          <label className="login-terms">
+          <label className={`login-terms${termsHint ? ' login-terms--warn' : ''}`}>
             <input
               type="checkbox"
               checked={acceptedTerms}
-              onChange={(e) => setAcceptedTerms(e.target.checked)}
+              onChange={(e) => {
+                setAcceptedTerms(e.target.checked);
+                if (e.target.checked) setTermsHint(false);
+              }}
             />
             <span>
               Acepto los{' '}
@@ -475,6 +483,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oa
               .
             </span>
           </label>
+          {termsHint && (
+            <p className="login-terms-hint" role="alert">
+              Debes aceptar los términos antes de ingresar o registrarte.
+            </p>
+          )}
 
           {pendingVerificationEmail && (
             <div className="login-verify-banner">
@@ -495,14 +508,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oa
           <button
             type="submit"
             className="btn btn-primary"
-            disabled={submitting || !acceptedTerms}
+            disabled={submitting}
             style={{
               width: '100%',
               justifyContent: 'center',
               padding: '0.65rem',
               fontSize: '0.9rem',
               fontWeight: 600,
-              opacity: submitting ? 0.7 : 1,
+              opacity: submitting ? 0.7 : acceptedTerms ? 1 : 0.85,
             }}
           >
             <span>

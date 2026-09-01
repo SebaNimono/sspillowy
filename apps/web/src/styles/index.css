@@ -775,6 +775,21 @@ html {
   text-decoration: underline;
 }
 
+.login-terms--warn {
+  padding: 0.5rem 0.55rem;
+  margin: 0 0 0.35rem;
+  border-radius: 6px;
+  background: #fff8f8;
+  border: 1px solid #ffccc7;
+}
+
+.login-terms-hint {
+  margin: 0 0 0.85rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #cf222e;
+}
+
 .login-verify-banner {
   margin: 0 0 1rem;
   padding: 0.75rem 0.85rem;

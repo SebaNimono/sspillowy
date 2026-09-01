@@ -114,8 +114,8 @@ const faqs = [
     a: 'No para el proyecto. Semgrep, Trivy, GitLeaks y OWASP ZAP son open source. SSPILLOWY los orquesta; no sustituye sus licencias de empresa si un día se usan reglas comerciales.',
   },
   {
-    q: '¿Dónde corre hoy?',
-    a: 'El Hub está en Vercel. La API (OAuth y REST) en Railway. En local: Vite 5173 + FastAPI 8000. PostgreSQL, Redis y el worker real (Semgrep primero) son el siguiente tramo; el Hub aún usa datos de demostración en varias vistas.',
+    q: '¿En qué usar SSPILLOWY?',
+    a: 'Para centralizar la gobernanza de seguridad en equipos que desarrollan software: conectar repos, ejecutar análisis (SAST, SCA, secretos, DAST), unificar hallazgos en un solo lugar y triarlos con supervisión humana antes de cerrar. Sirve en revisiones de código, auditorías internas, demos de DevSecOps y como consola de referencia mientras se integra el pipeline completo.',
   },
   {
     q: '¿Usáis cookies de publicidad?',
