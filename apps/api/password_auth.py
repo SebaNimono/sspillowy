@@ -11,6 +11,8 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
 from database import SessionLocal
+from email_service import mailer_configured
+from email_verification import assign_verification_token
 from models import User
 from oauth_common import save_session
 
@@ -38,6 +40,17 @@ class AuthResponse(BaseModel):
     user_id: str | None = None
 
 
+class RegisterResponse(BaseModel):
+    requires_verification: bool = False
+    email: str
+    message: str
+    email_sent: bool = False
+    session_id: str | None = None
+    name: str | None = None
+    provider: str | None = None
+    user_id: str | None = None
+
+
 def _norm_email(email: str) -> str:
     return email.strip().lower()
 
@@ -60,7 +73,15 @@ def _validate_email(email: str) -> str:
     return email
 
 
-@router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
+def _require_verified_password_login(user: User) -> None:
+    if user.provider == "password" and user.password_hash and not user.email_verified:
+        raise HTTPException(
+            status_code=403,
+            detail="Debes verificar tu correo antes de iniciar sesión. Revisa tu bandeja o solicita un nuevo enlace.",
+        )
+
+
+@router.post("/register", response_model=RegisterResponse, status_code=status.HTTP_201_CREATED)
 async def register(body: RegisterBody):
     email = _validate_email(body.email)
     if len(body.password) < 8:
@@ -72,45 +93,66 @@ async def register(body: RegisterBody):
         existing = db.query(User).filter(User.email == email).first()
         now = datetime.now(timezone.utc)
 
-        if existing and existing.password_hash:
+        if existing and existing.password_hash and existing.provider == "password":
             raise HTTPException(status_code=409, detail="Ya existe una cuenta con ese correo. Inicia sesión.")
 
         if existing:
-            # Cuenta OAuth previa: permite definir contraseña para Pulse / login manual
+            # Cuenta SSO previa: define contraseña (ya verificada por el proveedor)
             existing.password_hash = _hash_password(body.password)
             if name:
                 existing.name = name
+            existing.email_verified = True
+            existing.verification_token = None
+            existing.verification_token_expires_at = None
             existing.last_login_at = now
             db.commit()
             db.refresh(existing)
             user = existing
-        else:
-            user = User(
-                id=str(uuid.uuid4()),
-                email=email,
-                name=name,
-                provider="password",
-                password_hash=_hash_password(body.password),
-                created_at=now,
-                last_login_at=now,
-            )
-            db.add(user)
-            db.commit()
-            db.refresh(user)
 
-        session_id = save_session(
-            email=user.email,
-            name=user.name,
+            session_id = save_session(
+                email=user.email,
+                name=user.name,
+                provider=user.provider,
+                avatar_url=user.avatar_url,
+                provider_subject=user.provider_subject or user.id,
+            )
+            return RegisterResponse(
+                requires_verification=False,
+                email=user.email,
+                message="Contraseña definida. Ya puedes iniciar sesión (útil para Pulse).",
+                session_id=session_id,
+                name=user.name,
+                provider=user.provider,
+                user_id=user.id,
+            )
+
+        user = User(
+            id=str(uuid.uuid4()),
+            email=email,
+            name=name,
             provider="password",
-            avatar_url=user.avatar_url,
-            provider_subject=user.id,
+            password_hash=_hash_password(body.password),
+            email_verified=False,
+            created_at=now,
+            last_login_at=now,
         )
-        return AuthResponse(
-            session_id=session_id,
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        sent = await assign_verification_token(user, db)
+        message = "Cuenta creada. Revisa tu correo y haz clic en el enlace de verificación."
+        if not sent and not mailer_configured():
+            message = (
+                "Cuenta creada. El servidor aún no envía correos (configura Resend o SMTP en Railway). "
+                "Hasta entonces no podrás iniciar sesión con contraseña."
+            )
+
+        return RegisterResponse(
+            requires_verification=True,
             email=user.email,
-            name=user.name,
-            provider="password",
-            user_id=user.id,
+            message=message,
+            email_sent=sent,
         )
     except HTTPException:
         raise
@@ -141,6 +183,8 @@ async def login(body: LoginBody):
 
         if not _verify_password(body.password, user.password_hash):
             raise HTTPException(status_code=401, detail="Correo o contraseña incorrectos")
+
+        _require_verified_password_login(user)
 
         user.last_login_at = datetime.now(timezone.utc)
         db.commit()

@@ -128,6 +128,12 @@ export const App: React.FC = () => {
       return () => window.removeEventListener('popstate', onPop);
     }
 
+    if (params.get('email_verified') === '1') {
+      setView('login');
+      setBootstrapping(false);
+      return () => window.removeEventListener('popstate', onPop);
+    }
+
     if (sessionId) {
       fetchAuthSession(sessionId)
         .then((session) => {

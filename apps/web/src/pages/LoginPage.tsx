@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Lock, Mail, ArrowRight, Github, Chrome, Code2, Globe } from 'lucide-react';
 import { Toast, ToastMessage } from '../components/Toast';
 import { AnimatedBackground } from '../components/AnimatedBackground';
-import { apiUrl, fetchAuthProviders, loginWithPassword, registerWithPassword } from '../api/client';
+import { apiUrl, fetchAuthProviders, loginWithPassword, registerWithPassword, resendVerificationEmail } from '../api/client';
 
 interface LoginPageProps {
   onLoginSuccess: (email: string, name: string) => void;
@@ -57,6 +57,12 @@ const oauthErrorMessage = (code: string, detail?: string | null) => {
       return 'Microsoft devolvió token pero falló Graph /me. Revisa permiso User.Read.' + extra;
     case 'microsoft_no_email':
       return 'Microsoft no devolvió el correo. Revisa que la app pida email y User.Read.';
+    case 'verify_invalid_token':
+      return 'El enlace de verificación no es válido. Solicita uno nuevo desde el login.';
+    case 'verify_expired_token':
+      return 'El enlace de verificación expiró. Solicita uno nuevo desde el login.';
+    case 'verify_missing_token':
+      return 'Falta el token de verificación en el enlace.';
     default:
       return 'El proveedor no autorizó el inicio de sesión.' + extra;
   }
@@ -70,6 +76,21 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oa
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('email_verified') === '1') {
+      setIsRegister(false);
+      setToast({
+        id: 'email-verified',
+        type: 'info',
+        title: 'Correo verificado',
+        message: 'Tu cuenta está activa. Ya puedes iniciar sesión con tu contraseña.',
+      });
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
 
   useEffect(() => {
     if (!oauthError) return;
@@ -116,16 +137,70 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oa
 
     setSubmitting(true);
     try {
-      const result = isRegister
-        ? await registerWithPassword(email.trim(), password, fullName.trim() || undefined)
-        : await loginWithPassword(email.trim(), password);
+      if (isRegister) {
+        const result = await registerWithPassword(email.trim(), password, fullName.trim() || undefined);
+        if (result.requires_verification) {
+          setPendingVerificationEmail(result.email);
+          setIsRegister(false);
+          setToast({
+            id: Date.now().toString(),
+            type: 'info',
+            title: 'Revisa tu correo',
+            message: result.message,
+          });
+          return;
+        }
+        if (result.session_id && result.name) {
+          onLoginSuccess(result.email, result.name);
+        }
+        return;
+      }
+
+      const result = await loginWithPassword(email.trim(), password);
       onLoginSuccess(result.email, result.name);
     } catch (err) {
+      const message = err instanceof Error ? err.message : 'No se pudo completar la solicitud.';
+      if (message.toLowerCase().includes('verificar')) {
+        setPendingVerificationEmail(email.trim());
+      }
       setToast({
         id: Date.now().toString(),
         type: 'error',
         title: isRegister ? 'Registro' : 'Inicio de sesión',
-        message: err instanceof Error ? err.message : 'No se pudo completar la solicitud.',
+        message,
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    const target = pendingVerificationEmail || email.trim();
+    if (!target) {
+      setToast({
+        id: Date.now().toString(),
+        type: 'error',
+        title: 'Correo requerido',
+        message: 'Indica el correo con el que te registraste.',
+      });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const result = await resendVerificationEmail(target);
+      setPendingVerificationEmail(target);
+      setToast({
+        id: Date.now().toString(),
+        type: 'info',
+        title: 'Verificación',
+        message: result.message,
+      });
+    } catch (err) {
+      setToast({
+        id: Date.now().toString(),
+        type: 'error',
+        title: 'Verificación',
+        message: err instanceof Error ? err.message : 'No se pudo reenviar el enlace.',
       });
     } finally {
       setSubmitting(false);
@@ -400,6 +475,22 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oa
               .
             </span>
           </label>
+
+          {pendingVerificationEmail && (
+            <div className="login-verify-banner">
+              <p>
+                Pendiente verificar <strong>{pendingVerificationEmail}</strong>. Revisa tu bandeja (y spam).
+              </p>
+              <button
+                type="button"
+                className="site-footer-link"
+                disabled={submitting}
+                onClick={handleResendVerification}
+              >
+                Reenviar enlace de verificación
+              </button>
+            </div>
+          )}
 
           <button
             type="submit"

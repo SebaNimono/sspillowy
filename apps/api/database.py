@@ -80,6 +80,15 @@ def init_db() -> bool:
             conn.execute(text("SELECT 1"))
             # Migración suave: columna de login manual (proyectos ya creados)
             conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT"))
+            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE"))
+            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_token TEXT"))
+            conn.execute(
+                text(
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_token_expires_at TIMESTAMPTZ"
+                )
+            )
+            # Usuarios ya existentes (SSO o pruebas) siguen pudiendo entrar
+            conn.execute(text("UPDATE users SET email_verified = TRUE WHERE email_verified IS NOT TRUE"))
             conn.commit()
         return True
     except Exception as exc:

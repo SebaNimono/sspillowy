@@ -99,6 +99,10 @@ def save_session(
                     user.provider = provider
                 if provider_subject:
                     user.provider_subject = provider_subject
+                if provider != "password":
+                    user.email_verified = True
+                    user.verification_token = None
+                    user.verification_token_expires_at = None
                 user.last_login_at = now
             else:
                 user = User(
@@ -108,6 +112,7 @@ def save_session(
                     avatar_url=avatar_url,
                     provider=provider,
                     provider_subject=provider_subject,
+                    email_verified=provider != "password",
                     created_at=now,
                     last_login_at=now,
                 )

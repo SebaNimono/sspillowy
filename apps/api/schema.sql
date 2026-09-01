@@ -10,6 +10,9 @@ CREATE TABLE IF NOT EXISTS users (
   provider TEXT NOT NULL,
   provider_subject TEXT,
   password_hash TEXT,
+  email_verified BOOLEAN DEFAULT FALSE,
+  verification_token TEXT,
+  verification_token_expires_at TIMESTAMPTZ,
   is_active BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   last_login_at TIMESTAMPTZ DEFAULT NOW()
@@ -104,3 +107,7 @@ ON CONFLICT (id) DO NOTHING;
 
 -- Migración si la tabla users ya existía sin password_hash:
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_token TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_token_expires_at TIMESTAMPTZ;
+UPDATE users SET email_verified = TRUE WHERE email_verified IS NOT TRUE;

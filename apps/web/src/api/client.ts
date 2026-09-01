@@ -247,7 +247,18 @@ export interface PasswordAuthResult {
   user_id?: string;
 }
 
-async function passwordAuthRequest(path: string, body: object): Promise<PasswordAuthResult> {
+export interface RegisterResult {
+  requires_verification: boolean;
+  email: string;
+  message: string;
+  email_sent?: boolean;
+  session_id?: string;
+  name?: string;
+  provider?: string;
+  user_id?: string;
+}
+
+async function passwordAuthRequest(path: string, body: object): Promise<RegisterResult> {
   const res = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -258,17 +269,41 @@ async function passwordAuthRequest(path: string, body: object): Promise<Password
     const detail = typeof data.detail === 'string' ? data.detail : `Error de API (${res.status})`;
     throw new Error(detail);
   }
-  return data as PasswordAuthResult;
+  return data as RegisterResult;
 }
 
 export async function registerWithPassword(
   email: string,
   password: string,
   name?: string,
-): Promise<PasswordAuthResult> {
+): Promise<RegisterResult> {
   return passwordAuthRequest('/auth/register', { email, password, name: name || undefined });
 }
 
 export async function loginWithPassword(email: string, password: string): Promise<PasswordAuthResult> {
-  return passwordAuthRequest('/auth/login', { email, password });
+  const res = await fetch(`${API_BASE}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const detail = typeof data.detail === 'string' ? data.detail : `Error de API (${res.status})`;
+    throw new Error(detail);
+  }
+  return data as PasswordAuthResult;
+}
+
+export async function resendVerificationEmail(email: string): Promise<{ ok: boolean; message: string }> {
+  const res = await fetch(`${API_BASE}/auth/resend-verification`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const detail = typeof data.detail === 'string' ? data.detail : `Error de API (${res.status})`;
+    throw new Error(detail);
+  }
+  return data as { ok: boolean; message: string };
 }
