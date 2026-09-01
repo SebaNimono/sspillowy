@@ -848,7 +848,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: Color(0xFF00B4D8),
-                        fontWeight: FontWeight.black,
+                        fontWeight: FontWeight.w900,
                         fontSize: 18,
                         height: 1.2,
                       ),
