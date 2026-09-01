@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import os
 import smtplib
 from email.mime.multipart import MIMEMultipart
@@ -42,24 +43,74 @@ def email_from() -> str:
 
 
 def _verification_html(name: str, verify_url: str) -> str:
-    return f"""
-<!DOCTYPE html>
+    safe_name = html.escape(name)
+    return f"""<!DOCTYPE html>
 <html lang="es">
-<body style="font-family: system-ui, sans-serif; color: #1f2328; line-height: 1.5;">
-  <p>Hola {name},</p>
-  <p>Confirma tu correo para activar tu cuenta en <strong>SSPILLOWY</strong>:</p>
-  <p><a href="{verify_url}" style="display:inline-block;padding:10px 16px;background:#1a7f37;color:#fff;text-decoration:none;border-radius:6px;font-weight:600;">Verificar correo</a></p>
-  <p style="font-size:0.85rem;color:#656d76;">Si no creaste esta cuenta, ignora este mensaje. El enlace caduca en 24 horas.</p>
-  <p style="font-size:0.8rem;color:#8c959f;">{verify_url}</p>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f6f8fa;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f6f8fa;padding:32px 16px;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:480px;background:#ffffff;border:1px solid #d0d7de;border-radius:10px;overflow:hidden;">
+        <tr>
+          <td style="padding:20px 24px;border-bottom:1px solid #d0d7de;background:#ffffff;">
+            <span style="font-size:11px;font-weight:700;letter-spacing:0.06em;color:#656d76;text-transform:uppercase;">Web Hub · DevSecOps</span><br>
+            <span style="font-size:18px;font-weight:700;color:#1f2328;letter-spacing:-0.02em;">SSPILLOWY</span>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:24px;">
+            <p style="margin:0 0 12px;font-size:15px;color:#1f2328;">Hola {safe_name},</p>
+            <p style="margin:0 0 20px;font-size:14px;line-height:1.55;color:#656d76;">
+              Confirma tu correo para activar el acceso a la consola de gobernanza de seguridad.
+              Hasta entonces no podrás iniciar sesión con contraseña.
+            </p>
+            <table role="presentation" cellspacing="0" cellpadding="0">
+              <tr>
+                <td style="border-radius:6px;background:#1a7f37;">
+                  <a href="{verify_url}" style="display:inline-block;padding:11px 20px;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;">
+                    Verificar correo
+                  </a>
+                </td>
+              </tr>
+            </table>
+            <p style="margin:20px 0 0;font-size:12px;line-height:1.5;color:#8c959f;">
+              El enlace caduca en 24 horas. Si no creaste esta cuenta, ignora este mensaje.
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:14px 24px;border-top:1px solid #d0d7de;background:#f6f8fa;">
+            <p style="margin:0;font-size:11px;color:#8c959f;">
+              SSPILLOWY · Software Security Platform<br>
+              <a href="https://sspillowy.com" style="color:#0969da;text-decoration:none;">sspillowy.com</a>
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
 </body>
-</html>
+</html>"""
+
+
+def _verification_text(name: str, verify_url: str) -> str:
+    return f"""Hola {name},
+
+Confirma tu correo para activar tu cuenta en SSPILLOWY (Web Hub DevSecOps).
+
+Verificar: {verify_url}
+
+El enlace caduca en 24 horas. Si no creaste esta cuenta, ignora este mensaje.
+
+— SSPILLOWY
+https://sspillowy.com
 """
 
 
 async def send_verification_email(*, to: str, name: str, verify_url: str) -> bool:
-    subject = "Verifica tu correo — SSPILLOWY"
-    html = _verification_html(name, verify_url)
-    text = f"Hola {name},\n\nVerifica tu cuenta: {verify_url}\n\nEl enlace caduca en 24 horas."
+    subject = "Confirma tu acceso — SSPILLOWY"
+    html_body = _verification_html(name, verify_url)
+    text = _verification_text(name, verify_url)
 
     if _resend_key():
         try:
@@ -67,7 +118,7 @@ async def send_verification_email(*, to: str, name: str, verify_url: str) -> boo
                 res = await client.post(
                     "https://api.resend.com/emails",
                     headers={"Authorization": f"Bearer {_resend_key()}"},
-                    json={"from": email_from(), "to": [to], "subject": subject, "html": html, "text": text},
+                    json={"from": email_from(), "to": [to], "subject": subject, "html": html_body, "text": text},
                 )
             if res.status_code in (200, 201):
                 return True
@@ -89,7 +140,7 @@ async def send_verification_email(*, to: str, name: str, verify_url: str) -> boo
             msg["From"] = email_from()
             msg["To"] = to
             msg.attach(MIMEText(text, "plain", "utf-8"))
-            msg.attach(MIMEText(html, "html", "utf-8"))
+            msg.attach(MIMEText(html_body, "html", "utf-8"))
 
             with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as server:
                 if smtp_use_tls:
