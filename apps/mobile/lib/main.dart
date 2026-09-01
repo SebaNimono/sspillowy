@@ -12,7 +12,7 @@ class SSPILLOWYApp extends StatefulWidget {
 }
 
 class _SSPILLOWYAppState extends State<SSPILLOWYApp> {
-  ThemeMode _themeMode = ThemeMode.light;
+  ThemeMode _themeMode = ThemeMode.dark;
 
   void _toggleTheme() {
     setState(() {
@@ -38,7 +38,7 @@ class _SSPILLOWYAppState extends State<SSPILLOWYApp> {
       darkTheme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF0F172A),
+        scaffoldBackgroundColor: const Color(0xFF0D1117),
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFF6366F1),
           brightness: Brightness.dark,
@@ -556,7 +556,7 @@ class MainDashboardScreen extends StatefulWidget {
 }
 
 class _MainDashboardScreenState extends State<MainDashboardScreen> {
-  int _selectedNavIndex = 0;
+  int _selectedNavIndex = 0; // Dashboard General
 
   late String userName;
   late String userNickname;
@@ -584,7 +584,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Theme.of(context).brightness == Brightness.dark
-          ? const Color(0xFF1E293B)
+          ? const Color(0xFF161B22)
           : Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -609,7 +609,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                       children: [
                         const Row(
                           children: [
-                            Icon(Icons.manage_accounts, color: Color(0xFF4A3E85)),
+                            Icon(Icons.manage_accounts, color: Color(0xFF38BDF8)),
                             SizedBox(width: 8),
                             Text('Personalizar Perfil y Avatar',
                                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
@@ -709,11 +709,11 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                           }
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF4A3E85),
-                          foregroundColor: Colors.white,
+                          backgroundColor: const Color(0xFF38BDF8),
+                          foregroundColor: Colors.black,
                           padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
-                        child: const Text('Guardar Cambios'),
+                        child: const Text('Guardar Cambios', style: TextStyle(fontWeight: FontWeight.bold)),
                       ),
                     ),
                   ],
@@ -734,11 +734,11 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
         children: [
           CircleAvatar(
             radius: 20,
-            backgroundColor: isSelected ? const Color(0xFF4A3E85) : Colors.grey.shade300,
-            child: Icon(icon, size: 20, color: isSelected ? Colors.white : Colors.black87),
+            backgroundColor: isSelected ? const Color(0xFF38BDF8) : Colors.grey.shade800,
+            child: Icon(icon, size: 20, color: isSelected ? Colors.black : Colors.white),
           ),
           const SizedBox(height: 4),
-          Text(label, style: TextStyle(fontSize: 10, color: isSelected ? const Color(0xFF4A3E85) : Colors.grey)),
+          Text(label, style: TextStyle(fontSize: 10, color: isSelected ? const Color(0xFF38BDF8) : Colors.grey)),
         ],
       ),
     );
@@ -770,7 +770,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
       default:
         return CircleAvatar(
           radius: radius,
-          backgroundColor: const Color(0xFF1E88E5),
+          backgroundColor: const Color(0xFF2563EB),
           child: Text(
             userName.isNotEmpty ? userName[0].toUpperCase() : 'P',
             style: TextStyle(color: Colors.white, fontSize: fontSize, fontWeight: FontWeight.bold),
@@ -780,7 +780,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
 
     return CircleAvatar(
       radius: radius,
-      backgroundColor: const Color(0xFF1E88E5),
+      backgroundColor: const Color(0xFF2563EB),
       child: Icon(icon, color: Colors.white, size: radius * 1.1),
     );
   }
@@ -794,18 +794,171 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
     );
   }
 
+  // --- BOTONERA PRINCIPAL RESTAURADA TAL COMO SE MOSTRABA EN LA IMAGEN ---
+  Widget _buildBotoneraWebHub(bool isDark) {
+    final navItems = [
+      {'icon': Icons.grid_view_rounded, 'title': 'Dashboard General', 'index': 0},
+      {'icon': Icons.folder_copy_outlined, 'title': 'Repositorios', 'index': 1},
+      {'icon': Icons.shield_outlined, 'title': 'Matriz de Hallazgos', 'index': 2},
+      {'icon': Icons.radar_outlined, 'title': 'Escaneos', 'index': 3},
+      {'icon': Icons.tune_rounded, 'title': 'Security Gates (CI/CD)', 'index': 4},
+      {'icon': Icons.notifications_none_rounded, 'title': 'Notificaciones', 'index': 5},
+      {'icon': Icons.insert_drive_file_outlined, 'title': 'Informes ISO 27001', 'index': 6},
+    ];
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF0D1117) : Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFF38BDF8).withValues(alpha: 0.5), width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Encabezado de la Botonera
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: const Color(0xFF38BDF8).withValues(alpha: 0.3))),
+            ),
+            child: const Center(
+              child: Text(
+                'SSPILLOWY Web Hub',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ),
+          ),
+          IntrinsicHeight(
+            child: Row(
+              children: [
+                // Etiqueta vertical "WEB"
+                Container(
+                  width: 36,
+                  decoration: const BoxDecoration(
+                    border: Border(right: BorderSide(color: Color(0xFF38BDF8), width: 2)),
+                  ),
+                  child: const Center(
+                    child: Text(
+                      'W\nE\nB',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Color(0xFF00B4D8),
+                        fontWeight: FontWeight.black,
+                        fontSize: 18,
+                        height: 1.2,
+                      ),
+                    ),
+                  ),
+                ),
+                // Botonera dividida en 2 Columnas
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Columna Izquierda
+                        Expanded(
+                          child: Column(
+                            children: [
+                              _botoneraItem(navItems[0], isDark),
+                              _botoneraItem(navItems[1], isDark),
+                              _botoneraItem(navItems[2], isDark),
+                              _botoneraItem(navItems[3], isDark),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // Columna Derecha
+                        Expanded(
+                          child: Column(
+                            children: [
+                              _botoneraItem(navItems[4], isDark),
+                              _botoneraItem(navItems[5], isDark),
+                              _botoneraItem(navItems[6], isDark),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _botoneraItem(Map<String, dynamic> item, bool isDark) {
+    final int itemIndex = item['index'] as int;
+    final isSelected = _selectedNavIndex == itemIndex;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 2),
+      decoration: BoxDecoration(
+        color: isSelected
+            ? const Color(0xFF1E2638)
+            : (isDark ? const Color(0xFF161B22) : const Color(0xFFF1F5F9)),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: isSelected ? const Color(0xFF38BDF8) : Colors.transparent,
+          width: 1,
+        ),
+      ),
+      child: InkWell(
+        onTap: () {
+          setState(() {
+            _selectedNavIndex = itemIndex;
+          });
+        },
+        borderRadius: BorderRadius.circular(6),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          child: Row(
+            children: [
+              Icon(
+                item['icon'] as IconData,
+                size: 18,
+                color: isSelected ? const Color(0xFF38BDF8) : const Color(0xFF94A3B8),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  item['title'] as String,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                    color: isSelected ? Colors.white : (isDark ? Colors.white70 : Colors.black87),
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final navItems = [
       {'icon': Icons.grid_view_rounded, 'title': 'Dashboard General'},
-      {'icon': Icons.folder_open_rounded, 'title': 'Repositorios'},
-      {'icon': Icons.gavel_rounded, 'title': 'Matriz de Hallazgos'},
-      {'icon': Icons.radar_rounded, 'title': 'Escaneos'},
+      {'icon': Icons.folder_copy_outlined, 'title': 'Repositorios'},
+      {'icon': Icons.shield_outlined, 'title': 'Matriz de Hallazgos'},
+      {'icon': Icons.radar_outlined, 'title': 'Escaneos'},
       {'icon': Icons.tune_rounded, 'title': 'Security Gates (CI/CD)'},
       {'icon': Icons.notifications_none_rounded, 'title': 'Notificaciones'},
-      {'icon': Icons.description_outlined, 'title': 'Informes ISO 27001'},
+      {'icon': Icons.insert_drive_file_outlined, 'title': 'Informes ISO 27001'},
     ];
 
     return Scaffold(
@@ -831,14 +984,14 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: const Color(0xFFE0F2FE),
+              color: const Color(0xFF0284C7).withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Row(
               children: [
-                Icon(Icons.show_chart, size: 14, color: Color(0xFF0284C7)),
+                Icon(Icons.show_chart, size: 14, color: Color(0xFF38BDF8)),
                 SizedBox(width: 4),
-                Text('82/100', style: TextStyle(color: Color(0xFF0284C7), fontWeight: FontWeight.bold, fontSize: 11)),
+                Text('82/100', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11)),
               ],
             ),
           ),
@@ -850,12 +1003,12 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
         ],
       ),
       drawer: Drawer(
-        backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFF1E293B),
+        backgroundColor: isDark ? const Color(0xFF121620) : const Color(0xFF1E293B),
         child: Column(
           children: [
             Container(
-              padding: const EdgeInsets.only(top: 40, left: 16, right: 16, bottom: 16),
-              color: isDark ? const Color(0xFF0F172A) : const Color(0xFF1E293B),
+              padding: const EdgeInsets.only(top: 40, left: 20, right: 16, bottom: 20),
+              color: isDark ? const Color(0xFF121620) : const Color(0xFF1E293B),
               child: Row(
                 children: [
                   SizedBox(
@@ -874,35 +1027,55 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                 ],
               ),
             ),
-            const Divider(color: Colors.white12, height: 1),
+            const SizedBox(height: 8),
             Expanded(
               child: ListView.builder(
-                padding: const EdgeInsets.symmetric(vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
                 itemCount: navItems.length,
                 itemBuilder: (context, index) {
                   final isSelected = _selectedNavIndex == index;
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    child: ListTile(
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      tileColor: isSelected ? const Color(0xFF334155) : Colors.transparent,
-                      leading: Icon(
-                        navItems[index]['icon'] as IconData,
-                        color: isSelected ? Colors.white : Colors.grey.shade400,
-                        size: 20,
-                      ),
-                      title: Text(
-                        navItems[index]['title'] as String,
-                        style: TextStyle(
-                          color: isSelected ? Colors.white : Colors.grey.shade300,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                          fontSize: 13,
+                  return Container(
+                    margin: const EdgeInsets.symmetric(vertical: 3),
+                    decoration: BoxDecoration(
+                      color: isSelected ? const Color(0xFF1E2638) : Colors.transparent,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: IntrinsicHeight(
+                        child: Row(
+                          children: [
+                            AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              width: isSelected ? 4 : 0,
+                              color: const Color(0xFF38BDF8),
+                            ),
+                            Expanded(
+                              child: ListTile(
+                                dense: true,
+                                contentPadding: EdgeInsets.only(left: isSelected ? 12 : 16, right: 12),
+                                leading: Icon(
+                                  navItems[index]['icon'] as IconData,
+                                  color: isSelected ? const Color(0xFF38BDF8) : const Color(0xFF94A3B8),
+                                  size: 22,
+                                ),
+                                title: Text(
+                                  navItems[index]['title'] as String,
+                                  style: TextStyle(
+                                    color: isSelected ? Colors.white : const Color(0xFF94A3B8),
+                                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                onTap: () {
+                                  setState(() => _selectedNavIndex = index);
+                                  Navigator.pop(context);
+                                },
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      onTap: () {
-                        setState(() => _selectedNavIndex = index);
-                        Navigator.pop(context);
-                      },
                     ),
                   );
                 },
@@ -940,12 +1113,21 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
           ],
         ),
       ),
-      body: _buildSelectedView(_selectedNavIndex, isDark),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            // Botonera visible en la parte superior del Dashboard / Vista Principal
+            _buildBotoneraWebHub(isDark),
+            _buildSelectedView(_selectedNavIndex, isDark),
+          ],
+        ),
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: _openAIChat,
-        backgroundColor: const Color(0xFF4A3E85),
+        backgroundColor: const Color(0xFF1E2638),
         tooltip: 'Asistente IA',
-        child: const Icon(Icons.auto_awesome, color: Colors.amber),
+        child: const Icon(Icons.auto_awesome, color: Color(0xFF38BDF8)),
       ),
     );
   }
@@ -972,97 +1154,100 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
   }
 
   Widget _buildDashboardView(bool isDark) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF1E293B) : const Color(0xFF0F172A),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF161B22) : const Color(0xFF0F172A),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Row(
+            children: [
+              Icon(Icons.circle, color: Colors.green, size: 10),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'LIVE  orquestación activa  |  tick #18  |  7 hallazgos abiertos',
+                  style: TextStyle(color: Colors.white, fontSize: 11, fontFamily: 'monospace'),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        GridView.count(
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisSpacing: 10,
+          mainAxisSpacing: 10,
+          childAspectRatio: 1.3,
+          children: [
+            _metricTile('REPOSITORIOS MONITOREADOS', '3', 'activos', Colors.blue, Icons.developer_board, isDark),
+            _metricTile('VULNERABILIDADES CRÍTICAS', '3', 'abiertas', Colors.red, Icons.error_outline, isDark),
+            _metricTile('SECRETOS PREVENIDOS', '14', 'bloqueados', Colors.green, Icons.key_outlined, isDark),
+            _metricTile('ESCANEOS EJECUTADOS', '48', 'histórico', Colors.purple, Icons.verified_user_outlined, isDark),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Card(
+          elevation: 1,
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.circle, color: Colors.green, size: 10),
-                SizedBox(width: 8),
-                Text('LIVE  orquestación activa  |  tick #18  |  7 hallazgos abiertos',
-                    style: TextStyle(color: Colors.white, fontSize: 11, fontFamily: 'monospace')),
+                const Text('Health Score General', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        const SizedBox(
+                          width: 80,
+                          height: 80,
+                          child: CircularProgressIndicator(value: 0.82, strokeWidth: 8, color: Colors.green),
+                        ),
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            Text('82', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                            Text('/100', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                          ],
+                        ),
+                      ],
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        Row(children: [Icon(Icons.circle, color: Colors.red, size: 10), SizedBox(width: 6), Text('Críticas: 3', style: TextStyle(fontSize: 12))]),
+                        SizedBox(height: 4),
+                        Row(children: [Icon(Icons.circle, color: Colors.amber, size: 10), SizedBox(width: 6), Text('Altas: 3', style: TextStyle(fontSize: 12))]),
+                        SizedBox(height: 4),
+                        Row(children: [Icon(Icons.circle, color: Colors.blue, size: 10), SizedBox(width: 6), Text('Medias: 1', style: TextStyle(fontSize: 12))]),
+                        SizedBox(height: 4),
+                        Row(children: [Icon(Icons.circle, color: Colors.grey, size: 10), SizedBox(width: 6), Text('Bajas: 0', style: TextStyle(fontSize: 12))]),
+                      ],
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
-          const SizedBox(height: 14),
-          GridView.count(
-            crossAxisCount: 2,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisSpacing: 10,
-            mainAxisSpacing: 10,
-            childAspectRatio: 1.3,
-            children: [
-              _metricTile('REPOSITORIOS MONITOREADOS', '3', 'activos', Colors.blue, Icons.developer_board, isDark),
-              _metricTile('VULNERABILIDADES CRÍTICAS', '3', 'abiertas', Colors.red, Icons.error_outline, isDark),
-              _metricTile('SECRETOS PREVENIDOS', '14', 'bloqueados', Colors.green, Icons.key_outlined, isDark),
-              _metricTile('ESCANEOS EJECUTADOS', '48', 'histórico', Colors.purple, Icons.verified_user_outlined, isDark),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Card(
-            elevation: 1,
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Health Score General', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          const SizedBox(
-                            width: 80,
-                            height: 80,
-                            child: CircularProgressIndicator(value: 0.82, strokeWidth: 8, color: Colors.green),
-                          ),
-                          Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: const [
-                              Text('82', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                              Text('/100', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                            ],
-                          ),
-                        ],
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
-                          Row(children: [Icon(Icons.circle, color: Colors.red, size: 10), SizedBox(width: 6), Text('Críticas: 3', style: TextStyle(fontSize: 12))]),
-                          SizedBox(height: 4),
-                          Row(children: [Icon(Icons.circle, color: Colors.amber, size: 10), SizedBox(width: 6), Text('Altas: 3', style: TextStyle(fontSize: 12))]),
-                          SizedBox(height: 4),
-                          Row(children: [Icon(Icons.circle, color: Colors.blue, size: 10), SizedBox(width: 6), Text('Medias: 1', style: TextStyle(fontSize: 12))]),
-                          SizedBox(height: 4),
-                          Row(children: [Icon(Icons.circle, color: Colors.grey, size: 10), SizedBox(width: 6), Text('Bajas: 0', style: TextStyle(fontSize: 12))]),
-                        ],
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
   Widget _buildReposView(bool isDark) {
     return ListView(
-      padding: const EdgeInsets.all(16),
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1086,7 +1271,8 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
 
   Widget _buildFindingsView(bool isDark) {
     return ListView(
-      padding: const EdgeInsets.all(16),
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       children: [
         const Text('Vulnerabilidades & Secretos Detectados (7)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
         const SizedBox(height: 12),
@@ -1100,7 +1286,8 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
 
   Widget _buildScansView(bool isDark) {
     return ListView(
-      padding: const EdgeInsets.all(16),
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       children: [
         const Text('Historial de escaneos (4)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
         const SizedBox(height: 12),
@@ -1114,7 +1301,8 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
 
   Widget _buildGatesView(bool isDark) {
     return ListView(
-      padding: const EdgeInsets.all(16),
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       children: [
         const Text('Configuración de Política Activa', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
         const SizedBox(height: 12),
@@ -1157,7 +1345,8 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
 
   Widget _buildNotificationsView(bool isDark) {
     return ListView(
-      padding: const EdgeInsets.all(16),
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       children: [
         const Text('Notificaciones Recientes', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
         const SizedBox(height: 12),
@@ -1170,7 +1359,8 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
 
   Widget _buildIsoView(bool isDark) {
     return ListView(
-      padding: const EdgeInsets.all(16),
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       children: [
         const Text('Paquete de evidencia ISO 27001', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
         const SizedBox(height: 12),
@@ -1273,7 +1463,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
       elevation: 1,
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
-        leading: const Icon(Icons.notifications, color: Color(0xFF4A3E85)),
+        leading: const Icon(Icons.notifications, color: Color(0xFF38BDF8)),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
         subtitle: Text(desc, style: const TextStyle(fontSize: 11)),
         trailing: Text(time, style: const TextStyle(fontSize: 9, color: Colors.grey)),
@@ -1339,7 +1529,7 @@ class _IAChatModalState extends State<IAChatModal> {
     return Container(
       height: MediaQuery.of(context).size.height * 0.70,
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        color: isDark ? const Color(0xFF161B22) : Colors.white,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Column(
@@ -1347,12 +1537,12 @@ class _IAChatModalState extends State<IAChatModal> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: const BoxDecoration(
-              color: Color(0xFF4A3E85),
+              color: Color(0xFF1E2638),
               borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
             ),
             child: Row(
               children: [
-                const Icon(Icons.auto_awesome, color: Colors.amber, size: 20),
+                const Icon(Icons.auto_awesome, color: Color(0xFF38BDF8), size: 20),
                 const SizedBox(width: 8),
                 const Text('SSPILLOWY AI Copilot', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 const Spacer(),
@@ -1376,7 +1566,7 @@ class _IAChatModalState extends State<IAChatModal> {
                     margin: const EdgeInsets.symmetric(vertical: 4),
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
-                      color: isUser ? const Color(0xFF1E88E5) : (isDark ? const Color(0xFF334155) : Colors.grey.shade200),
+                      color: isUser ? const Color(0xFF2563EB) : (isDark ? const Color(0xFF1E2638) : Colors.grey.shade200),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
@@ -1412,7 +1602,7 @@ class _IAChatModalState extends State<IAChatModal> {
                 ),
                 const SizedBox(width: 8),
                 IconButton(
-                  icon: const Icon(Icons.send, color: Color(0xFF4A3E85)),
+                  icon: const Icon(Icons.send, color: Color(0xFF38BDF8)),
                   onPressed: () => _sendMessage(_msgController.text),
                 ),
               ],
