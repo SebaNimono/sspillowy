@@ -20,7 +20,13 @@ from models import PillowDailyUsage
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash").strip()
+# gemini-2.0/2.5 ya no están disponibles para cuentas nuevas → 3.6-flash (Google AI Studio)
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash").strip()
+GEMINI_MODEL_FALLBACKS = [
+    m.strip()
+    for m in os.getenv("GEMINI_MODEL_FALLBACKS", "gemini-flash-latest,gemini-2.5-flash").split(",")
+    if m.strip()
+]
 PILLOW_DAILY_CREDITS = int(os.getenv("PILLOW_DAILY_CREDITS", "2"))
 
 router = APIRouter(prefix="/api/v1/pillow", tags=["Pillow"])
@@ -127,6 +133,27 @@ def _parse_gemini_json(text: str) -> dict:
         raise
 
 
+def _gemini_model_candidates() -> list[str]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for name in [GEMINI_MODEL, *GEMINI_MODEL_FALLBACKS, "gemini-3.6-flash", "gemini-flash-latest"]:
+        if name and name not in seen:
+            seen.add(name)
+            ordered.append(name)
+    return ordered
+
+
+def _friendly_gemini_error(status: int, raw: str) -> str:
+    if status == 404:
+        return (
+            "El modelo de Gemini configurado ya no está disponible. "
+            "En Railway cambia GEMINI_MODEL a gemini-3.6-flash y redeploy."
+        )
+    if status in (401, 403):
+        return "API key de Gemini inválida o sin permisos. Revisa GEMINI_API_KEY en Railway."
+    return f"Gemini no respondió ({status}). Intenta de nuevo en unos minutos."
+
+
 async def _call_gemini(user_message: str, context: dict | None) -> dict:
     if not GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="Pillow no está configurado (falta GEMINI_API_KEY en el servidor).")
@@ -145,21 +172,25 @@ async def _call_gemini(user_message: str, context: dict | None) -> dict:
         },
     }
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
+    last_status = 502
+    last_raw = ""
     async with httpx.AsyncClient(timeout=45.0) as client:
-        res = await client.post(url, params={"key": GEMINI_API_KEY}, json=payload)
+        for model in _gemini_model_candidates():
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+            res = await client.post(url, params={"key": GEMINI_API_KEY}, json=payload)
+            if res.status_code == 200:
+                body = res.json()
+                try:
+                    text = body["candidates"][0]["content"]["parts"][0]["text"]
+                except (KeyError, IndexError) as exc:
+                    raise HTTPException(status_code=502, detail="Respuesta de Gemini inesperada.") from exc
+                return _parse_gemini_json(text)
+            last_status = res.status_code
+            last_raw = res.text[:300]
+            if res.status_code != 404:
+                break
 
-    if res.status_code != 200:
-        detail = res.text[:300]
-        raise HTTPException(status_code=502, detail=f"Gemini no respondió ({res.status_code}): {detail}")
-
-    body = res.json()
-    try:
-        text = body["candidates"][0]["content"]["parts"][0]["text"]
-    except (KeyError, IndexError) as exc:
-        raise HTTPException(status_code=502, detail="Respuesta de Gemini inesperada.") from exc
-
-    return _parse_gemini_json(text)
+    raise HTTPException(status_code=502, detail=_friendly_gemini_error(last_status, last_raw))
 
 
 @router.get("/quota", response_model=PillowQuotaResponse)
