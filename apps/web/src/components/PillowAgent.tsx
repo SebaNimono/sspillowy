@@ -1,6 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowUp, Sparkles, X, LayoutGrid, MessageSquare } from 'lucide-react';
-import { DashboardStats, fetchPillowQuota, sendPillowMessage, PillowQuota, PillowWidgetSuggestion } from '../api/client';
+import {
+  DashboardStats,
+  fetchPillowAdminStatus,
+  fetchPillowQuota,
+  sendPillowMessage,
+  PillowQuota,
+  PillowWidgetSuggestion,
+} from '../api/client';
 import {
   PlacedPillowWidget,
   PILLOW_SUGGESTIONS,
@@ -8,6 +15,7 @@ import {
   createPlacedWidget,
   groupCatalogByCategory,
 } from '../config/pillowWidgets';
+import { PillowAdminPanel } from './PillowAdminPanel';
 
 interface PillowAgentProps {
   userEmail?: string;
@@ -28,6 +36,7 @@ export const PillowAgent: React.FC<PillowAgentProps> = ({ userEmail, dashboardCo
   const [tab, setTab] = useState<Tab>('ask');
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [quota, setQuota] = useState<PillowQuota | null>(null);
   const [chat, setChat] = useState<ChatLine[]>([
     {
@@ -46,7 +55,14 @@ export const PillowAgent: React.FC<PillowAgentProps> = ({ userEmail, dashboardCo
   };
 
   useEffect(() => {
-    if (open) refreshQuota();
+    if (!open || !userKey) {
+      setIsAdmin(false);
+      return;
+    }
+    refreshQuota();
+    fetchPillowAdminStatus(userKey)
+      .then((r) => setIsAdmin(r.is_admin))
+      .catch(() => setIsAdmin(false));
   }, [open, userKey]);
 
   const grouped = useMemo(() => groupCatalogByCategory(), []);
@@ -124,6 +140,9 @@ export const PillowAgent: React.FC<PillowAgentProps> = ({ userEmail, dashboardCo
                   Créditos hoy: <strong>{quota.credits_remaining}</strong> / {quota.daily_limit}
                 </span>
                 {!quota.configured && <em>API Gemini pendiente en servidor</em>}
+                {isAdmin && (
+                  <PillowAdminPanel adminEmail={userKey} onCreditsReset={refreshQuota} />
+                )}
               </div>
             )}
 
@@ -155,6 +174,16 @@ export const PillowAgent: React.FC<PillowAgentProps> = ({ userEmail, dashboardCo
                       ) : null}
                     </div>
                   ))}
+                  {sending && (
+                    <div className="pillow-chat-line pillow-chat-line--pillow pillow-chat-line--typing" aria-live="polite">
+                      <span className="pillow-typing-dots">
+                        <span />
+                        <span />
+                        <span />
+                      </span>
+                      <span className="pillow-typing-label">Pillow está pensando…</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="pillow-suggestion-chips">

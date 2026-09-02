@@ -394,3 +394,51 @@ export async function sendPillowMessage(body: {
   }
   return data as PillowChatResult;
 }
+
+export interface PillowAdminStatus {
+  is_admin: boolean;
+}
+
+export interface PillowUsageRow {
+  user_key: string;
+  credits_used: number;
+  daily_limit: number;
+  usage_date: string;
+}
+
+export async function fetchPillowAdminStatus(userKey: string): Promise<PillowAdminStatus> {
+  const res = await fetch(`${API_BASE}/pillow/admin/status?user_key=${encodeURIComponent(userKey)}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const detail = typeof data.detail === 'string' ? data.detail : `Error de API (${res.status})`;
+    throw new Error(detail);
+  }
+  return data as PillowAdminStatus;
+}
+
+export async function fetchPillowAdminUsage(adminKey: string): Promise<{ usage: PillowUsageRow[] }> {
+  const res = await fetch(`${API_BASE}/pillow/admin/usage?admin_key=${encodeURIComponent(adminKey)}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const detail = typeof data.detail === 'string' ? data.detail : `Error de API (${res.status})`;
+    throw new Error(detail);
+  }
+  return data as { usage: PillowUsageRow[] };
+}
+
+export async function resetPillowCredits(
+  adminKey: string,
+  targetUserKey: string,
+): Promise<{ ok: boolean; message: string; credits_remaining: number }> {
+  const res = await fetch(`${API_BASE}/pillow/admin/reset-credits`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ admin_key: adminKey, target_user_key: targetUserKey }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const detail = typeof data.detail === 'string' ? data.detail : `Error de API (${res.status})`;
+    throw new Error(detail);
+  }
+  return data as { ok: boolean; message: string; credits_remaining: number };
+}

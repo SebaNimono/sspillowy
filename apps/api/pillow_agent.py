@@ -31,6 +31,25 @@ PILLOW_DAILY_CREDITS = int(os.getenv("PILLOW_DAILY_CREDITS", "2"))
 
 router = APIRouter(prefix="/api/v1/pillow", tags=["Pillow"])
 
+
+def _admin_emails() -> set[str]:
+    raw = os.getenv("PILLOW_ADMIN_EMAILS", "")
+    return {e.strip().lower() for e in raw.split(",") if e.strip()}
+
+
+def _require_admin(admin_key: str) -> str:
+    key = admin_key.strip().lower()
+    if not key or key not in _admin_emails():
+        raise HTTPException(status_code=403, detail="No autorizado. Solo administradores Pillow.")
+    return key
+
+
+def _reset_user_credits(db, user_key: str) -> None:
+    row = _quota_row(db, user_key.strip().lower())
+    if row:
+        db.delete(row)
+        db.commit()
+
 WIDGET_CATALOG = """
 Tipos de widget que el usuario puede añadir al dashboard (usa solo estos ids en suggested_widgets):
 - timeseries: serie temporal (hallazgos, escaneos)
@@ -83,6 +102,32 @@ class PillowChatResponse(BaseModel):
     suggested_widgets: list[PillowWidgetSuggestion]
     credits_remaining: int
     daily_limit: int
+
+
+class PillowAdminStatusResponse(BaseModel):
+    is_admin: bool
+
+
+class PillowUsageRow(BaseModel):
+    user_key: str
+    credits_used: int
+    daily_limit: int
+    usage_date: str
+
+
+class PillowAdminUsageResponse(BaseModel):
+    usage: list[PillowUsageRow]
+
+
+class PillowResetBody(BaseModel):
+    admin_key: str = Field(min_length=3, max_length=255)
+    target_user_key: str = Field(min_length=3, max_length=255)
+
+
+class PillowResetResponse(BaseModel):
+    ok: bool
+    message: str
+    credits_remaining: int
 
 
 def _today_utc() -> date:
@@ -273,5 +318,56 @@ async def pillow_chat(body: PillowChatBody):
     except Exception as exc:
         db.rollback()
         raise HTTPException(status_code=503, detail=f"Error de Pillow: {exc}") from exc
+    finally:
+        db.close()
+
+
+@router.get("/admin/status", response_model=PillowAdminStatusResponse)
+async def pillow_admin_status(user_key: str = ""):
+    key = user_key.strip().lower()
+    return PillowAdminStatusResponse(is_admin=bool(key and key in _admin_emails()))
+
+
+@router.get("/admin/usage", response_model=PillowAdminUsageResponse)
+async def pillow_admin_usage(admin_key: str = ""):
+    _require_admin(admin_key)
+    if not db_ping():
+        return PillowAdminUsageResponse(usage=[])
+
+    db = SessionLocal()
+    try:
+        today = _today_utc()
+        rows = db.query(PillowDailyUsage).filter(PillowDailyUsage.usage_date == today).all()
+        return PillowAdminUsageResponse(
+            usage=[
+                PillowUsageRow(
+                    user_key=r.user_key,
+                    credits_used=r.credits_used,
+                    daily_limit=PILLOW_DAILY_CREDITS,
+                    usage_date=str(r.usage_date),
+                )
+                for r in rows
+            ]
+        )
+    finally:
+        db.close()
+
+
+@router.post("/admin/reset-credits", response_model=PillowResetResponse)
+async def pillow_admin_reset(body: PillowResetBody):
+    _require_admin(body.admin_key)
+    target = body.target_user_key.strip().lower()
+
+    if not db_ping():
+        raise HTTPException(status_code=503, detail="Base de datos no disponible.")
+
+    db = SessionLocal()
+    try:
+        _reset_user_credits(db, target)
+        return PillowResetResponse(
+            ok=True,
+            message=f"Créditos restablecidos para {target}.",
+            credits_remaining=PILLOW_DAILY_CREDITS,
+        )
     finally:
         db.close()
