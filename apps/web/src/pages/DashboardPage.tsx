@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   ResponsiveContainer,
@@ -19,38 +19,46 @@ import { Header } from '../components/Header';
 import { SidebarState } from '../components/Sidebar';
 import { HeatmapCalendar } from '../components/HeatmapCalendar';
 import { AnimatedNumber } from '../components/AnimatedNumber';
+import { DashboardSettings } from '../components/DashboardSettings';
 import { DashboardStats, HeatmapData, AuditEvent, fetchStats, fetchHeatmap, fetchAuditLog } from '../api/client';
-import { buildFallbackHeatmap, FALLBACK_AUDIT } from '../api/fallbacks';
+import {
+  ALERT_COLORS,
+  DashboardConfig,
+  healthAlert,
+  loadDashboardConfig,
+  metricAlert,
+} from '../config/dashboardConfig';
 import {
   KeyRound,
   Cpu,
   ShieldCheck,
-  CheckCircle2,
   AlertOctagon,
   Terminal,
   Layers,
   Activity,
   Flame,
-  Radio,
+  Database,
 } from 'lucide-react';
 
-const DEFAULT_STATS: DashboardStats = {
-  overall_health_score: 82,
-  monitored_repos: 3,
-  total_scans_run: 48,
-  total_open_findings: 6,
-  critical_findings: 3,
-  high_findings: 3,
-  medium_findings: 1,
+const EMPTY_STATS: DashboardStats = {
+  overall_health_score: 0,
+  monitored_repos: 0,
+  total_scans_run: 0,
+  total_open_findings: 0,
+  critical_findings: 0,
+  high_findings: 0,
+  medium_findings: 0,
   low_findings: 0,
-  secrets_leaked_prevented: 14,
-  findings_by_engine: {
-    semgrep: 2,
-    trivy: 1,
-    gitleaks: 2,
-    owasp_zap: 2,
-  },
-  trend_7d: [2, 2, 1, 9, 4, 10, 5],
+  secrets_leaked_prevented: 0,
+  findings_by_engine: {},
+  trend_7d: [0, 0, 0, 0, 0, 0, 0],
+};
+
+const EMPTY_HEATMAP: HeatmapData = {
+  cells: [],
+  max_count: 0,
+  total_findings_period: 0,
+  weeks: 12,
 };
 
 interface PageProps {
@@ -69,13 +77,6 @@ const ENGINE_META = [
   { key: 'gitleaks', short: 'GitLeaks', label: 'GitLeaks · Secretos', color: '#cf222e' },
   { key: 'owasp_zap', short: 'ZAP', label: 'OWASP ZAP · DAST', color: '#8250df' },
 ] as const;
-
-const ARCH = [
-  { name: 'FastAPI Gateway Core', detail: 'Enrutamiento REST asíncrono · :8000', ok: true, live: false },
-  { name: 'PostgreSQL 16 Engine', detail: 'Persistencia de esquemas unificados', ok: true, live: false },
-  { name: 'Redis + ARQ Workers', detail: 'Escáneres en paralelo', ok: true, live: true },
-  { name: 'LLM Router (HITL)', detail: 'Triaje de alcanzabilidad · no cierra', ok: true, live: true, accent: true },
-];
 
 const DAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
@@ -96,7 +97,15 @@ const stagger = {
   show: { transition: { staggerChildren: 0.07 } },
 };
 
-const ChartTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number; name?: string; color?: string }>; label?: string }) => {
+const ChartTooltip = ({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: Array<{ value: number; name?: string; color?: string }>;
+  label?: string;
+}) => {
   if (!active || !payload?.length) return null;
   return (
     <div className="dash-tooltip">
@@ -112,6 +121,16 @@ const ChartTooltip = ({ active, payload, label }: { active?: boolean; payload?: 
   );
 };
 
+function hasDashboardData(stats: DashboardStats, heatmap: HeatmapData, events: AuditEvent[]): boolean {
+  return (
+    stats.monitored_repos > 0 ||
+    stats.total_scans_run > 0 ||
+    stats.total_open_findings > 0 ||
+    (heatmap.total_findings_period ?? 0) > 0 ||
+    events.length > 0
+  );
+}
+
 export const DashboardPage: React.FC<PageProps> = ({
   sidebarState,
   setSidebarState,
@@ -121,68 +140,122 @@ export const DashboardPage: React.FC<PageProps> = ({
   unreadCount,
   onGoToSite,
 }) => {
-  const [stats, setStats] = useState<DashboardStats>(DEFAULT_STATS);
-  const [heatmap, setHeatmap] = useState<HeatmapData>(buildFallbackHeatmap());
-  const [events, setEvents] = useState<AuditEvent[]>(FALLBACK_AUDIT);
-  const [liveTick, setLiveTick] = useState(0);
+  const [config, setConfig] = useState<DashboardConfig>(() => loadDashboardConfig());
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [heatmap, setHeatmap] = useState<HeatmapData | null>(null);
+  const [events, setEvents] = useState<AuditEvent[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchStats()
-      .then((data) => {
-        if (data) setStats(data);
-      })
-      .catch(() => setStats(DEFAULT_STATS));
+    let cancelled = false;
+    setLoadError(null);
 
-    fetchHeatmap()
-      .then((data) => {
-        if (data?.cells?.length) setHeatmap(data);
+    Promise.all([fetchStats(), fetchHeatmap(), fetchAuditLog()])
+      .then(([statsData, heatmapData, auditData]) => {
+        if (cancelled) return;
+        setStats(statsData ?? EMPTY_STATS);
+        setHeatmap(heatmapData?.cells?.length ? heatmapData : EMPTY_HEATMAP);
+        setEvents(auditData ?? []);
       })
-      .catch(() => setHeatmap(buildFallbackHeatmap()));
+      .catch((err) => {
+        if (cancelled) return;
+        setStats(EMPTY_STATS);
+        setHeatmap(EMPTY_HEATMAP);
+        setEvents([]);
+        setLoadError(err instanceof Error ? err.message : 'No se pudo cargar el dashboard.');
+      });
 
-    fetchAuditLog()
-      .then((data) => {
-        if (data?.length) setEvents(data);
-      })
-      .catch(() => setEvents(FALLBACK_AUDIT));
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  useEffect(() => {
-    const id = window.setInterval(() => setLiveTick((n) => n + 1), 2400);
-    return () => window.clearInterval(id);
-  }, []);
+  const resolvedStats = stats ?? EMPTY_STATS;
+  const resolvedHeatmap = heatmap ?? EMPTY_HEATMAP;
+  const resolvedEvents = events ?? [];
+  const loading = stats === null;
+  const dataReady = hasDashboardData(resolvedStats, resolvedHeatmap, resolvedEvents);
 
-  const trend = stats.trend_7d?.length ? stats.trend_7d : DEFAULT_STATS.trend_7d!;
+  const { thresholds } = config;
+
+  const kpi = useMemo(
+    () => [
+      {
+        id: 'repos',
+        label: 'Repositorios monitoreados',
+        value: resolvedStats.monitored_repos,
+        icon: Cpu,
+        hint: 'activos',
+        alert: metricAlert(resolvedStats.monitored_repos, 0),
+        invert: true,
+      },
+      {
+        id: 'critical',
+        label: 'Vulnerabilidades críticas',
+        value: resolvedStats.critical_findings,
+        icon: AlertOctagon,
+        hint: `umbral ≤ ${thresholds.critical_max}`,
+        alert: metricAlert(resolvedStats.critical_findings, thresholds.critical_max),
+      },
+      {
+        id: 'secrets',
+        label: 'Secretos mitigados',
+        value: resolvedStats.secrets_leaked_prevented,
+        icon: KeyRound,
+        hint: 'resueltos',
+        alert: 'ok' as const,
+      },
+      {
+        id: 'scans',
+        label: 'Escaneos ejecutados',
+        value: resolvedStats.total_scans_run,
+        icon: ShieldCheck,
+        hint: 'histórico',
+        alert: 'ok' as const,
+      },
+    ],
+    [resolvedStats, thresholds.critical_max],
+  );
+
+  const trend = resolvedStats.trend_7d?.length ? resolvedStats.trend_7d : EMPTY_STATS.trend_7d!;
   const trendData = trend.map((value, i) => ({ day: DAYS[i] ?? `D${i + 1}`, hallazgos: value }));
+  const trendHasData = trend.some((v) => v > 0);
 
   const engineData = ENGINE_META.map((engine) => ({
     name: engine.short,
     full: engine.label,
-    hallazgos: stats.findings_by_engine?.[engine.key] || 0,
+    hallazgos: resolvedStats.findings_by_engine?.[engine.key] || 0,
     fill: engine.color,
   }));
+  const enginesHasData = engineData.some((e) => e.hallazgos > 0);
 
   const severityData = [
-    { name: 'Críticas', value: stats.critical_findings, fill: '#cf222e' },
-    { name: 'Altas', value: stats.high_findings, fill: '#bf8700' },
-    { name: 'Medias', value: stats.medium_findings, fill: '#0969da' },
-    { name: 'Bajas', value: stats.low_findings, fill: '#6e7781' },
+    {
+      name: 'Críticas',
+      value: resolvedStats.critical_findings,
+      fill: ALERT_COLORS[metricAlert(resolvedStats.critical_findings, thresholds.critical_max)],
+    },
+    {
+      name: 'Altas',
+      value: resolvedStats.high_findings,
+      fill: ALERT_COLORS[metricAlert(resolvedStats.high_findings, thresholds.high_max)],
+    },
+    { name: 'Medias', value: resolvedStats.medium_findings, fill: '#0969da' },
+    { name: 'Bajas', value: resolvedStats.low_findings, fill: '#6e7781' },
   ];
 
-  const healthData = [{ name: 'health', value: stats.overall_health_score, fill: '#0969da' }];
+  const healthAlertLevel = healthAlert(resolvedStats.overall_health_score, thresholds.health_min);
+  const healthColor = ALERT_COLORS[healthAlertLevel];
+  const healthData = [{ name: 'health', value: resolvedStats.overall_health_score, fill: healthColor }];
 
-  const kpi = [
-    { label: 'Repositorios monitoreados', value: stats.monitored_repos, color: '#0969da', icon: Cpu, hint: 'activos' },
-    { label: 'Vulnerabilidades críticas', value: stats.critical_findings, color: '#cf222e', icon: AlertOctagon, hint: 'abiertas' },
-    { label: 'Secretos prevenidos', value: stats.secrets_leaked_prevented, color: '#1a7f37', icon: KeyRound, hint: 'bloqueados' },
-    { label: 'Escaneos ejecutados', value: stats.total_scans_run, color: '#8250df', icon: ShieldCheck, hint: 'histórico' },
-  ];
+  const openAlert = metricAlert(resolvedStats.total_open_findings, thresholds.open_max);
 
   return (
     <div className="dash">
       <Header
         title="Dashboard General DevSecOps"
-        subtitle="Centro de comando unificado, triaje agéntico con IA y observabilidad en tiempo real"
-        healthScore={stats.overall_health_score}
+        subtitle="Métricas reales de tus repos y hallazgos — personaliza umbrales y bloques"
+        healthScore={dataReady ? resolvedStats.overall_health_score : undefined}
         sidebarState={sidebarState}
         setSidebarState={setSidebarState}
         user={user}
@@ -192,220 +265,250 @@ export const DashboardPage: React.FC<PageProps> = ({
         onGoToSite={onGoToSite}
       />
 
-      <motion.div className="dash-livebar" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-        <span className="dash-live-dot" />
-        <strong>LIVE</strong>
-        <em>orquestación activa</em>
-        <span className="dash-live-sep" />
-        <span>tick #{liveTick + 1}</span>
-        <span className="dash-live-sep" />
-        <span>{stats.total_open_findings} hallazgos abiertos</span>
-      </motion.div>
-
-      <motion.div className="stats-grid" variants={stagger} initial="hidden" animate="show">
-        {kpi.map((item) => {
-          const Icon = item.icon;
-          return (
-            <motion.div key={item.label} className="stat-card dash-stat" variants={fadeUp} whileHover={{ y: -3 }}>
-              <div>
-                <div className="stat-label">{item.label}</div>
-                <div className="stat-value" style={{ color: item.color }}>
-                  <AnimatedNumber value={item.value} />
-                </div>
-                <div className="dash-stat-hint">{item.hint}</div>
-              </div>
-              <div className="stat-icon" style={{ color: item.color, borderColor: `${item.color}33` }}>
-                <Icon size={20} />
-              </div>
-            </motion.div>
-          );
-        })}
-      </motion.div>
-
-      <div className="split-grid dash-split-3">
-        <motion.div className="card dash-card" variants={fadeUp} initial="hidden" whileInView="show" viewport={{ once: true }}>
-          <div className="card-header">
-            <div className="card-title">
-              <Layers size={18} color="#0969da" />
-              <span>Hallazgos por motor</span>
-            </div>
-            <span className="dash-chip">interactivo</span>
-          </div>
-          <div className="dash-chart" style={{ height: 220 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={engineData} barSize={28}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#eaeef2" vertical={false} />
-                <XAxis dataKey="name" tick={{ fill: '#656d76', fontSize: 12 }} axisLine={false} tickLine={false} />
-                <YAxis allowDecimals={false} tick={{ fill: '#656d76', fontSize: 11 }} axisLine={false} tickLine={false} width={28} />
-                <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(9,105,218,0.06)' }} />
-                <Bar dataKey="hallazgos" radius={[6, 6, 0, 0]} animationDuration={900}>
-                  {engineData.map((entry) => (
-                    <Cell key={entry.name} fill={entry.fill} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </motion.div>
-
-        <motion.div className="card dash-card" variants={fadeUp} initial="hidden" whileInView="show" viewport={{ once: true }}>
-          <div className="card-header">
-            <div className="card-title">
-              <Activity size={18} color="#8250df" />
-              <span>Tendencia 7 días</span>
-            </div>
-            <span className="dash-chip">área</span>
-          </div>
-          <div className="dash-chart" style={{ height: 220 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={trendData}>
-                <defs>
-                  <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#0969da" stopOpacity={0.35} />
-                    <stop offset="100%" stopColor="#0969da" stopOpacity={0.02} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#eaeef2" vertical={false} />
-                <XAxis dataKey="day" tick={{ fill: '#656d76', fontSize: 12 }} axisLine={false} tickLine={false} />
-                <YAxis allowDecimals={false} tick={{ fill: '#656d76', fontSize: 11 }} axisLine={false} tickLine={false} width={28} />
-                <Tooltip content={<ChartTooltip />} />
-                <Area
-                  type="monotone"
-                  dataKey="hallazgos"
-                  stroke="#0969da"
-                  strokeWidth={2.5}
-                  fill="url(#trendFill)"
-                  animationDuration={1100}
-                  activeDot={{ r: 5, stroke: '#fff', strokeWidth: 2 }}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </motion.div>
-
-        <motion.div className="card dash-card" variants={fadeUp} initial="hidden" whileInView="show" viewport={{ once: true }}>
-          <div className="card-header">
-            <div className="card-title">
-              <ShieldCheck size={18} color="#1a7f37" />
-              <span>Health Score</span>
-            </div>
-          </div>
-          <div className="dash-health">
-            <div className="dash-chart" style={{ height: 160, width: 160 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <RadialBarChart
-                  innerRadius="72%"
-                  outerRadius="100%"
-                  data={healthData}
-                  startAngle={90}
-                  endAngle={-270}
-                >
-                  <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
-                  <RadialBar dataKey="value" background={{ fill: '#eaeef2' }} cornerRadius={8} animationDuration={1000}>
-                    <Cell fill={stats.overall_health_score >= 80 ? '#1a7f37' : stats.overall_health_score >= 60 ? '#bf8700' : '#cf222e'} />
-                  </RadialBar>
-                </RadialBarChart>
-              </ResponsiveContainer>
-              <div className="dash-health-center">
-                <AnimatedNumber value={stats.overall_health_score} className="dash-health-score" />
-                <span>/100</span>
-              </div>
-            </div>
-            <div className="dash-severity">
-              {severityData.map((s) => (
-                <div key={s.name} className="dash-severity-row">
-                  <span style={{ background: s.fill }} />
-                  <em>{s.name}</em>
-                  <b>{s.value}</b>
-                </div>
-              ))}
-            </div>
-          </div>
-        </motion.div>
+      <div className="dash-toolbar">
+        <DashboardSettings config={config} onChange={setConfig} />
+        {!loading && dataReady && (
+          <span className={`dash-status-pill dash-status-pill--${openAlert}`}>
+            {resolvedStats.total_open_findings} hallazgos abiertos
+          </span>
+        )}
       </div>
 
-      <div className="split-grid">
-        <motion.div className="card dash-card" variants={fadeUp} initial="hidden" whileInView="show" viewport={{ once: true }}>
-          <div className="card-header">
-            <div className="card-title">
-              <Terminal size={18} color="#8250df" />
-              <span>Estado de la arquitectura</span>
-            </div>
-            <span className="dash-chip is-live">
-              <Radio size={12} />
-              sync
-            </span>
-          </div>
-          <div className="dash-arch">
-            {ARCH.map((item, i) => (
-              <motion.div
-                key={item.name}
-                className={`dash-arch-row ${item.accent ? 'is-accent' : ''} ${item.live ? 'is-live' : ''}`}
-                initial={{ opacity: 0, x: -10 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.06 }}
-                whileHover={{ x: 3 }}
-              >
-                <CheckCircle2 color={item.accent ? '#0969da' : '#1a7f37'} size={18} />
-                <div>
-                  <div className="dash-arch-name">{item.name}</div>
-                  <div className="dash-arch-detail">{item.detail}</div>
-                </div>
-                {item.live && <span className="dash-pulse" aria-hidden="true" />}
-              </motion.div>
-            ))}
-          </div>
-        </motion.div>
-
-        <motion.div className="card dash-card" variants={fadeUp} initial="hidden" whileInView="show" viewport={{ once: true }}>
-          <div className="card-header">
-            <div className="card-title">
-              <Flame size={18} color="#cf222e" />
-              <span>Mapa de calor (12 semanas)</span>
-            </div>
-            <span style={{ fontSize: '0.75rem', color: '#656d76', fontWeight: 600 }}>
-              Intensidad = volumen
-            </span>
-          </div>
-          <HeatmapCalendar data={heatmap} />
-        </motion.div>
-      </div>
-
-      <motion.div className="card dash-card" variants={fadeUp} initial="hidden" whileInView="show" viewport={{ once: true }}>
-        <div className="card-header">
-          <div className="card-title">
-            <Activity size={18} color="#0969da" />
-            <span>Bitácora de eventos</span>
-          </div>
-          <span className="dash-chip">últimos {Math.min(events.length, 6)}</span>
+      {loading && (
+        <div className="dash-empty">
+          <p>Cargando métricas…</p>
         </div>
-        <div className="dash-events">
-          {events.slice(0, 6).map((event, i) => {
-            const color = actionColor(event.action);
+      )}
+
+      {!loading && loadError && (
+        <div className="dash-empty dash-empty--warn">
+          <p>{loadError}</p>
+        </div>
+      )}
+
+      {!loading && !dataReady && (
+        <div className="dash-empty">
+          <Database size={40} color="#656d76" />
+          <h2>Sin datos todavía</h2>
+          <p>
+            El dashboard solo muestra información cuando hay repositorios, escaneos o hallazgos en la base de datos.
+            Registra un repo o ejecuta un escaneo para ver métricas aquí.
+          </p>
+          <button type="button" className="btn btn-primary" onClick={() => onNavigate?.('repositories')}>
+            Ir a repositorios
+          </button>
+        </div>
+      )}
+
+      {!loading && dataReady && config.widgets.kpis && (
+        <motion.div className="stats-grid" variants={stagger} initial="hidden" animate="show">
+          {kpi.map((item) => {
+            const Icon = item.icon;
+            const color =
+              item.id === 'repos' && item.value === 0
+                ? '#656d76'
+                : item.alert === 'danger'
+                  ? ALERT_COLORS.danger
+                  : item.alert === 'warn'
+                    ? ALERT_COLORS.warn
+                    : item.id === 'critical'
+                      ? ALERT_COLORS[metricAlert(item.value, thresholds.critical_max)]
+                      : '#0969da';
             return (
               <motion.div
-                key={event.id}
-                className="dash-event"
-                initial={{ opacity: 0, y: 8 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.05 }}
-                whileHover={{ y: -2, borderColor: color }}
+                key={item.id}
+                className={`stat-card dash-stat ${item.alert === 'danger' ? 'dash-stat--danger' : ''}`}
+                variants={fadeUp}
+                whileHover={{ y: -3 }}
               >
-                <span className="dash-event-dot" style={{ background: color }} />
-                <div className="dash-event-body">
-                  <div className="dash-event-top">
-                    <strong style={{ color }}>{event.action}</strong>
-                    <span>{event.target}</span>
+                <div>
+                  <div className="stat-label">{item.label}</div>
+                  <div className="stat-value" style={{ color }}>
+                    <AnimatedNumber value={item.value} />
                   </div>
-                  <p>{event.detail}</p>
+                  <div className="dash-stat-hint">{item.hint}</div>
+                </div>
+                <div className="stat-icon" style={{ color, borderColor: `${color}33` }}>
+                  <Icon size={20} />
                 </div>
               </motion.div>
             );
           })}
+        </motion.div>
+      )}
+
+      {!loading && dataReady && (config.widgets.engines || config.widgets.trend || config.widgets.health) && (
+        <div className="split-grid dash-split-3">
+          {config.widgets.engines && (
+            <motion.div className="card dash-card" variants={fadeUp} initial="hidden" whileInView="show" viewport={{ once: true }}>
+              <div className="card-header">
+                <div className="card-title">
+                  <Layers size={18} color="#0969da" />
+                  <span>Hallazgos por motor</span>
+                </div>
+              </div>
+              {enginesHasData ? (
+                <div className="dash-chart" style={{ height: 220 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={engineData} barSize={28}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#eaeef2" vertical={false} />
+                      <XAxis dataKey="name" tick={{ fill: '#656d76', fontSize: 12 }} axisLine={false} tickLine={false} />
+                      <YAxis allowDecimals={false} tick={{ fill: '#656d76', fontSize: 11 }} axisLine={false} tickLine={false} width={28} />
+                      <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(9,105,218,0.06)' }} />
+                      <Bar dataKey="hallazgos" radius={[6, 6, 0, 0]} animationDuration={900}>
+                        {engineData.map((entry) => (
+                          <Cell key={entry.name} fill={entry.fill} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <p className="dash-panel-empty">No hay hallazgos abiertos por motor.</p>
+              )}
+            </motion.div>
+          )}
+
+          {config.widgets.trend && (
+            <motion.div className="card dash-card" variants={fadeUp} initial="hidden" whileInView="show" viewport={{ once: true }}>
+              <div className="card-header">
+                <div className="card-title">
+                  <Activity size={18} color="#8250df" />
+                  <span>Tendencia 7 días</span>
+                </div>
+              </div>
+              {trendHasData ? (
+                <div className="dash-chart" style={{ height: 220 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={trendData}>
+                      <defs>
+                        <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#0969da" stopOpacity={0.35} />
+                          <stop offset="100%" stopColor="#0969da" stopOpacity={0.02} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#eaeef2" vertical={false} />
+                      <XAxis dataKey="day" tick={{ fill: '#656d76', fontSize: 12 }} axisLine={false} tickLine={false} />
+                      <YAxis allowDecimals={false} tick={{ fill: '#656d76', fontSize: 11 }} axisLine={false} tickLine={false} width={28} />
+                      <Tooltip content={<ChartTooltip />} />
+                      <Area
+                        type="monotone"
+                        dataKey="hallazgos"
+                        stroke="#0969da"
+                        strokeWidth={2.5}
+                        fill="url(#trendFill)"
+                        animationDuration={1100}
+                        activeDot={{ r: 5, stroke: '#fff', strokeWidth: 2 }}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <p className="dash-panel-empty">Sin actividad de hallazgos en los últimos 7 días.</p>
+              )}
+            </motion.div>
+          )}
+
+          {config.widgets.health && (
+            <motion.div className="card dash-card" variants={fadeUp} initial="hidden" whileInView="show" viewport={{ once: true }}>
+              <div className="card-header">
+                <div className="card-title">
+                  <ShieldCheck size={18} color={healthColor} />
+                  <span>Health Score</span>
+                </div>
+                <span className={`dash-chip dash-chip--${healthAlertLevel}`}>mín. {thresholds.health_min}</span>
+              </div>
+              <div className="dash-health">
+                <div className="dash-chart" style={{ height: 160, width: 160 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RadialBarChart innerRadius="72%" outerRadius="100%" data={healthData} startAngle={90} endAngle={-270}>
+                      <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
+                      <RadialBar dataKey="value" background={{ fill: '#eaeef2' }} cornerRadius={8} animationDuration={1000}>
+                        <Cell fill={healthColor} />
+                      </RadialBar>
+                    </RadialBarChart>
+                  </ResponsiveContainer>
+                  <div className="dash-health-center">
+                    <AnimatedNumber value={resolvedStats.overall_health_score} className="dash-health-score" />
+                    <span>/100</span>
+                  </div>
+                </div>
+                <div className="dash-severity">
+                  {severityData.map((s) => (
+                    <div key={s.name} className="dash-severity-row">
+                      <span style={{ background: s.fill }} />
+                      <em>{s.name}</em>
+                      <b>{s.value}</b>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
         </div>
-      </motion.div>
+      )}
+
+      {!loading && dataReady && config.widgets.heatmap && (
+        <div className="split-grid">
+          <motion.div className="card dash-card" variants={fadeUp} initial="hidden" whileInView="show" viewport={{ once: true }}>
+            <div className="card-header">
+              <div className="card-title">
+                <Flame size={18} color="#cf222e" />
+                <span>Mapa de calor (12 semanas)</span>
+              </div>
+              <span style={{ fontSize: '0.75rem', color: '#656d76', fontWeight: 600 }}>
+                {resolvedHeatmap.total_findings_period} hallazgos en el periodo
+              </span>
+            </div>
+            {resolvedHeatmap.cells.length > 0 && resolvedHeatmap.total_findings_period > 0 ? (
+              <HeatmapCalendar data={resolvedHeatmap} />
+            ) : (
+              <p className="dash-panel-empty">Sin actividad registrada en las últimas 12 semanas.</p>
+            )}
+          </motion.div>
+        </div>
+      )}
+
+      {!loading && dataReady && config.widgets.audit && (
+        <motion.div className="card dash-card" variants={fadeUp} initial="hidden" whileInView="show" viewport={{ once: true }}>
+          <div className="card-header">
+            <div className="card-title">
+              <Terminal size={18} color="#0969da" />
+              <span>Bitácora de eventos</span>
+            </div>
+            <span className="dash-chip">últimos {Math.min(resolvedEvents.length, 6)}</span>
+          </div>
+          {resolvedEvents.length > 0 ? (
+            <div className="dash-events">
+              {resolvedEvents.slice(0, 6).map((event, i) => {
+                const color = actionColor(event.action);
+                return (
+                  <motion.div
+                    key={event.id}
+                    className="dash-event"
+                    initial={{ opacity: 0, y: 8 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: i * 0.05 }}
+                    whileHover={{ y: -2, borderColor: color }}
+                  >
+                    <span className="dash-event-dot" style={{ background: color }} />
+                    <div className="dash-event-body">
+                      <div className="dash-event-top">
+                        <strong style={{ color }}>{event.action}</strong>
+                        <span>{event.target}</span>
+                      </div>
+                      <p>{event.detail}</p>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="dash-panel-empty">La bitácora se llenará cuando registres repos, escaneos o cambios HITL.</p>
+          )}
+        </motion.div>
+      )}
     </div>
   );
 };

@@ -20,7 +20,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   title,
   subtitle,
-  healthScore = 82,
+  healthScore,
   sidebarState,
   setSidebarState,
   user,
@@ -106,6 +106,7 @@ export const Header: React.FC<HeaderProps> = ({
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
         {/* Security Health Score Pill Light */}
+        {typeof healthScore === 'number' && (
         <div
           style={{
             display: 'flex',
@@ -122,6 +123,7 @@ export const Header: React.FC<HeaderProps> = ({
           <span style={{ color: '#0969da', fontWeight: 600 }}>Health Score:</span>
           <strong style={{ color: '#0969da', fontSize: '0.95rem' }}>{healthScore}/100</strong>
         </div>
+        )}
 
         {/* Pulse Mobile App Sync Pill Light */}
         <div

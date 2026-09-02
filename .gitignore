@@ -1,6 +1,9 @@
 # Local working branches / cloned sub-workspaces
 app_demian_branch/
 
+# Documentación APT local (no versionar)
+requerimiento/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

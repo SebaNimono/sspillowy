@@ -43,8 +43,9 @@ from oauth_common import router as auth_meta_router
 from password_auth import router as password_auth_router
 from email_verification import router as email_verification_router
 from password_reset import router as password_reset_router
-from database import init_db, db_ping
+from database import init_db, db_ping, SessionLocal
 from email_service import mailer_status
+from dashboard_metrics import compute_dashboard_stats, compute_heatmap, list_audit_events
 
 app = FastAPI(
     title="SSPILLOWY API Core",
@@ -505,28 +506,72 @@ async def health_check():
         "email_mailer": mailer_status(),
     }
 
+def _empty_dashboard_stats() -> DashboardStats:
+    return DashboardStats(
+        overall_health_score=0,
+        monitored_repos=0,
+        total_scans_run=0,
+        total_open_findings=0,
+        critical_findings=0,
+        high_findings=0,
+        medium_findings=0,
+        low_findings=0,
+        secrets_leaked_prevented=0,
+        findings_by_engine={},
+        trend_7d=[0, 0, 0, 0, 0, 0, 0],
+    )
+
+
+def _empty_heatmap(weeks: int = 12) -> HeatmapResponse:
+    today = _now().date()
+    days = weeks * 7 - 1
+    cells = [
+        {"date": (today - timedelta(days=i)).isoformat(), "count": 0, "level": 0}
+        for i in range(days, -1, -1)
+    ]
+    return HeatmapResponse(cells=cells, max_count=0, total_findings_period=0, weeks=weeks)
+
+
 @app.get("/api/v1/stats", response_model=DashboardStats, tags=["Dashboard"])
 async def get_dashboard_stats():
-    open_items = _open_findings()
-    today = _now().date()
-    trend = [_heatmap_count(today - timedelta(days=i)) for i in range(6, -1, -1)]
-    engine_counts = {}
-    for finding in MOCK_FINDINGS:
-        key = finding["engine"].value if hasattr(finding["engine"], "value") else str(finding["engine"])
-        engine_counts[key] = engine_counts.get(key, 0) + 1
-    return DashboardStats(
-        overall_health_score=82,
-        monitored_repos=len(MOCK_REPOSITORIES),
-        total_scans_run=len(MOCK_SCANS) + 44,
-        total_open_findings=len(open_items),
-        critical_findings=sum(1 for f in open_items if f["severity"] == SeverityLevel.CRITICAL),
-        high_findings=sum(1 for f in open_items if f["severity"] == SeverityLevel.HIGH),
-        medium_findings=sum(1 for f in open_items if f["severity"] == SeverityLevel.MEDIUM),
-        low_findings=sum(1 for f in open_items if f["severity"] == SeverityLevel.LOW),
-        secrets_leaked_prevented=14,
-        findings_by_engine=engine_counts,
-        trend_7d=trend,
-    )
+    db = SessionLocal()
+    try:
+        if not db_ping():
+            return _empty_dashboard_stats()
+        return DashboardStats(**compute_dashboard_stats(db))
+    except Exception as exc:
+        print(f"[sspillowy] dashboard stats error: {exc}")
+        return _empty_dashboard_stats()
+    finally:
+        db.close()
+
+
+@app.get("/api/v1/heatmap", response_model=HeatmapResponse, tags=["Dashboard"])
+async def get_heatmap(weeks: int = Query(default=12, ge=4, le=52)):
+    db = SessionLocal()
+    try:
+        if not db_ping():
+            return _empty_heatmap(weeks)
+        return HeatmapResponse(**compute_heatmap(db, weeks=weeks))
+    except Exception as exc:
+        print(f"[sspillowy] heatmap error: {exc}")
+        return _empty_heatmap(weeks)
+    finally:
+        db.close()
+
+
+@app.get("/api/v1/audit-log", response_model=List[AuditEventResponse], tags=["Audit"])
+async def list_audit_log(limit: int = Query(default=40, ge=1, le=200)):
+    db = SessionLocal()
+    try:
+        if not db_ping():
+            return []
+        return list_audit_events(db, limit=limit)
+    except Exception as exc:
+        print(f"[sspillowy] audit log error: {exc}")
+        return []
+    finally:
+        db.close()
 
 @app.get("/api/v1/repositories", response_model=List[RepositoryResponse], tags=["Repositories"])
 async def list_repositories():
@@ -636,22 +681,6 @@ async def update_security_gate(policy: SecurityGatePolicy):
         f"Umbrales actualizados: critical≤{policy.max_critical_allowed}, high≤{policy.max_high_allowed}, block_secrets={policy.block_on_secrets}.",
     )
     return MOCK_POLICY
-
-@app.get("/api/v1/heatmap", response_model=HeatmapResponse, tags=["Dashboard"])
-async def get_heatmap():
-    today = _now().date()
-    cells = []
-    for i in range(83, -1, -1):
-        day = today - timedelta(days=i)
-        count = _heatmap_count(day)
-        cells.append({"date": day.isoformat(), "count": count, "level": _heatmap_level(count)})
-    total = sum(c["count"] for c in cells)
-    max_count = max((c["count"] for c in cells), default=0)
-    return HeatmapResponse(cells=cells, max_count=max_count, total_findings_period=total, weeks=12)
-
-@app.get("/api/v1/audit-log", response_model=List[AuditEventResponse], tags=["Audit"])
-async def list_audit_log(limit: int = Query(default=40, ge=1, le=200)):
-    return MOCK_AUDIT[:limit]
 
 @app.get("/api/v1/notifications", response_model=List[NotificationResponse], tags=["Notifications"])
 async def list_notifications(unread_only: bool = False):
