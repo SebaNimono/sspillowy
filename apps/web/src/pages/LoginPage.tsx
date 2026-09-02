@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Lock, Mail, ArrowRight, Github, Chrome, Code2, Globe } from 'lucide-react';
 import { Toast, ToastMessage } from '../components/Toast';
 import { AnimatedBackground } from '../components/AnimatedBackground';
-import { apiUrl, fetchAuthProviders, loginWithPassword, registerWithPassword, resendVerificationEmail } from '../api/client';
+import { apiUrl, fetchAuthProviders, loginWithPassword, registerWithPassword, resendVerificationEmail, requestPasswordReset } from '../api/client';
 
 interface LoginPageProps {
   onLoginSuccess: (email: string, name: string) => void;
@@ -70,6 +70,7 @@ const oauthErrorMessage = (code: string, detail?: string | null) => {
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oauthError, oauthDetail }) => {
   const [isRegister, setIsRegister] = useState(false);
+  const [isForgot, setIsForgot] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -83,11 +84,23 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oa
     const params = new URLSearchParams(window.location.search);
     if (params.get('email_verified') === '1') {
       setIsRegister(false);
+      setIsForgot(false);
       setToast({
         id: 'email-verified',
         type: 'info',
         title: 'Correo verificado',
         message: 'Tu cuenta está activa. Ya puedes iniciar sesión con tu contraseña.',
+      });
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+    if (params.get('password_reset') === '1') {
+      setIsForgot(false);
+      setIsRegister(false);
+      setToast({
+        id: 'password-reset-done',
+        type: 'success',
+        title: 'Contraseña actualizada',
+        message: 'Ya puedes iniciar sesión con tu nueva contraseña.',
       });
       window.history.replaceState({}, '', window.location.pathname);
     }
@@ -212,6 +225,38 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oa
     }
   };
 
+  const handleForgotSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim()) {
+      setToast({
+        id: Date.now().toString(),
+        type: 'error',
+        title: 'Correo requerido',
+        message: 'Indica el correo con el que te registraste.',
+      });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const result = await requestPasswordReset(email.trim());
+      setToast({
+        id: Date.now().toString(),
+        type: 'info',
+        title: 'Revisa tu correo',
+        message: result.message,
+      });
+    } catch (err) {
+      setToast({
+        id: Date.now().toString(),
+        type: 'error',
+        title: 'Recuperación',
+        message: err instanceof Error ? err.message : 'No se pudo enviar el enlace.',
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const startOAuth = async (provider: 'github' | 'gitlab' | 'google' | 'microsoft') => {
     if (!requireTerms()) return;
     const labels = { github: 'GitHub', gitlab: 'GitLab', google: 'Google', microsoft: 'Microsoft' };
@@ -293,10 +338,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oa
             letterSpacing: '-0.3px',
           }}
         >
-          {isRegister ? 'Crear una cuenta en SSPILLOWY' : 'Iniciar sesión en SSPILLOWY'}
+          {isForgot ? 'Recuperar contraseña' : isRegister ? 'Crear una cuenta en SSPILLOWY' : 'Iniciar sesión en SSPILLOWY'}
         </h1>
         <p style={{ color: '#656d76', fontSize: '0.85rem', marginTop: '0.2rem' }}>
-          Plataforma Integral de Gobernanza DevSecOps
+          {isForgot
+            ? 'Te enviaremos un enlace para definir una contraseña nueva.'
+            : 'Plataforma Integral de Gobernanza DevSecOps'}
         </p>
       </div>
 
@@ -315,6 +362,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oa
         }}
       >
         {/* Auth Mode Toggle Tabs */}
+        {!isForgot && (
         <div
           style={{
             display: 'flex',
@@ -327,7 +375,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oa
         >
           <button
             type="button"
-            onClick={() => setIsRegister(false)}
+            onClick={() => { setIsRegister(false); setIsForgot(false); }}
             style={{
               flex: 1,
               padding: '0.45rem',
@@ -346,7 +394,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oa
           </button>
           <button
             type="button"
-            onClick={() => setIsRegister(true)}
+            onClick={() => { setIsRegister(true); setIsForgot(false); }}
             style={{
               flex: 1,
               padding: '0.45rem',
@@ -364,7 +412,58 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oa
             Crear Cuenta
           </button>
         </div>
+        )}
 
+        {isForgot ? (
+          <form onSubmit={handleForgotSubmit}>
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#1f2328', marginBottom: '0.35rem' }}>
+                Correo electrónico
+              </label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  type="email"
+                  placeholder="usuario@ejemplo.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '0.65rem 0.85rem 0.65rem 2.25rem',
+                    borderRadius: '6px',
+                    border: '1px solid #d0d7de',
+                    background: '#ffffff',
+                    color: '#1f2328',
+                    fontSize: '0.9rem',
+                    outline: 'none',
+                  }}
+                />
+                <Mail size={16} color="#8c959f" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
+              </div>
+            </div>
+            <p style={{ fontSize: '0.78rem', color: '#656d76', margin: '0 0 1rem', lineHeight: 1.45 }}>
+              Si entraste solo con Google o GitHub, usa «Crear cuenta» con el mismo correo para definir una contraseña.
+            </p>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={submitting}
+              style={{ width: '100%', justifyContent: 'center', padding: '0.65rem', opacity: submitting ? 0.7 : 1 }}
+            >
+              <span>{submitting ? 'Enviando…' : 'Enviar enlace de recuperación'}</span>
+              <ArrowRight size={16} />
+            </button>
+            <button
+              type="button"
+              className="site-footer-link"
+              style={{ display: 'block', margin: '1rem auto 0', textAlign: 'center' }}
+              onClick={() => setIsForgot(false)}
+            >
+              Volver al inicio de sesión
+            </button>
+          </form>
+        ) : (
+        <>
         <form onSubmit={handleSubmit}>
           {isRegister && (
             <div style={{ marginBottom: '1rem' }}>
@@ -422,22 +521,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oa
                 Contraseña
               </label>
               {!isRegister && (
-                <a
-                  href="#forgot"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setToast({
-                      id: Date.now().toString(),
-                      type: 'info',
-                      title: 'Recuperación de clave',
-                      message:
-                        'Si entraste solo con Google/GitHub, usa «Crear cuenta» con el mismo correo para definir una contraseña (sirve para Pulse).',
-                    });
-                  }}
-                  style={{ fontSize: '0.75rem', color: '#0969da', textDecoration: 'none' }}
+                <button
+                  type="button"
+                  onClick={() => setIsForgot(true)}
+                  style={{ fontSize: '0.75rem', color: '#0969da', background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontWeight: 600 }}
                 >
                   ¿Olvidaste tu clave?
-                </a>
+                </button>
               )}
             </div>
             <div style={{ position: 'relative' }}>
@@ -580,6 +670,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oa
             <span>Microsoft</span>
           </button>
         </div>
+        </>
+        )}
       </div>
 
       {/* Footer text */}

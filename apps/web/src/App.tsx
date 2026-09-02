@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Sidebar, SidebarState } from './components/Sidebar';
 import { LoginPage } from './pages/LoginPage';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { LandingPage } from './pages/LandingPage';
 import { LegalPage, LegalDoc } from './pages/LegalPage';
 import { DashboardPage } from './pages/DashboardPage';
@@ -14,7 +15,9 @@ import { fetchNotifications, fetchAuthSession } from './api/client';
 import { FALLBACK_NOTIFICATIONS } from './api/fallbacks';
 import { CookieBanner } from './components/CookieBanner';
 
-type AppView = 'site' | 'login' | 'console' | LegalDoc;
+type AppView = 'site' | 'login' | 'console' | LegalDoc | 'reset-password';
+
+const RESET_PASSWORD_PATH = '/restablecer-contrasena';
 
 const LEGAL_PATHS: Record<string, LegalDoc> = {
   '/privacidad': 'privacidad',
@@ -40,13 +43,28 @@ function legalFromLocation(): LegalDoc | null {
   return HASH_TO_LEGAL[hash] ?? null;
 }
 
+function resetTokenFromLocation(): string | null {
+  if (normalizePath(window.location.pathname) === RESET_PASSWORD_PATH) {
+    return new URLSearchParams(window.location.search).get('token');
+  }
+  return null;
+}
+
+function initialView(): AppView {
+  const legal = legalFromLocation();
+  if (legal) return legal;
+  if (resetTokenFromLocation()) return 'reset-password';
+  return 'site';
+}
+
 function pathForView(view: AppView): string {
   if (view === 'privacidad' || view === 'terminos' || view === 'cookies') return `/${view}`;
   return '/';
 }
 
 export const App: React.FC = () => {
-  const [view, setView] = useState<AppView>(() => legalFromLocation() ?? 'site');
+  const [view, setView] = useState<AppView>(initialView);
+  const [resetToken, setResetToken] = useState<string | null>(() => resetTokenFromLocation());
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [unreadCount, setUnreadCount] = useState(0);
   const [bootstrapping, setBootstrapping] = useState(true);
@@ -102,9 +120,17 @@ export const App: React.FC = () => {
       const legal = legalFromLocation();
       if (legal) {
         setView(legal);
+        setResetToken(null);
+        return;
+      }
+      const token = resetTokenFromLocation();
+      if (token) {
+        setResetToken(token);
+        setView('reset-password');
         return;
       }
       if (normalizePath(window.location.pathname) === '/') {
+        setResetToken(null);
         setView((current) => (current === 'login' || current === 'console' ? current : 'site'));
       }
     };
@@ -130,6 +156,14 @@ export const App: React.FC = () => {
 
     if (params.get('email_verified') === '1') {
       setView('login');
+      setBootstrapping(false);
+      return () => window.removeEventListener('popstate', onPop);
+    }
+
+    const resetTokenParam = resetTokenFromLocation();
+    if (resetTokenParam) {
+      setResetToken(resetTokenParam);
+      setView('reset-password');
       setBootstrapping(false);
       return () => window.removeEventListener('popstate', onPop);
     }
@@ -207,6 +241,23 @@ export const App: React.FC = () => {
 
   if (view === 'privacidad' || view === 'terminos' || view === 'cookies') {
     return <LegalPage doc={view} onHome={goHome} />;
+  }
+
+  if (view === 'reset-password' && resetToken) {
+    return (
+      <>
+        <ResetPasswordPage
+          token={resetToken}
+          onGoLogin={() => {
+            window.history.pushState({}, '', '/?password_reset=1');
+            setResetToken(null);
+            setView('login');
+          }}
+          onBack={goHome}
+        />
+        <CookieBanner />
+      </>
+    );
   }
 
   if (view === 'site') {

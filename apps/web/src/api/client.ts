@@ -307,3 +307,41 @@ export async function resendVerificationEmail(email: string): Promise<{ ok: bool
   }
   return data as { ok: boolean; message: string };
 }
+
+export async function requestPasswordReset(email: string): Promise<{ ok: boolean; message: string }> {
+  const res = await fetch(`${API_BASE}/auth/forgot-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const detail = typeof data.detail === 'string' ? data.detail : `Error de API (${res.status})`;
+    throw new Error(detail);
+  }
+  return data as { ok: boolean; message: string };
+}
+
+export async function validatePasswordResetToken(token: string): Promise<{ ok: boolean; email: string }> {
+  const res = await fetch(`${API_BASE}/auth/reset-password/validate?token=${encodeURIComponent(token)}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const detail = typeof data.detail === 'string' ? data.detail : `Error de API (${res.status})`;
+    throw new Error(detail);
+  }
+  return data as { ok: boolean; email: string };
+}
+
+export async function resetPassword(token: string, password: string): Promise<{ ok: boolean; message: string }> {
+  const res = await fetch(`${API_BASE}/auth/reset-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, password }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const detail = typeof data.detail === 'string' ? data.detail : `Error de API (${res.status})`;
+    throw new Error(detail);
+  }
+  return data as { ok: boolean; message: string };
+}

@@ -87,6 +87,10 @@ def init_db() -> bool:
                     "ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_token_expires_at TIMESTAMPTZ"
                 )
             )
+            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token TEXT"))
+            conn.execute(
+                text("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_expires_at TIMESTAMPTZ")
+            )
             # Usuarios ya existentes (SSO o pruebas) siguen pudiendo entrar
             conn.execute(text("UPDATE users SET email_verified = TRUE WHERE email_verified IS NOT TRUE"))
             conn.commit()

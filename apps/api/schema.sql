@@ -13,6 +13,8 @@ CREATE TABLE IF NOT EXISTS users (
   email_verified BOOLEAN DEFAULT FALSE,
   verification_token TEXT,
   verification_token_expires_at TIMESTAMPTZ,
+  password_reset_token TEXT,
+  password_reset_expires_at TIMESTAMPTZ,
   is_active BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   last_login_at TIMESTAMPTZ DEFAULT NOW()
@@ -110,4 +112,6 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_token TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_token_expires_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_expires_at TIMESTAMPTZ;
 UPDATE users SET email_verified = TRUE WHERE email_verified IS NOT TRUE;
