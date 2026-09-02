@@ -168,14 +168,78 @@ def _consume_credit(db, user_key: str) -> int:
 
 
 def _parse_gemini_json(text: str) -> dict:
-    text = text.strip()
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        match = re.search(r"\{[\s\S]*\}", text)
-        if match:
-            return json.loads(match.group(0))
-        raise
+    """Extrae JSON de la respuesta de Gemini (markdown, texto mezclado o JSON puro)."""
+    raw = (text or "").strip()
+    if not raw:
+        raise json.JSONDecodeError("empty", raw, 0)
+
+    candidates: list[str] = [raw]
+
+    # Quitar bloques ```json ... ```
+    fence = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", raw, re.IGNORECASE)
+    if fence:
+        candidates.insert(0, fence.group(1).strip())
+
+    # Primer objeto JSON balanceado (más fiable que regex greedy)
+    start = raw.find("{")
+    if start >= 0:
+        depth = 0
+        in_string = False
+        escape = False
+        for i in range(start, len(raw)):
+            ch = raw[i]
+            if in_string:
+                if escape:
+                    escape = False
+                elif ch == "\\":
+                    escape = True
+                elif ch == '"':
+                    in_string = False
+                continue
+            if ch == '"':
+                in_string = True
+            elif ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    candidates.append(raw[start : i + 1])
+                    break
+
+    for chunk in candidates:
+        if not chunk:
+            continue
+        try:
+            parsed = json.loads(chunk)
+            if isinstance(parsed, dict):
+                return parsed
+        except json.JSONDecodeError:
+            continue
+
+    # Último recurso: devolver el texto como reply (mejor que error al usuario)
+    cleaned = re.sub(r"^```(?:json)?|```$", "", raw, flags=re.IGNORECASE).strip()
+    return {"reply": cleaned[:3000] or "Listo.", "suggested_widgets": []}
+
+
+PILLOW_RESPONSE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "reply": {"type": "string"},
+        "suggested_widgets": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "type": {"type": "string"},
+                    "title": {"type": "string"},
+                    "metric": {"type": "string"},
+                },
+                "required": ["type", "title"],
+            },
+        },
+    },
+    "required": ["reply", "suggested_widgets"],
+}
 
 
 def _gemini_model_candidates() -> list[str]:
@@ -207,14 +271,10 @@ async def _call_gemini(user_message: str, context: dict | None) -> dict:
     if context:
         ctx_block = f"\nContexto actual del dashboard (JSON):\n{json.dumps(context, ensure_ascii=False)[:4000]}\n"
 
-    payload = {
+    user_text = f"{ctx_block}\nPregunta del usuario:\n{user_message}"
+    base_payload = {
         "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
-        "contents": [{"role": "user", "parts": [{"text": f"{ctx_block}\nPregunta del usuario:\n{user_message}"}]}],
-        "generationConfig": {
-            "temperature": 0.35,
-            "maxOutputTokens": 1024,
-            "responseMimeType": "application/json",
-        },
+        "contents": [{"role": "user", "parts": [{"text": user_text}]}],
     }
 
     last_status = 502
@@ -222,17 +282,38 @@ async def _call_gemini(user_message: str, context: dict | None) -> dict:
     async with httpx.AsyncClient(timeout=45.0) as client:
         for model in _gemini_model_candidates():
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-            res = await client.post(url, params={"key": GEMINI_API_KEY}, json=payload)
-            if res.status_code == 200:
-                body = res.json()
-                try:
-                    text = body["candidates"][0]["content"]["parts"][0]["text"]
-                except (KeyError, IndexError) as exc:
-                    raise HTTPException(status_code=502, detail="Respuesta de Gemini inesperada.") from exc
-                return _parse_gemini_json(text)
-            last_status = res.status_code
-            last_raw = res.text[:300]
-            if res.status_code != 404:
+            for use_schema in (True, False):
+                gen_config: dict[str, Any] = {
+                    "temperature": 0.35,
+                    "maxOutputTokens": 2048,
+                    "responseMimeType": "application/json",
+                }
+                if use_schema:
+                    gen_config["responseSchema"] = PILLOW_RESPONSE_SCHEMA
+                payload = {**base_payload, "generationConfig": gen_config}
+                res = await client.post(url, params={"key": GEMINI_API_KEY}, json=payload)
+                if res.status_code == 200:
+                    body = res.json()
+                    candidates = body.get("candidates") or []
+                    if not candidates:
+                        block = (body.get("promptFeedback") or {}).get("blockReason")
+                        if block:
+                            raise HTTPException(
+                                status_code=502,
+                                detail="Gemini bloqueó la respuesta por políticas de contenido. Reformula la pregunta.",
+                            )
+                        raise HTTPException(status_code=502, detail="Gemini devolvió una respuesta vacía.")
+                    parts = (candidates[0].get("content") or {}).get("parts") or []
+                    text = "".join(p.get("text", "") for p in parts if isinstance(p, dict)).strip()
+                    if not text:
+                        raise HTTPException(status_code=502, detail="Gemini devolvió una respuesta vacía.")
+                    return _parse_gemini_json(text)
+                last_status = res.status_code
+                last_raw = res.text[:300]
+                if res.status_code == 404:
+                    break
+                if res.status_code == 400 and use_schema:
+                    continue
                 break
 
     raise HTTPException(status_code=502, detail=_friendly_gemini_error(last_status, last_raw))
@@ -314,7 +395,10 @@ async def pillow_chat(body: PillowChatBody):
     except HTTPException:
         raise
     except json.JSONDecodeError as exc:
-        raise HTTPException(status_code=502, detail="Pillow no pudo interpretar la respuesta de Gemini.") from exc
+        raise HTTPException(
+            status_code=502,
+            detail="Pillow no pudo interpretar la respuesta de Gemini. Intenta de nuevo.",
+        ) from exc
     except Exception as exc:
         db.rollback()
         raise HTTPException(status_code=503, detail=f"Error de Pillow: {exc}") from exc
