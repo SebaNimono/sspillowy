@@ -345,3 +345,52 @@ export async function resetPassword(token: string, password: string): Promise<{ 
   }
   return data as { ok: boolean; message: string };
 }
+
+export interface PillowQuota {
+  configured: boolean;
+  daily_limit: number;
+  credits_used: number;
+  credits_remaining: number;
+  resets_at: string;
+}
+
+export interface PillowWidgetSuggestion {
+  type: string;
+  title: string;
+  metric?: string | null;
+}
+
+export interface PillowChatResult {
+  reply: string;
+  suggested_widgets: PillowWidgetSuggestion[];
+  credits_remaining: number;
+  daily_limit: number;
+}
+
+export async function fetchPillowQuota(userKey: string): Promise<PillowQuota> {
+  const res = await fetch(`${API_BASE}/pillow/quota?user_key=${encodeURIComponent(userKey)}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const detail = typeof data.detail === 'string' ? data.detail : `Error de API (${res.status})`;
+    throw new Error(detail);
+  }
+  return data as PillowQuota;
+}
+
+export async function sendPillowMessage(body: {
+  message: string;
+  user_key: string;
+  dashboard_context?: Record<string, unknown>;
+}): Promise<PillowChatResult> {
+  const res = await fetch(`${API_BASE}/pillow/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const detail = typeof data.detail === 'string' ? data.detail : `Error de API (${res.status})`;
+    throw new Error(detail);
+  }
+  return data as PillowChatResult;
+}

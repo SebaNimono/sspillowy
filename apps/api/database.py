@@ -91,6 +91,18 @@ def init_db() -> bool:
             conn.execute(
                 text("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_expires_at TIMESTAMPTZ")
             )
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS pillow_daily_usage (
+                      user_key TEXT NOT NULL,
+                      usage_date DATE NOT NULL,
+                      credits_used INTEGER DEFAULT 0,
+                      PRIMARY KEY (user_key, usage_date)
+                    )
+                    """
+                )
+            )
             # Usuarios ya existentes (SSO o pruebas) siguen pudiendo entrar
             conn.execute(text("UPDATE users SET email_verified = TRUE WHERE email_verified IS NOT TRUE"))
             conn.commit()

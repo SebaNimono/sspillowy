@@ -43,6 +43,7 @@ from oauth_common import router as auth_meta_router
 from password_auth import router as password_auth_router
 from email_verification import router as email_verification_router
 from password_reset import router as password_reset_router
+from pillow_agent import router as pillow_router
 from database import init_db, db_ping, SessionLocal
 from email_service import mailer_status
 from dashboard_metrics import compute_dashboard_stats, compute_heatmap, list_audit_events
@@ -72,6 +73,7 @@ app.include_router(auth_meta_router)
 app.include_router(password_auth_router)
 app.include_router(email_verification_router)
 app.include_router(password_reset_router)
+app.include_router(pillow_router)
 app.include_router(github_auth_router)
 app.include_router(gitlab_auth_router)
 app.include_router(google_auth_router)

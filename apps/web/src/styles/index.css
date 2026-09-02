@@ -3348,3 +3348,417 @@ a.cookie-inline {
   color: #1a7f37;
 }
 
+/* —— Pillow agent —— */
+.pillow-fab {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 1200;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.65rem 1rem;
+  border-radius: 999px;
+  border: 1px solid #8250df;
+  background: linear-gradient(135deg, #8250df 0%, #0969da 100%);
+  color: #ffffff;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(130, 80, 223, 0.35);
+}
+
+.pillow-fab:hover {
+  transform: translateY(-1px);
+}
+
+.pillow-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  background: rgba(27, 30, 46, 0.4);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.pillow-panel {
+  width: min(420px, 100%);
+  height: 100%;
+  background: #ffffff;
+  border-left: 1px solid #d0d7de;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -8px 0 32px rgba(140, 149, 159, 0.2);
+}
+
+.pillow-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 1rem 1.1rem 0.5rem;
+  border-bottom: 1px solid #eaeef2;
+}
+
+.pillow-panel-kicker {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #8250df;
+}
+
+.pillow-panel-head h2 {
+  margin: 0.15rem 0 0;
+  font-size: 1.2rem;
+  color: #1f2328;
+}
+
+.pillow-panel-close {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: #656d76;
+}
+
+.pillow-quota {
+  padding: 0.55rem 1.1rem;
+  font-size: 0.78rem;
+  color: #656d76;
+  background: #f6f8fa;
+  border-bottom: 1px solid #eaeef2;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.pillow-quota strong {
+  color: #0969da;
+}
+
+.pillow-quota em {
+  color: #bf8700;
+  font-style: normal;
+}
+
+.pillow-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem;
+  padding: 0.65rem 1rem;
+  border-bottom: 1px solid #eaeef2;
+}
+
+.pillow-tabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.45rem;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #656d76;
+  cursor: pointer;
+}
+
+.pillow-tabs button.is-active {
+  background: #ddf4ff;
+  border-color: #54aeff66;
+  color: #0969da;
+}
+
+.pillow-ask {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0.75rem 1rem 1rem;
+}
+
+.pillow-chat {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin-bottom: 0.75rem;
+}
+
+.pillow-chat-line {
+  padding: 0.65rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.pillow-chat-line p {
+  margin: 0;
+}
+
+.pillow-chat-line--user {
+  align-self: flex-end;
+  max-width: 92%;
+  background: #0969da;
+  color: #ffffff;
+}
+
+.pillow-chat-line--pillow {
+  align-self: flex-start;
+  max-width: 95%;
+  background: #f6f8fa;
+  border: 1px solid #eaeef2;
+  color: #1f2328;
+}
+
+.pillow-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+}
+
+.pillow-suggestions button {
+  border: 1px solid #8250df55;
+  background: #fbefff;
+  color: #8250df;
+  border-radius: 999px;
+  padding: 0.25rem 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pillow-suggestion-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 0.65rem;
+}
+
+.pillow-suggestion-chips button {
+  text-align: left;
+  border: 1px solid #d0d7de;
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 0.45rem 0.6rem;
+  font-size: 0.75rem;
+  color: #656d76;
+  cursor: pointer;
+}
+
+.pillow-input-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+
+.pillow-input-row textarea {
+  flex: 1;
+  resize: none;
+  border: 1px solid #d0d7de;
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.85rem;
+  font-family: inherit;
+}
+
+.pillow-send {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  border: none;
+  background: #8250df;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.pillow-send:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pillow-widget-tray {
+  flex: 1;
+  overflow: auto;
+  padding: 0.75rem 1rem 1.25rem;
+}
+
+.pillow-widget-search {
+  width: 100%;
+  margin-bottom: 0.75rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+.pillow-widget-tray section {
+  margin-bottom: 1rem;
+}
+
+.pillow-widget-tray h3 {
+  margin: 0 0 0.45rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #656d76;
+}
+
+.pillow-widget-tray ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pillow-widget-tray li button {
+  width: 100%;
+  display: flex;
+  gap: 0.65rem;
+  align-items: flex-start;
+  text-align: left;
+  padding: 0.55rem 0.45rem;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.pillow-widget-tray li button:hover {
+  background: #f6f8fa;
+}
+
+.pillow-widget-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #ddf4ff, #fbefff);
+  border: 1px solid #d0d7de;
+  flex-shrink: 0;
+}
+
+.pillow-widget-tray strong {
+  display: block;
+  font-size: 0.82rem;
+  color: #1f2328;
+}
+
+.pillow-widget-tray em {
+  display: block;
+  font-size: 0.72rem;
+  color: #656d76;
+  font-style: normal;
+  margin-top: 0.1rem;
+}
+
+.pillow-board {
+  margin: 1.5rem 0;
+}
+
+.pillow-board-head h2 {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+  color: #1f2328;
+}
+
+.pillow-board-head p {
+  margin: 0 0 0.85rem;
+  font-size: 0.8rem;
+  color: #656d76;
+}
+
+.pillow-board-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 0.85rem;
+}
+
+.pillow-widget-card {
+  background: #ffffff;
+  border: 1px dashed #8250df66;
+  border-radius: 10px;
+  padding: 0.85rem;
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+}
+
+.pillow-widget-card header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.65rem;
+}
+
+.pillow-widget-type {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #8250df;
+  letter-spacing: 0.04em;
+}
+
+.pillow-widget-card h3 {
+  margin: 0.15rem 0 0;
+  font-size: 0.9rem;
+  color: #1f2328;
+}
+
+.pillow-widget-remove {
+  border: none;
+  background: transparent;
+  color: #656d76;
+  cursor: pointer;
+}
+
+.pillow-widget-preview {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pillow-preview-kpi {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #0969da;
+}
+
+.pillow-preview-note {
+  font-size: 0.8rem;
+  color: #656d76;
+  text-align: center;
+  margin: 0;
+}
+
+.pillow-preview-chart {
+  width: 100%;
+  text-align: center;
+}
+
+.pillow-preview-bars {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 0.35rem;
+  height: 72px;
+  margin-bottom: 0.45rem;
+}
+
+.pillow-preview-bars span {
+  width: 18px;
+  border-radius: 4px 4px 0 0;
+  background: linear-gradient(180deg, #8250df, #0969da);
+  opacity: 0.75;
+}
+
+.pillow-preview-chart p {
+  margin: 0;
+  font-size: 0.72rem;
+  color: #656d76;
+}
+

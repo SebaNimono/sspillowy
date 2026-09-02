@@ -20,6 +20,8 @@ import { SidebarState } from '../components/Sidebar';
 import { HeatmapCalendar } from '../components/HeatmapCalendar';
 import { AnimatedNumber } from '../components/AnimatedNumber';
 import { DashboardSettings } from '../components/DashboardSettings';
+import { PillowAgent } from '../components/PillowAgent';
+import { PillowWidgetBoard } from '../components/PillowWidgetBoard';
 import { DashboardStats, HeatmapData, AuditEvent, fetchStats, fetchHeatmap, fetchAuditLog } from '../api/client';
 import {
   ALERT_COLORS,
@@ -28,6 +30,7 @@ import {
   loadDashboardConfig,
   metricAlert,
 } from '../config/dashboardConfig';
+import { PlacedPillowWidget, loadPlacedWidgets, savePlacedWidgets } from '../config/pillowWidgets';
 import {
   KeyRound,
   Cpu,
@@ -145,6 +148,7 @@ export const DashboardPage: React.FC<PageProps> = ({
   const [heatmap, setHeatmap] = useState<HeatmapData | null>(null);
   const [events, setEvents] = useState<AuditEvent[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [pillowWidgets, setPillowWidgets] = useState<PlacedPillowWidget[]>(() => loadPlacedWidgets());
 
   useEffect(() => {
     let cancelled = false;
@@ -249,6 +253,22 @@ export const DashboardPage: React.FC<PageProps> = ({
   const healthData = [{ name: 'health', value: resolvedStats.overall_health_score, fill: healthColor }];
 
   const openAlert = metricAlert(resolvedStats.total_open_findings, thresholds.open_max);
+
+  const handleAddPillowWidget = (widget: PlacedPillowWidget) => {
+    setPillowWidgets((prev) => {
+      const next = [...prev, widget];
+      savePlacedWidgets(next);
+      return next;
+    });
+  };
+
+  const handleRemovePillowWidget = (id: string) => {
+    setPillowWidgets((prev) => {
+      const next = prev.filter((w) => w.id !== id);
+      savePlacedWidgets(next);
+      return next;
+    });
+  };
 
   return (
     <div className="dash">
@@ -509,6 +529,14 @@ export const DashboardPage: React.FC<PageProps> = ({
           )}
         </motion.div>
       )}
+
+      <PillowWidgetBoard widgets={pillowWidgets} stats={stats} onRemove={handleRemovePillowWidget} />
+
+      <PillowAgent
+        userEmail={user?.email}
+        dashboardContext={stats}
+        onAddWidget={handleAddPillowWidget}
+      />
     </div>
   );
 };

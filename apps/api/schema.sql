@@ -103,6 +103,13 @@ CREATE TABLE IF NOT EXISTS audit_events (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS pillow_daily_usage (
+  user_key TEXT NOT NULL,
+  usage_date DATE NOT NULL,
+  credits_used INTEGER DEFAULT 0,
+  PRIMARY KEY (user_key, usage_date)
+);
+
 INSERT INTO security_gates (id)
 VALUES ('default-policy')
 ON CONFLICT (id) DO NOTHING;

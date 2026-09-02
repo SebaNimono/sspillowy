@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, Date, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 
 from database import Base
@@ -132,3 +132,13 @@ class AuditEvent(Base):
     detail = Column(Text, nullable=True)
     actor_email = Column(String, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class PillowDailyUsage(Base):
+    """Créditos diarios del agente Pillow por usuario (email)."""
+
+    __tablename__ = "pillow_daily_usage"
+
+    user_key = Column(String, primary_key=True)
+    usage_date = Column(Date, primary_key=True)
+    credits_used = Column(Integer, default=0)
