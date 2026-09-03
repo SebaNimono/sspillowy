@@ -5,7 +5,7 @@
     instance_type: mac_mini_m1
     working_directory: ticasistente
     integrations:
-      app_store_connect: codemagic_key
+      app_store_connect: Codemagic Key
     environment:
       flutter: stable
       xcode: latest
