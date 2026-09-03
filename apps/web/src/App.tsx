@@ -5,17 +5,12 @@ import {
   Moon, 
   Search, 
   Terminal, 
-  CheckCircle2, 
-  AlertTriangle, 
-  XCircle, 
-  Info, 
   Smartphone, 
   Download, 
   Bot, 
   Cpu, 
   Check, 
-  X,
-  FileText
+  X
 } from 'lucide-react';
 
 export interface AITriaging {
