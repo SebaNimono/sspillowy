@@ -1,15 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ShieldAlert, Play, RefreshCw, Mail, Lock, ArrowRight, Code2, Database, User, LogOut, CheckCircle2, Globe } from 'lucide-react';
-
-interface Finding {
-  id: string;
-  tool: string;
-  severity: string;
-  title: string;
-  file: string;
-  description: string;
-  aiFix: string;
-}
+import { loginUser, Finding } from './services/api';
 
 interface ScanRecord {
   id: string;
@@ -33,16 +24,17 @@ export default function App() {
   const [findings, setFindings] = useState<Finding[]>([]);
   const [dbScans, setDbScans] = useState<ScanRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   const fetchDbRecords = async () => {
     try {
-      const res = await fetch('http://localhost:8000/api/scans');
+      const res = await fetch('https://api.sspillowy.com/api/v1/scans');
       if (res.ok) {
         const data = await res.json();
         setDbScans(data);
       }
     } catch {
-      setError('Error al conectar con la base de datos PostgreSQL.');
+      setError('Error al conectar con la base de datos de producción.');
     }
   };
 
@@ -52,9 +44,24 @@ export default function App() {
     }
   }, [isAuthenticated]);
 
-  const handleAuthSubmit = (e: React.FormEvent) => {
+  const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (email && password) {
+    setAuthError(null);
+
+    if (!email || !password) {
+      setAuthError('Por favor ingresa correo y contraseña.');
+      return;
+    }
+
+    if (authMode === 'login') {
+      const res = await loginUser({ email, password });
+      if (res.success) {
+        setCurrentUser(email);
+        setIsAuthenticated(true);
+      } else {
+        setAuthError(res.message || 'Credenciales incorrectas');
+      }
+    } else {
       setCurrentUser(email);
       setIsAuthenticated(true);
     }
@@ -70,7 +77,7 @@ export default function App() {
     setFindings([]);
 
     try {
-      const res = await fetch('http://localhost:8000/api/scan', {
+      const res = await fetch('https://api.sspillowy.com/api/v1/scans', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ repo_url: repoUrl }),
@@ -80,13 +87,13 @@ export default function App() {
       const { scanId } = await res.json();
 
       setLogs([
-        '[SYSTEM] Conectando a la base de datos PostgreSQL 16...',
-        `[POSTGRES] Registro guardado con ID: ${scanId}`,
+        '[SYSTEM] Conectando con la API de producción...',
+        `[DATABASE] Registro guardado con ID: ${scanId}`,
         '[GITLEAKS] Analizando credenciales y secretos expuestos...',
         '[SUCCESS] Hallazgos indexados correctamente en la BD.'
       ]);
 
-      const resResults = await fetch(`http://localhost:8000/api/scan/${scanId}/results`);
+      const resResults = await fetch(`https://api.sspillowy.com/api/v1/scans/${scanId}/results`);
       const data = await resResults.json();
       setFindings(data);
       setIsScanning(false);
@@ -97,7 +104,7 @@ export default function App() {
       if (err instanceof Error) {
         setError(err.message);
       } else {
-        setError('Error al conectar con el backend de FastAPI.');
+        setError('Error al conectar con la API de SSPILLOWY.');
       }
     }
   };
@@ -107,36 +114,42 @@ export default function App() {
       <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center p-4 relative font-sans">
         <div className="w-full max-w-md space-y-6 text-center z-10">
           <div className="flex flex-col items-center justify-center space-y-2">
-            <div className="w-16 h-16 bg-[#2E1065] rounded-2xl flex items-center justify-center shadow-lg">
-              <ShieldAlert className="h-10 w-10 text-white" />
+            <div className="w-14 h-14 sm:w-16 sm:h-16 bg-[#2E1065] rounded-2xl flex items-center justify-center shadow-lg">
+              <ShieldAlert className="h-8 w-8 sm:h-10 sm:w-10 text-white" />
             </div>
             <span className="text-xs font-black tracking-widest text-[#2E1065] uppercase">SSPILLOWY</span>
           </div>
 
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900">
               {authMode === 'login' ? 'Iniciar sesión en SSPILLOWY' : 'Crear una cuenta nueva'}
             </h1>
-            <p className="text-sm text-slate-500 mt-1">Plataforma Integral de Gobernanza DevSecOps</p>
+            <p className="text-xs sm:text-sm text-slate-500 mt-1">Plataforma Integral de Gobernanza DevSecOps</p>
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl p-6 text-left space-y-5">
-            <div className="grid grid-cols-2 bg-slate-100 p-1 rounded-xl text-sm font-medium text-slate-600">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl p-4 sm:p-6 text-left space-y-5">
+            <div className="grid grid-cols-2 bg-slate-100 p-1 rounded-xl text-xs sm:text-sm font-medium text-slate-600">
               <button
                 type="button"
-                onClick={() => setAuthMode('login')}
+                onClick={() => { setAuthMode('login'); setAuthError(null); }}
                 className={`py-2 rounded-lg text-center transition ${authMode === 'login' ? 'bg-white text-slate-900 font-bold shadow-sm' : 'hover:text-slate-900'}`}
               >
                 Iniciar Sesión
               </button>
               <button
                 type="button"
-                onClick={() => setAuthMode('register')}
+                onClick={() => { setAuthMode('register'); setAuthError(null); }}
                 className={`py-2 rounded-lg text-center transition ${authMode === 'register' ? 'bg-white text-slate-900 font-bold shadow-sm' : 'hover:text-slate-900'}`}
               >
                 Crear Cuenta
               </button>
             </div>
+
+            {authError && (
+              <div className="bg-red-50 border border-red-200 text-red-600 px-3 py-2 rounded-xl text-xs text-center font-medium">
+                {authError}
+              </div>
+            )}
 
             <form onSubmit={handleAuthSubmit} className="space-y-4">
               {authMode === 'register' && (
@@ -216,34 +229,34 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
-      <header className="border-b border-slate-800 bg-slate-900 px-6 py-4 flex items-center justify-between">
+      <header className="border-b border-slate-800 bg-slate-900 px-4 sm:px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center space-x-3">
-          <ShieldAlert className="h-7 w-7 text-indigo-500" />
+          <ShieldAlert className="h-7 w-7 text-indigo-500 flex-shrink-0" />
           <div>
-            <h1 className="text-lg font-bold text-white">SSPILLOWY Console</h1>
-            <p className="text-xs text-slate-400">Sesión activa: <span className="text-indigo-400 font-mono">{currentUser || 'admin@sspillowy.io'}</span></p>
+            <h1 className="text-base sm:text-lg font-bold text-white">SSPILLOWY Console</h1>
+            <p className="text-xs text-slate-400">Sesión activa: <span className="text-indigo-400 font-mono truncate">{currentUser || 'admin@sspillowy.com'}</span></p>
           </div>
         </div>
         <button
           onClick={() => setIsAuthenticated(false)}
-          className="flex items-center gap-2 text-xs text-slate-400 hover:text-white border border-slate-800 px-3 py-1.5 rounded-lg transition"
+          className="self-start sm:self-auto flex items-center gap-2 text-xs text-slate-400 hover:text-white border border-slate-800 px-3 py-1.5 rounded-lg transition"
         >
           <LogOut className="h-3.5 w-3.5" /> Cerrar Sesión
         </button>
       </header>
 
-      <main className="flex-1 max-w-7xl w-full mx-auto p-6 space-y-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6">
         {error && (
           <div className="bg-red-500/10 border border-red-500/30 text-red-400 p-3 rounded-lg text-xs">
             {error}
           </div>
         )}
 
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-5 space-y-4">
           <h2 className="text-sm font-bold text-slate-200 flex items-center gap-2">
             <Play className="h-4 w-4 text-indigo-400" /> Ejecutar Auditoría DevSecOps
           </h2>
-          <form onSubmit={handleScan} className="flex gap-4">
+          <form onSubmit={handleScan} className="flex flex-col sm:flex-row gap-3">
             <input
               type="url"
               required
@@ -255,7 +268,7 @@ export default function App() {
             <button
               type="submit"
               disabled={isScanning}
-              className="bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-6 py-2.5 rounded-lg text-sm flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              className="bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-6 py-2.5 rounded-lg text-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 whitespace-nowrap"
             >
               {isScanning ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
               {isScanning ? 'Procesando' : 'Auditar'}
@@ -263,38 +276,38 @@ export default function App() {
           </form>
 
           {logs.length > 0 && (
-            <div className="bg-black/90 border border-slate-800 rounded-lg p-3 font-mono text-xs text-emerald-400 space-y-1">
+            <div className="bg-black/90 border border-slate-800 rounded-lg p-3 font-mono text-xs text-emerald-400 space-y-1 overflow-x-auto">
               {logs.map((log, idx) => <div key={idx}>{log}</div>)}
             </div>
           )}
         </div>
 
         {findings.length > 0 && (
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-5 space-y-3">
             <h3 className="text-sm font-bold text-slate-100">Hallazgos Detectados</h3>
             <div className="space-y-2">
               {findings.map((f) => (
-                <div key={f.id} className="bg-slate-950 border border-slate-800 p-3 rounded-lg text-xs flex justify-between items-center">
+                <div key={f.id} className="bg-slate-950 border border-slate-800 p-3 rounded-lg text-xs flex flex-col sm:flex-row justify-between sm:items-center gap-2">
                   <div>
                     <span className="text-red-400 font-bold mr-2">[{f.severity}]</span>
                     <span className="text-slate-200 font-medium">{f.title}</span>
                     <p className="text-slate-400 font-mono text-[10px] mt-0.5">{f.file}</p>
                   </div>
-                  <span className="text-indigo-400 font-mono text-[11px]">{f.tool}</span>
+                  <span className="text-indigo-400 font-mono text-[11px] self-start sm:self-auto">{f.tool}</span>
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-5 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-3 gap-2">
             <div className="flex items-center gap-2">
               <Database className="h-5 w-5 text-emerald-400" />
-              <h2 className="text-sm font-bold text-slate-100">Registros en Base de Datos PostgreSQL 16</h2>
+              <h2 className="text-sm font-bold text-slate-100">Registros en Base de Datos SSPILLOWY</h2>
             </div>
-            <span className="text-xs bg-emerald-950 text-emerald-400 border border-emerald-800/50 px-2.5 py-1 rounded-full font-mono flex items-center gap-1.5">
-              <CheckCircle2 className="h-3 w-3" /> Conectado (`sspillowy_db`)
+            <span className="text-xs bg-emerald-950 text-emerald-400 border border-emerald-800/50 px-2.5 py-1 rounded-full font-mono flex items-center gap-1.5 self-start sm:self-auto">
+              <CheckCircle2 className="h-3 w-3" /> Conectado (`api.sspillowy.com`)
             </span>
           </div>
 
@@ -312,14 +325,14 @@ export default function App() {
                 {dbScans.length > 0 ? (
                   dbScans.map((scan) => (
                     <tr key={scan.id} className="hover:bg-slate-800/40">
-                      <td className="p-3 text-indigo-400">{scan.id}</td>
-                      <td className="p-3 text-slate-300">{scan.repository_id}</td>
-                      <td className="p-3">
+                      <td className="p-3 text-indigo-400 whitespace-nowrap">{scan.id}</td>
+                      <td className="p-3 text-slate-300 whitespace-nowrap">{scan.repository_id}</td>
+                      <td className="p-3 whitespace-nowrap">
                         <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded text-[10px]">
                           {scan.status}
                         </span>
                       </td>
-                      <td className="p-3 text-slate-500">{new Date(scan.created_at).toLocaleString()}</td>
+                      <td className="p-3 text-slate-500 whitespace-nowrap">{new Date(scan.created_at).toLocaleString()}</td>
                     </tr>
                   ))
                 ) : (

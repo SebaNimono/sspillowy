@@ -1,0 +1,31 @@
+name: CI/CD Pipeline SSPILLOWY Frontend
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 1. Obtener el código del repositorio
+        uses: actions/checkout@v4
+
+      - name: 2. Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'npm'
+
+      - name: 3. Instalar dependencias
+        run: npm ci
+
+      - name: 4. Validar tipos de TypeScript y Build
+        run: npm run build
+
+      # Opcional: Despliegue automático (ejemplo con Vercel, Netlify, GitHub Pages, etc.)
+      # - name: 5. Deploy
+      #   run: echo "Desplegando la aplicación..."
