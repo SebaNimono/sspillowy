@@ -14,7 +14,7 @@
         provisioning_profiles:
           - sspillowy
         certificates:
-          - LexyLegal
+          - "123456"
     scripts:
       - name: Set up code signing settings on Xcode project
         script: |
