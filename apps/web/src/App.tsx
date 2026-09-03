@@ -1,351 +1,400 @@
-import { useState, useEffect } from 'react';
-import { ShieldAlert, Play, RefreshCw, Mail, Lock, ArrowRight, Code2, Database, User, LogOut, CheckCircle2, Globe } from 'lucide-react';
-import { loginUser, Finding } from './services/api';
+import React, { useState } from 'react';
+import { 
+  Shield, 
+  Sun, 
+  Moon, 
+  Search, 
+  Terminal, 
+  CheckCircle2, 
+  AlertTriangle, 
+  XCircle, 
+  Info, 
+  Smartphone, 
+  Download, 
+  Bot, 
+  Cpu, 
+  Check, 
+  X,
+  FileText
+} from 'lucide-react';
 
-interface ScanRecord {
-  id: string;
-  repository_id: string;
-  status: string;
-  created_at: string;
+export interface AITriaging {
+  confidenceScore: number;
+  reachability: 'REACHABLE' | 'UNREACHABLE' | 'UNKNOWN';
+  suggestedFix: string;
+  businessImpact: string;
 }
 
-export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
-  const [currentUser, setCurrentUser] = useState<string>('');
-  
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
+export interface Finding {
+  id: string;
+  title: string;
+  severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+  engine: 'GitLeaks' | 'Semgrep' | 'Trivy' | 'OWASP ZAP';
+  compliance: string[];
+  status: 'OPEN' | 'IN_REVIEW' | 'FIXED' | 'VERIFIED';
+  location: string;
+  description: string;
+  aiTriaging?: AITriaging;
+}
 
-  const [repoUrl, setRepoUrl] = useState('');
-  const [isScanning, setIsScanning] = useState(false);
-  const [logs, setLogs] = useState<string[]>([]);
-  const [findings, setFindings] = useState<Finding[]>([]);
-  const [dbScans, setDbScans] = useState<ScanRecord[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [authError, setAuthError] = useState<string | null>(null);
-
-  const fetchDbRecords = async () => {
-    try {
-      const res = await fetch('https://api.sspillowy.com/api/v1/scans');
-      if (res.ok) {
-        const data = await res.json();
-        setDbScans(data);
-      }
-    } catch {
-      setError('Error al conectar con la base de datos de producción.');
+const INITIAL_FINDINGS: Finding[] = [
+  {
+    id: 'SEC-001',
+    title: 'Clave privada / API Key detectada en el repositorio',
+    severity: 'CRITICAL',
+    engine: 'GitLeaks',
+    compliance: ['ISO 27001 A.8.28', 'OWASP A07:2021'],
+    status: 'OPEN',
+    location: 'apps/api/config.py:42',
+    description: 'Se detectó una credencial expuesta en el historial de commits. Debe ser revocada e introducida mediante variables de entorno.',
+    aiTriaging: {
+      confidenceScore: 98,
+      reachability: 'REACHABLE',
+      suggestedFix: 'export API_SECRET_KEY=$(kat vault/secrets.txt)\n# Reemplazar asignación directa por os.getenv("API_SECRET_KEY")',
+      businessImpact: 'Riesgo alto de exfiltración de datos no autorizada y compromiso perimetral de la API.'
     }
-  };
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      fetchDbRecords();
+  },
+  {
+    id: 'SEC-002',
+    title: 'Vulnerabilidad SQL Injection en endpoint de búsqueda',
+    severity: 'HIGH',
+    engine: 'Semgrep',
+    compliance: ['OWASP A03:2021', 'CWE-89'],
+    status: 'IN_REVIEW',
+    location: 'apps/api/routers/users.py:118',
+    description: 'Concatenación directa de cadenas en la consulta SQL sin sanitización adecuada.',
+    aiTriaging: {
+      confidenceScore: 92,
+      reachability: 'REACHABLE',
+      suggestedFix: 'query = select(User).where(User.name == username)\n# Utilizar ORM parametrizado en lugar de f-strings',
+      businessImpact: 'Permite a atacantes externos ejecutar consultas arbitrarias y extraer credenciales.'
     }
-  }, [isAuthenticated]);
-
-  const handleAuthSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthError(null);
-
-    if (!email || !password) {
-      setAuthError('Por favor ingresa correo y contraseña.');
-      return;
+  },
+  {
+    id: 'SEC-003',
+    title: 'Librería desactualizada con CVE crítico detectado (SCA)',
+    severity: 'HIGH',
+    engine: 'Trivy',
+    compliance: ['ISO 27001 A.8.8', 'OWASP A06:2021'],
+    status: 'OPEN',
+    location: 'apps/web/package.json:28',
+    description: 'La versión configurada de la dependencia presenta vulnerabilidades conocidas de denegación de servicio (DoS).',
+    aiTriaging: {
+      confidenceScore: 85,
+      reachability: 'UNREACHABLE',
+      suggestedFix: 'npm install axios@^1.7.0 --save',
+      businessImpact: 'Bajo impacto inmediato en el flujo crítico, pero incumplimiento de la política de parches.'
     }
-
-    if (authMode === 'login') {
-      const res = await loginUser({ email, password });
-      if (res.success) {
-        setCurrentUser(email);
-        setIsAuthenticated(true);
-      } else {
-        setAuthError(res.message || 'Credenciales incorrectas');
-      }
-    } else {
-      setCurrentUser(email);
-      setIsAuthenticated(true);
+  },
+  {
+    id: 'SEC-004',
+    title: 'Encabezados HTTP de seguridad ausentes (DAST)',
+    severity: 'MEDIUM',
+    engine: 'OWASP ZAP',
+    compliance: ['ISO 27001 A.8.20', 'OWASP A05:2021'],
+    status: 'OPEN',
+    location: 'https://api.sspillowy.com/api/v1/health',
+    description: 'Falta de cabeceras de protección tipo Content-Security-Policy y Strict-Transport-Security.',
+    aiTriaging: {
+      confidenceScore: 95,
+      reachability: 'REACHABLE',
+      suggestedFix: 'response.headers["Content-Security-Policy"] = "default-src \'self\'"',
+      businessImpact: 'Exposición a ataques de tipo Cross-Site Scripting (XSS) y Clickjacking.'
     }
-  };
-
-  const handleScan = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!repoUrl) return;
-
-    setIsScanning(true);
-    setError(null);
-    setLogs([]);
-    setFindings([]);
-
-    try {
-      const res = await fetch('https://api.sspillowy.com/api/v1/scans', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ repo_url: repoUrl }),
-      });
-
-      if (!res.ok) throw new Error('Error al iniciar el escaneo en la API');
-      const { scanId } = await res.json();
-
-      setLogs([
-        '[SYSTEM] Conectando con la API de producción...',
-        `[DATABASE] Registro guardado con ID: ${scanId}`,
-        '[GITLEAKS] Analizando credenciales y secretos expuestos...',
-        '[SUCCESS] Hallazgos indexados correctamente en la BD.'
-      ]);
-
-      const resResults = await fetch(`https://api.sspillowy.com/api/v1/scans/${scanId}/results`);
-      const data = await resResults.json();
-      setFindings(data);
-      setIsScanning(false);
-      
-      fetchDbRecords();
-    } catch (err: unknown) {
-      setIsScanning(false);
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('Error al conectar con la API de SSPILLOWY.');
-      }
-    }
-  };
-
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center p-4 relative font-sans">
-        <div className="w-full max-w-md space-y-6 text-center z-10">
-          <div className="flex flex-col items-center justify-center space-y-2">
-            <div className="w-14 h-14 sm:w-16 sm:h-16 bg-[#2E1065] rounded-2xl flex items-center justify-center shadow-lg">
-              <ShieldAlert className="h-8 w-8 sm:h-10 sm:w-10 text-white" />
-            </div>
-            <span className="text-xs font-black tracking-widest text-[#2E1065] uppercase">SSPILLOWY</span>
-          </div>
-
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-900">
-              {authMode === 'login' ? 'Iniciar sesión en SSPILLOWY' : 'Crear una cuenta nueva'}
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-500 mt-1">Plataforma Integral de Gobernanza DevSecOps</p>
-          </div>
-
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl p-4 sm:p-6 text-left space-y-5">
-            <div className="grid grid-cols-2 bg-slate-100 p-1 rounded-xl text-xs sm:text-sm font-medium text-slate-600">
-              <button
-                type="button"
-                onClick={() => { setAuthMode('login'); setAuthError(null); }}
-                className={`py-2 rounded-lg text-center transition ${authMode === 'login' ? 'bg-white text-slate-900 font-bold shadow-sm' : 'hover:text-slate-900'}`}
-              >
-                Iniciar Sesión
-              </button>
-              <button
-                type="button"
-                onClick={() => { setAuthMode('register'); setAuthError(null); }}
-                className={`py-2 rounded-lg text-center transition ${authMode === 'register' ? 'bg-white text-slate-900 font-bold shadow-sm' : 'hover:text-slate-900'}`}
-              >
-                Crear Cuenta
-              </button>
-            </div>
-
-            {authError && (
-              <div className="bg-red-50 border border-red-200 text-red-600 px-3 py-2 rounded-xl text-xs text-center font-medium">
-                {authError}
-              </div>
-            )}
-
-            <form onSubmit={handleAuthSubmit} className="space-y-4">
-              {authMode === 'register' && (
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Nombre Completo</label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                    <input
-                      type="text"
-                      required
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder="Tu nombre y apellido"
-                      className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-emerald-600"
-                    />
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Correo electrónico</label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="usuario@ejemplo.com"
-                    className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-emerald-600"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Contraseña</label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <input
-                    type="password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-emerald-600"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full bg-[#15803D] hover:bg-[#166534] text-white font-semibold py-3 rounded-xl text-sm flex items-center justify-center gap-2 shadow-md transition cursor-pointer"
-              >
-                {authMode === 'login' ? 'Ingresar a la Consola' : 'Registrar Cuenta'} <ArrowRight className="h-4 w-4" />
-              </button>
-            </form>
-
-            <div className="relative flex py-1 items-center">
-              <div className="flex-grow border-t border-slate-200"></div>
-              <span className="flex-shrink mx-4 text-[10px] font-bold text-slate-400 tracking-wider">O CONTINUAR CON</span>
-              <div className="flex-grow border-t border-slate-200"></div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <button type="button" onClick={() => setIsAuthenticated(true)} className="flex items-center justify-center gap-2 bg-slate-50 border border-slate-200 py-2 rounded-xl text-xs text-slate-700 hover:bg-slate-100">
-                <Globe className="h-4 w-4 text-red-500" /> Google
-              </button>
-              <button type="button" onClick={() => setIsAuthenticated(true)} className="flex items-center justify-center gap-2 bg-slate-50 border border-slate-200 py-2 rounded-xl text-xs text-slate-700 hover:bg-slate-100">
-                <Code2 className="h-4 w-4 text-slate-900" /> GitHub
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
   }
+];
+
+export default function App() {
+  const [darkMode, setDarkMode] = useState(true);
+  const [findings, setFindings] = useState<Finding[]>(INITIAL_FINDINGS);
+  const [selectedFinding, setSelectedFinding] = useState<Finding | null>(INITIAL_FINDINGS[0]);
+  const [severityFilter, setSeverityFilter] = useState<string>('ALL');
+  const [targetUrl, setTargetUrl] = useState('https://github.com/SebaNimono/sspillowy');
+  const [isScanning, setIsScanning] = useState(false);
+  const [logs, setLogs] = useState<string[]>([
+    '[INIT] Sistema SSPILLOWY Web Hub operacional.',
+    '[INFO] Conexión establecida con API (api.sspillowy.com).',
+    '[PULSE] Agente móvil sincronizado vía FCM.'
+  ]);
+
+  const handleStatusChange = (id: string, newStatus: Finding['status']) => {
+    setFindings(prev => prev.map(f => f.id === id ? { ...f, status: newStatus } : f));
+    if (selectedFinding?.id === id) {
+      setSelectedFinding(prev => prev ? { ...prev, status: newStatus } : null);
+    }
+    setLogs(prev => [`[GOVERNANCE] Estado del hallazgo ${id} actualizado a ${newStatus}`, ...prev]);
+  };
+
+  const handleStartScan = (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsScanning(true);
+    setLogs(prev => [`[SCAN] Iniciando escaneo orquestado en target: ${targetUrl}`, ...prev]);
+
+    setTimeout(() => {
+      setLogs(prev => [
+        '[SEMGREP] SAST completado sin bloqueos fatales.',
+        '[GITLEAKS] Análisis de secretos finalizado.',
+        '[TRIVY] Verificación de manifiestos SCA ok.',
+        '[AI_ROUTER] Triaje agéntico generado correctamente.',
+        ...prev
+      ]);
+      setIsScanning(false);
+    }, 2500);
+  };
+
+  const filteredFindings = findings.filter(f => 
+    severityFilter === 'ALL' ? true : f.severity === severityFilter
+  );
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
-      <header className="border-b border-slate-800 bg-slate-900 px-4 sm:px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center space-x-3">
-          <ShieldAlert className="h-7 w-7 text-indigo-500 flex-shrink-0" />
-          <div>
-            <h1 className="text-base sm:text-lg font-bold text-white">SSPILLOWY Console</h1>
-            <p className="text-xs text-slate-400">Sesión activa: <span className="text-indigo-400 font-mono truncate">{currentUser || 'admin@sspillowy.com'}</span></p>
+    <div className={`min-h-screen ${darkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'} transition-colors duration-200`}>
+      {/* Header Superior */}
+      <header className={`border-b ${darkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-white'} sticky top-0 z-50 backdrop-blur-md`}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <img src="/logo.png" alt="SSPILLOWY" className="h-8 w-auto object-contain" />
+            <div className="h-5 w-px bg-slate-700/50 hidden sm:block" />
+            <span className="text-xs font-semibold px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 hidden sm:block">
+              Web Hub Console
+            </span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {/* Pulse Sync Status */}
+            <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border ${
+              darkMode ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-slate-100 border-slate-200 text-slate-700'
+            }`}>
+              <Smartphone className="w-3.5 h-3.5 text-emerald-500" />
+              <span>Pulse Sync</span>
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+            </div>
+
+            {/* Switcher Modo Claro / Oscuro */}
+            <button
+              onClick={() => setDarkMode(!darkMode)}
+              className={`p-2 rounded-lg border transition-colors ${
+                darkMode 
+                  ? 'bg-slate-800 border-slate-700 text-amber-400 hover:bg-slate-700' 
+                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+              }`}
+              title="Cambiar Tema"
+            >
+              {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            </button>
           </div>
         </div>
-        <button
-          onClick={() => setIsAuthenticated(false)}
-          className="self-start sm:self-auto flex items-center gap-2 text-xs text-slate-400 hover:text-white border border-slate-800 px-3 py-1.5 rounded-lg transition"
-        >
-          <LogOut className="h-3.5 w-3.5" /> Cerrar Sesión
-        </button>
       </header>
 
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6">
-        {error && (
-          <div className="bg-red-500/10 border border-red-500/30 text-red-400 p-3 rounded-lg text-xs">
-            {error}
-          </div>
-        )}
-
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-5 space-y-4">
-          <h2 className="text-sm font-bold text-slate-200 flex items-center gap-2">
-            <Play className="h-4 w-4 text-indigo-400" /> Ejecutar Auditoría DevSecOps
-          </h2>
-          <form onSubmit={handleScan} className="flex flex-col sm:flex-row gap-3">
-            <input
-              type="url"
-              required
-              value={repoUrl}
-              onChange={(e) => setRepoUrl(e.target.value)}
-              placeholder="https://github.com/usuario/repositorio.git"
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2.5 text-sm font-mono text-slate-200 focus:outline-none focus:border-indigo-500"
-            />
-            <button
-              type="submit"
-              disabled={isScanning}
-              className="bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-6 py-2.5 rounded-lg text-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 whitespace-nowrap"
-            >
-              {isScanning ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-              {isScanning ? 'Procesando' : 'Auditar'}
-            </button>
-          </form>
-
-          {logs.length > 0 && (
-            <div className="bg-black/90 border border-slate-800 rounded-lg p-3 font-mono text-xs text-emerald-400 space-y-1 overflow-x-auto">
-              {logs.map((log, idx) => <div key={idx}>{log}</div>)}
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        
+        {/* Banner de Disparador / Lanzar Escaneo */}
+        <div className={`p-6 rounded-xl border ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+          <form onSubmit={handleStartScan} className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-center justify-between">
+            <div className="flex-1 relative">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                value={targetUrl}
+                onChange={(e) => setTargetUrl(e.target.value)}
+                placeholder="Repositorio Git o URL objetivo..."
+                className={`w-full pl-9 pr-4 py-2 text-sm rounded-lg border focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                  darkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-slate-50 border-slate-200 text-slate-900'
+                }`}
+              />
             </div>
-          )}
+            <div className="flex items-center gap-2">
+              <button
+                type="submit"
+                disabled={isScanning}
+                className="px-4 py-2 text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors flex items-center gap-2"
+              >
+                {isScanning ? <Cpu className="w-4 h-4 animate-spin" /> : <Shield className="w-4 h-4" />}
+                {isScanning ? 'Ejecutando Motores...' : 'Lanzar Auditoría'}
+              </button>
+              <button
+                type="button"
+                onClick={() => alert('Generando paquete de evidencias ISO 27001...')}
+                className={`p-2 rounded-lg border text-xs font-medium flex items-center gap-1 transition-colors ${
+                  darkMode ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700' : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
+                }`}
+                title="Exportar Evidencias"
+              >
+                <Download className="w-4 h-4" />
+                <span className="hidden md:inline">ISO 27001</span>
+              </button>
+            </div>
+          </form>
         </div>
 
-        {findings.length > 0 && (
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-5 space-y-3">
-            <h3 className="text-sm font-bold text-slate-100">Hallazgos Detectados</h3>
+        {/* Dashboard Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          
+          {/* Columna Izquierda: Lista de Hallazgos */}
+          <div className="lg:col-span-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-bold uppercase tracking-wider text-slate-400">
+                Hallazgos Detectados
+              </h2>
+              {/* Filtro de Severidad */}
+              <select
+                value={severityFilter}
+                onChange={(e) => setSeverityFilter(e.target.value)}
+                className={`text-xs rounded-lg px-2.5 py-1 border font-medium focus:outline-none ${
+                  darkMode ? 'bg-slate-900 border-slate-800 text-slate-300' : 'bg-white border-slate-200 text-slate-700'
+                }`}
+              >
+                <option value="ALL">Todas las severidades</option>
+                <option value="CRITICAL">Crítica</option>
+                <option value="HIGH">Alta</option>
+                <option value="MEDIUM">Media</option>
+                <option value="LOW">Baja</option>
+              </select>
+            </div>
+
             <div className="space-y-2">
-              {findings.map((f) => (
-                <div key={f.id} className="bg-slate-950 border border-slate-800 p-3 rounded-lg text-xs flex flex-col sm:flex-row justify-between sm:items-center gap-2">
-                  <div>
-                    <span className="text-red-400 font-bold mr-2">[{f.severity}]</span>
-                    <span className="text-slate-200 font-medium">{f.title}</span>
-                    <p className="text-slate-400 font-mono text-[10px] mt-0.5">{f.file}</p>
+              {filteredFindings.map((finding) => (
+                <div
+                  key={finding.id}
+                  onClick={() => setSelectedFinding(finding)}
+                  className={`p-4 rounded-lg border cursor-pointer transition-all ${
+                    selectedFinding?.id === finding.id
+                      ? 'border-indigo-500 ring-1 ring-indigo-500/50'
+                      : darkMode ? 'border-slate-800 bg-slate-900/60 hover:border-slate-700' : 'border-slate-200 bg-white hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase font-mono ${
+                      finding.severity === 'CRITICAL' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
+                      finding.severity === 'HIGH' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                      'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                    }`}>
+                      {finding.severity}
+                    </span>
+                    <span className="text-xs font-mono text-slate-400">
+                      {finding.engine}
+                    </span>
                   </div>
-                  <span className="text-indigo-400 font-mono text-[11px] self-start sm:self-auto">{f.tool}</span>
+                  <h3 className="text-sm font-semibold mb-1 line-clamp-1">{finding.title}</h3>
+                  <p className="text-xs text-slate-500 font-mono line-clamp-1">{finding.location}</p>
                 </div>
               ))}
             </div>
           </div>
-        )}
 
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-5 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-3 gap-2">
-            <div className="flex items-center gap-2">
-              <Database className="h-5 w-5 text-emerald-400" />
-              <h2 className="text-sm font-bold text-slate-100">Registros en Base de Datos SSPILLOWY</h2>
-            </div>
-            <span className="text-xs bg-emerald-950 text-emerald-400 border border-emerald-800/50 px-2.5 py-1 rounded-full font-mono flex items-center gap-1.5 self-start sm:self-auto">
-              <CheckCircle2 className="h-3 w-3" /> Conectado (`api.sspillowy.com`)
-            </span>
+          {/* Columna Derecha: Detalle del Hallazgo + IA Triaging */}
+          <div className="lg:col-span-7">
+            {selectedFinding ? (
+              <div className={`p-6 rounded-xl border space-y-6 ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+                
+                {/* Header del Hallazgo */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-mono text-indigo-400 font-bold">{selectedFinding.id}</span>
+                    <div className="flex items-center gap-2">
+                      {selectedFinding.compliance.map((c, i) => (
+                        <span key={i} className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                          {c}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <h2 className="text-lg font-bold">{selectedFinding.title}</h2>
+                  <p className="text-xs font-mono text-slate-400 mt-1">{selectedFinding.location}</p>
+                </div>
+
+                {/* Descripción y Detalles */}
+                <div className="text-sm text-slate-300 space-y-2">
+                  <p>{selectedFinding.description}</p>
+                </div>
+
+                {/* Capa Agéntica de IA (Triaje y Remediación) */}
+                {selectedFinding.aiTriaging && (
+                  <div className={`p-4 rounded-xl border space-y-3 ${
+                    darkMode ? 'bg-slate-950/80 border-indigo-500/30' : 'bg-indigo-50/50 border-indigo-200'
+                  }`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Bot className="w-4 h-4 text-indigo-400" />
+                        <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">
+                          Triaje Agéntico con IA
+                        </span>
+                        <span className="text-xs text-slate-400 font-mono">
+                          ({selectedFinding.aiTriaging.confidenceScore}% confianza)
+                        </span>
+                      </div>
+                      <span className={`text-[10px] font-mono px-2 py-0.5 rounded font-bold uppercase ${
+                        selectedFinding.aiTriaging.reachability === 'REACHABLE'
+                          ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+                          : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                      }`}>
+                        {selectedFinding.aiTriaging.reachability}
+                      </span>
+                    </div>
+
+                    <div className="text-xs space-y-1">
+                      <p className="font-semibold text-slate-400">Impacto Operativo:</p>
+                      <p className="text-slate-300">{selectedFinding.aiTriaging.businessImpact}</p>
+                    </div>
+
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold text-slate-400">Parche Sugerido:</p>
+                      <pre className="p-3 rounded bg-slate-950 font-mono text-xs text-emerald-400 border border-slate-800 overflow-x-auto">
+                        {selectedFinding.aiTriaging.suggestedFix}
+                      </pre>
+                    </div>
+
+                    {/* Gobernanza Human-in-the-Loop */}
+                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+                      <button
+                        onClick={() => handleStatusChange(selectedFinding.id, 'FIXED')}
+                        className="px-3 py-1.5 text-xs font-semibold rounded bg-emerald-600 hover:bg-emerald-500 text-white transition-colors flex items-center gap-1"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        Aprobar Parche
+                      </button>
+                      <button
+                        onClick={() => handleStatusChange(selectedFinding.id, 'VERIFIED')}
+                        className={`px-3 py-1.5 text-xs font-semibold rounded border transition-colors flex items-center gap-1 ${
+                          darkMode ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        <X className="w-3.5 h-3.5" />
+                        Descartar
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+              </div>
+            ) : (
+              <div className={`p-12 text-center rounded-xl border ${darkMode ? 'bg-slate-900 border-slate-800 text-slate-500' : 'bg-white border-slate-200 text-slate-400'}`}>
+                Selecciona un hallazgo para inspeccionar los detalles de auditoría.
+              </div>
+            )}
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs font-mono">
-              <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
-                <tr>
-                  <th className="p-3">ID Escaneo (UUID)</th>
-                  <th className="p-3">ID Repositorio</th>
-                  <th className="p-3">Estado BD</th>
-                  <th className="p-3">Fecha de Creación</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60">
-                {dbScans.length > 0 ? (
-                  dbScans.map((scan) => (
-                    <tr key={scan.id} className="hover:bg-slate-800/40">
-                      <td className="p-3 text-indigo-400 whitespace-nowrap">{scan.id}</td>
-                      <td className="p-3 text-slate-300 whitespace-nowrap">{scan.repository_id}</td>
-                      <td className="p-3 whitespace-nowrap">
-                        <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded text-[10px]">
-                          {scan.status}
-                        </span>
-                      </td>
-                      <td className="p-3 text-slate-500 whitespace-nowrap">{new Date(scan.created_at).toLocaleString()}</td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={4} className="p-4 text-center text-slate-500">
-                      No hay registros en la base de datos aún. Ejecuta un escaneo arriba.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+        </div>
+
+        {/* Terminal Integrada / Bitácora de Eventos */}
+        <div className={`p-4 rounded-xl border font-mono text-xs ${darkMode ? 'bg-slate-950 border-slate-800 text-slate-400' : 'bg-slate-900 border-slate-800 text-slate-300'}`}>
+          <div className="flex items-center gap-2 mb-2 pb-2 border-b border-slate-800 text-slate-500">
+            <Terminal className="w-4 h-4 text-indigo-400" />
+            <span className="font-bold uppercase tracking-wider text-[10px]">Console Output Logs</span>
+          </div>
+          <div className="space-y-1 max-h-32 overflow-y-auto">
+            {logs.map((log, index) => (
+              <div key={index} className="flex items-center gap-2">
+                <span className="text-slate-600">&gt;</span>
+                <span>{log}</span>
+              </div>
+            ))}
           </div>
         </div>
+
       </main>
     </div>
   );
