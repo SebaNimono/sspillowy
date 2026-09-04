@@ -11,19 +11,12 @@
       groups:
         - app_store_credentials
     scripts:
-      - name: Set up keychain to be used for code signing
-        script: |
-          keychain initialize --path $HOME/Library/Keychains/build.keychain-db
-      - name: Fetch signing files from App Store Connect
+      - name: Fetch signing files and prepare keychain
         script: |
           app-store-connect fetch-signing-files "com.sspillowy.sspillowy" \
             --type IOS_APP_STORE \
             --create
-      - name: Add certificates to keychain
-        script: |
-          keychain add-certificates --path $HOME/Library/Keychains/build.keychain-db
-      - name: Set up code signing settings on Xcode project
-        script: |
+          keychain add-certificates
           xcode-project use-profiles
       - name: Get Flutter packages and iOS configuration
         script: |
