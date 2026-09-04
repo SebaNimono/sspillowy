@@ -3,7 +3,7 @@
     name: iOS Release Build & Deploy to TestFlight
     max_build_duration: 120
     instance_type: mac_mini_m2
-    working_directory: ticasistente
+    working_directory: .
     environment:
       groups:
         - app_store_credentials
