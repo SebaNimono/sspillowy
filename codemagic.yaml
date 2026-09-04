@@ -2,7 +2,7 @@
   ios-release-workflow:
     name: iOS Release Build & Deploy to TestFlight
     max_build_duration: 120
-    instance_type: mac_mini_m1
+    instance_type: mac_mini_m2
     working_directory: ticasistente
     environment:
       flutter: stable
@@ -13,7 +13,7 @@
     scripts:
       - name: Set up keychain to be used for code signing
         script: |
-          keychain initialize
+          keychain initialize --path $HOME/Library/Keychains/build.keychain-db
       - name: Fetch signing files from App Store Connect
         script: |
           app-store-connect fetch-signing-files "com.sspillowy.sspillowy" \
@@ -21,7 +21,7 @@
             --create
       - name: Add certificates to keychain
         script: |
-          keychain add-certificates
+          keychain add-certificates --path $HOME/Library/Keychains/build.keychain-db
       - name: Set up code signing settings on Xcode project
         script: |
           xcode-project use-profiles
