@@ -26,9 +26,6 @@
       - name: Get Flutter packages
         script: |
           flutter packages pub get
-      - name: Install CocoaPods
-        script: |
-          cd ios && pod install
       - name: Build ipa for App Store Distribution
         script: |
           AUTO_BUILD=$(($BUILD_NUMBER + 5))
