@@ -5,14 +5,19 @@
     instance_type: mac_mini_m2
     working_directory: ticasistente
     environment:
+      groups:
+        - app_store_credentials
+      vars:
+        APP_STORE_CONNECT_ISSUER_ID: $APP_STORE_CONNECT_ISSUER_ID
+        APP_STORE_CONNECT_KEY_IDENTIFIER: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        APP_STORE_CONNECT_PRIVATE_KEY: $APP_STORE_CONNECT_PRIVATE_KEY
       flutter: stable
       xcode: latest
       cocoapods: default
-      groups:
-        - app_store_credentials
     scripts:
-      - name: Fetch signing files and prepare keychain
+      - name: Set up keychain and fetch signing files
         script: |
+          keychain initialize
           app-store-connect fetch-signing-files "com.sspillowy.sspillowy" \
             --type IOS_APP_STORE \
             --create
@@ -30,9 +35,7 @@
         script: |
           AUTO_BUILD=$(($BUILD_NUMBER + 5))
           flutter build ipa --release \
-            --build-number=$AUTO_BUILD \
-            --export-options-plist=/Users/builder/export_options.plist
-          find . -name "*.ipa" -exec cp {} ./ \; || true
+            --build-number=$AUTO_BUILD
     artifacts:
       - "*.ipa"
       - build/ios/ipa/*.ipa
