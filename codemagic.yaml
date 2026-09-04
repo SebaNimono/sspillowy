@@ -23,11 +23,9 @@
             --create
           keychain add-certificates
           xcode-project use-profiles
-      - name: Get Flutter packages and iOS configuration
+      - name: Get Flutter packages
         script: |
-          flutter config --no-enable-swift-package-manager
           flutter packages pub get
-          flutter build ios --config-only
       - name: Install CocoaPods
         script: |
           cd ios && pod install
