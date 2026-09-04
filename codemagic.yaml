@@ -30,7 +30,8 @@
         script: |
           AUTO_BUILD=$(($BUILD_NUMBER + 5))
           flutter build ipa --release \
-            --build-number=$AUTO_BUILD
+            --build-number=$AUTO_BUILD \
+            --export-options-plist=/Users/builder/export_options.plist
     artifacts:
       - "*.ipa"
       - build/ios/ipa/*.ipa
