@@ -5,45 +5,6 @@ import { Toast, ToastMessage } from '../components/Toast';
 import { Repository, fetchRepositories, createRepository, triggerScan } from '../api/client';
 import { FolderGit2, Plus, Play, GitBranch, RefreshCw } from 'lucide-react';
 
-const FALLBACK_REPOS: Repository[] = [
-  {
-    id: 'repo-1',
-    name: 'sspillowy-backend-api',
-    url: 'https://github.com/sspillowy/backend-api',
-    branch: 'main',
-    is_active: true,
-    health_score: 88,
-    open_criticals: 1,
-    open_highs: 2,
-    total_findings: 12,
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: 'repo-2',
-    name: 'payment-gateway-service',
-    url: 'https://github.com/sspillowy/payment-service',
-    branch: 'develop',
-    is_active: true,
-    health_score: 62,
-    open_criticals: 3,
-    open_highs: 5,
-    total_findings: 28,
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: 'repo-3',
-    name: 'auth-identity-provider',
-    url: 'https://github.com/sspillowy/auth-provider',
-    branch: 'main',
-    is_active: true,
-    health_score: 95,
-    open_criticals: 0,
-    open_highs: 1,
-    total_findings: 4,
-    created_at: new Date().toISOString(),
-  },
-];
-
 interface PageProps {
   sidebarState: SidebarState;
   setSidebarState: (state: SidebarState) => void;
@@ -69,15 +30,15 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
   const loadRepos = () => {
     setLoading(true);
     fetchRepositories()
-      .then((data) => {
-        if (data && data.length > 0) {
-          setRepos(data);
-        } else {
-          setRepos(FALLBACK_REPOS);
-        }
-      })
+      .then((data) => setRepos(data || []))
       .catch(() => {
-        setRepos(FALLBACK_REPOS);
+        setRepos([]);
+        setToast({
+          id: Date.now().toString(),
+          type: 'error',
+          title: 'Error al cargar repositorios',
+          message: 'No se pudo conectar con la API.',
+        });
       })
       .finally(() => setLoading(false));
   };
@@ -131,22 +92,30 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
   };
 
   const handleTriggerScan = async (repoId: string, repoName: string) => {
-    setScanStatus(`Orquestando análisis multihilo (Semgrep, Trivy, GitLeaks) para ${repoName}...`);
+    setScanStatus(`Semgrep en curso para ${repoName} (clone + análisis)…`);
     try {
       await triggerScan(repoId);
-    } catch (err) {
-      // simulate scanning
-    }
-    setTimeout(() => {
-      setScanStatus(`Escaneo finalizado exitosamente para ${repoName}. Hallazgos actualizados.`);
       setToast({
         id: Date.now().toString(),
         type: 'info',
-        title: 'Escaneo Finalizado',
-        message: `Análisis de seguridad completado para ${repoName}.`,
+        title: 'Escaneo iniciado',
+        message: `Semgrep está analizando ${repoName}. En unos segundos refresca Hallazgos / Escaneos.`,
       });
-      setTimeout(() => setScanStatus(null), 3500);
-    }, 1800);
+      // Dar tiempo al background job y refrescar contadores del repo
+      setTimeout(() => {
+        loadRepos();
+        setScanStatus(`Escaneo de ${repoName} encolado. Revisa Escaneos/Hallazgos para el resultado.`);
+        setTimeout(() => setScanStatus(null), 4000);
+      }, 8000);
+    } catch (err) {
+      setScanStatus(null);
+      setToast({
+        id: Date.now().toString(),
+        type: 'error',
+        title: 'No se pudo iniciar el escaneo',
+        message: err instanceof Error ? err.message : 'Error de API',
+      });
+    }
   };
 
   return (

@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query, status
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
@@ -64,6 +64,7 @@ from models import (  # noqa: E402
     Scan,
     SecurityGate,
 )
+from semgrep_scan import run_semgrep_scan_job, semgrep_available  # noqa: E402
 
 app = FastAPI(
     title="SSPILLOWY API Core",
@@ -315,10 +316,11 @@ async def health_check():
     return {
         "status": "healthy" if db_ok else "degraded",
         "service": "SSPILLOWY Core API",
-        "version": "0.2.0",
+        "version": "0.3.0",
         "database": "postgresql (ok)" if db_ok else "unavailable",
         "data_source": "postgresql" if db_ok else "none",
-        "redis_worker": "arq (ready)",
+        "semgrep": "available" if semgrep_available() else "missing",
+        "redis_worker": "inline-background (semgrep)",
         "email_mailer": mailer_status(),
     }
 
@@ -475,7 +477,7 @@ async def update_finding_status(finding_id: str, payload: FindingStatusUpdate):
     status_code=status.HTTP_201_CREATED,
     tags=["Scans"],
 )
-async def trigger_scan(scan_in: ScanCreate):
+async def trigger_scan(scan_in: ScanCreate, background_tasks: BackgroundTasks):
     _require_db()
     db = SessionLocal()
     try:
@@ -503,10 +505,12 @@ async def trigger_scan(scan_in: ScanCreate):
             "web_hub",
             "SCAN_TRIGGERED",
             repo.name,
-            f"Escaneo {row.id} encolado (Semgrep, Trivy, GitLeaks, ZAP).",
+            f"Escaneo {row.id} encolado · motor Semgrep (background).",
         )
         db.commit()
         db.refresh(row)
+        scan_id = row.id
+        background_tasks.add_task(run_semgrep_scan_job, scan_id)
         return _scan_out(row)
     finally:
         db.close()
