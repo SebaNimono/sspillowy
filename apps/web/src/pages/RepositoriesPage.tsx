@@ -4,6 +4,7 @@ import { SidebarState } from '../components/Sidebar';
 import { Toast, ToastMessage } from '../components/Toast';
 import { Repository, fetchRepositories, createRepository, triggerScan } from '../api/client';
 import { FolderGit2, Plus, Play, GitBranch, RefreshCw } from 'lucide-react';
+import { useI18n } from '../i18n/I18nProvider';
 
 interface PageProps {
   sidebarState: SidebarState;
@@ -16,6 +17,7 @@ interface PageProps {
 }
 
 export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebarState, user, onLogout, onNavigate, unreadCount, onGoToSite }) => {
+  const { t } = useI18n();
   const [repos, setRepos] = useState<Repository[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -123,8 +125,8 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
       <Toast toast={toast} onClose={() => setToast(null)} />
 
       <Header
-        title="Gestión de Repositorios"
-        subtitle="Registro de repositorios Git monitoreados, estado de salud y escaneo bajo demanda"
+        title={t('pages.repositories.title')}
+        subtitle={t('pages.repositories.subtitle')}
         sidebarState={sidebarState}
         setSidebarState={setSidebarState}
         user={user}
@@ -160,32 +162,32 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
         <div className="card-header">
           <div className="card-title">
             <FolderGit2 size={20} color="#0969da" />
-            <span>Repositorios Monitoreados ({repos.length})</span>
+            <span>{t('repos.monitored', { count: repos.length })}</span>
           </div>
 
           <button className="btn btn-primary" onClick={() => setShowModal(true)}>
             <Plus size={16} />
-            <span>+ Nuevo Repositorio</span>
+            <span>{t('repos.newRepo')}</span>
           </button>
         </div>
 
         {loading ? (
           <div style={{ color: '#656d76', padding: '2rem', textAlign: 'center' }}>
             <RefreshCw size={20} className="spin" style={{ marginBottom: '0.5rem' }} />
-            <div>Cargando inventario de repositorios...</div>
+            <div>{t('common.loading')}</div>
           </div>
         ) : (
           <div className="table-container">
             <table className="custom-table">
               <thead>
                 <tr>
-                  <th>Estado</th>
-                  <th>Nombre Repositorio</th>
-                  <th>Rama</th>
-                  <th>Health Score</th>
-                  <th>Críticas</th>
-                  <th>Total Hallazgos</th>
-                  <th>Acciones DevSecOps</th>
+                  <th>{t('repos.status')}</th>
+                  <th>{t('repos.name')}</th>
+                  <th>{t('repos.branch')}</th>
+                  <th>{t('repos.health')}</th>
+                  <th>{t('repos.criticals')}</th>
+                  <th>{t('repos.totalFindings')}</th>
+                  <th>{t('repos.actions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -217,10 +219,10 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
                     </td>
                     <td>
                       <span className={`badge ${repo.open_criticals > 0 ? 'badge-critical' : 'badge-low'}`}>
-                        {repo.open_criticals} Críticas
+                        {t('repos.criticalCount', { count: repo.open_criticals })}
                       </span>
                     </td>
-                    <td style={{ fontWeight: 500, color: '#656d76' }}>{repo.total_findings} hallazgos</td>
+                    <td style={{ fontWeight: 500, color: '#656d76' }}>{t('repos.findingsCount', { count: repo.total_findings })}</td>
                     <td>
                       <button
                         className="btn btn-secondary"
@@ -228,7 +230,7 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
                         onClick={() => handleTriggerScan(repo.id, repo.name)}
                       >
                         <Play size={14} color="#0969da" />
-                        <span>Ejecutar Escaneo</span>
+                        <span>{t('repos.runScan')}</span>
                       </button>
                     </td>
                   </tr>

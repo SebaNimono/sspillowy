@@ -138,6 +138,39 @@ def _cwe_from(result: dict) -> str | None:
     return None
 
 
+def relative_file_path(raw: str | None, scan_root: Path | None = None) -> str | None:
+    """Devuelve ruta relativa al repo (sin /tmp/.../repo/)."""
+    if not raw:
+        return None
+    s = str(raw).replace("\\", "/").strip()
+    if not s:
+        return None
+
+    if scan_root is not None:
+        try:
+            root = str(scan_root.resolve()).replace("\\", "/")
+            abs_s = str(Path(s).resolve()).replace("\\", "/") if Path(s).is_absolute() else s
+            if abs_s.startswith(root.rstrip("/") + "/"):
+                return abs_s[len(root.rstrip("/")) + 1 :]
+            rel = Path(s)
+            if not rel.is_absolute():
+                return s.lstrip("./")
+            return str(Path(s).resolve().relative_to(scan_root.resolve())).replace("\\", "/")
+        except Exception:
+            pass
+
+    # Hallazgos ya guardados con path absoluto del clone temporal
+    for marker in ("/repo/", "/vuln_sample/"):
+        if marker in s:
+            return s.split(marker, 1)[1]
+    if "sspillowy-scan-" in s:
+        parts = s.split("/")
+        if "repo" in parts:
+            idx = parts.index("repo")
+            return "/".join(parts[idx + 1 :])
+    return s.lstrip("./")
+
+
 def _refresh_repo_counters(db, repo: Repository) -> None:
     findings = db.query(Finding).filter(Finding.repository_id == repo.id).all()
     opens = [f for f in findings if (f.status or "") in OPEN_STATUSES]
@@ -173,6 +206,7 @@ def persist_semgrep_results(
     repo: Repository,
     results: list[dict],
     source_note: str,
+    scan_root: Path | None = None,
 ) -> dict[str, int]:
     counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFO": 0}
     # Limitar volumen por escaneo (Railway / demo)
@@ -182,7 +216,7 @@ def persist_semgrep_results(
         severity = _map_severity(extra.get("severity") or result.get("severity"))
         counts[severity] = counts.get(severity, 0) + 1
         check_id = result.get("check_id") or "semgrep.rule"
-        path = result.get("path") or ""
+        path = relative_file_path(result.get("path") or "", scan_root) or ""
         start = (result.get("start") or {}).get("line")
         message = (extra.get("message") or check_id).strip()
         title = f"{check_id}: {message}"[:200]
@@ -194,7 +228,7 @@ def persist_semgrep_results(
             description=message[:2000],
             engine="semgrep",
             severity=severity,
-            file_path=str(path)[:500] if path else None,
+            file_path=path[:500] if path else None,
             line_number=int(start) if start else None,
             cwe=_cwe_from(result),
             owasp_category=None,
@@ -279,7 +313,14 @@ def run_semgrep_scan_job(scan_id: str) -> None:
 
         try:
             results = _run_semgrep(target)
-            persist_semgrep_results(db, scan=scan, repo=repo, results=results, source_note=source_note)
+            persist_semgrep_results(
+                db,
+                scan=scan,
+                repo=repo,
+                results=results,
+                source_note=source_note,
+                scan_root=target,
+            )
             db.commit()
         except Exception as scan_exc:
             scan.status = "FAILED"

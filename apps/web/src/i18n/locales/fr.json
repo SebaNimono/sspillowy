@@ -1,0 +1,110 @@
+{
+  "lang": {
+    "label": "Langue",
+    "es": "Español",
+    "en": "English",
+    "pt": "Português",
+    "fr": "Français"
+  },
+  "nav": {
+    "dashboard": "Tableau de bord",
+    "repositories": "Dépôts",
+    "findings": "Matrice des findings",
+    "scans": "Scans",
+    "gates": "Security Gates (CI/CD)",
+    "notifications": "Notifications",
+    "reports": "Rapports ISO 27001",
+    "brandSub": "Web Hub • DevSecOps",
+    "hideMenu": "Masquer le menu",
+    "collapseMenu": "Réduire le menu",
+    "expandMenu": "Développer le menu"
+  },
+  "header": {
+    "healthScore": "Health Score",
+    "pulseSync": "Pulse App Sync : Active",
+    "notifications": "Notifications",
+    "viewAll": "Tout voir",
+    "publicSite": "Site public",
+    "logout": "Déconnexion",
+    "openMenu": "Ouvrir le menu de navigation",
+    "keepMenuOpen": "Garder le menu ouvert"
+  },
+  "pages": {
+    "dashboard": {
+      "title": "Tableau de bord DevSecOps",
+      "subtitle": "Métriques réelles de vos dépôts et findings — personnalisez seuils et blocs"
+    },
+    "repositories": {
+      "title": "Gestion des dépôts",
+      "subtitle": "Dépôts Git surveillés, score de santé et scan à la demande"
+    },
+    "findings": {
+      "title": "Matrice unifiée des findings",
+      "subtitle": "Consolidation déterministe des scanners avec triage IA (Human-in-the-loop)"
+    },
+    "scans": {
+      "title": "Orchestration des scans",
+      "subtitle": "Timeline des workers : Semgrep, Trivy, GitLeaks et OWASP ZAP"
+    },
+    "gates": {
+      "title": "Security Gates & règles CI/CD",
+      "subtitle": "Seuils de déploiement et contrôle de bypass mobile (SSPILLOWY Pulse)"
+    },
+    "notifications": {
+      "title": "Boîte de notifications",
+      "subtitle": "Alertes secrets, blocages Security Gate et événements Pulse App"
+    },
+    "reports": {
+      "title": "Rapports et conformité",
+      "subtitle": "Preuves ISO/IEC 27001:2022, mapping OWASP/CWE et rapports exécutifs"
+    }
+  },
+  "findings": {
+    "auditFilters": "Filtres d'audit :",
+    "allEngines": "Tous les moteurs",
+    "allSeverities": "Toutes les sévérités",
+    "allStatuses": "Tous les statuts",
+    "severity": "Sévérité",
+    "titleCol": "Vulnérabilité / Titre",
+    "engine": "Moteur",
+    "statusHitl": "Statut HITL",
+    "fileEndpoint": "Fichier / Endpoint",
+    "aiTriage": "Triage IA",
+    "action": "Action",
+    "loading": "Chargement des findings...",
+    "detected": "Vulnérabilités & secrets détectés ({{count}})",
+    "inspect": "Inspecter",
+    "pending": "En attente",
+    "confidence": "Confiance {{pct}} %",
+    "apiEndpoint": "API Endpoint",
+    "line": "Ligne {{n}}",
+    "close": "Fermer",
+    "inReview": "En revue",
+    "falsePositive": "Faux positif",
+    "acceptRisk": "Accepter le risque",
+    "approveFixed": "Approuver & FIXED",
+    "critical": "Critique",
+    "high": "Élevé",
+    "medium": "Moyen",
+    "low": "Faible"
+  },
+  "repos": {
+    "newRepo": "+ Nouveau dépôt",
+    "monitored": "Dépôts surveillés ({{count}})",
+    "status": "État",
+    "name": "Nom du dépôt",
+    "branch": "Branche",
+    "health": "Health Score",
+    "criticals": "Critiques",
+    "totalFindings": "Total findings",
+    "actions": "Actions DevSecOps",
+    "runScan": "Lancer le scan",
+    "criticalCount": "{{count}} Critiques",
+    "findingsCount": "{{count}} findings"
+  },
+  "common": {
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "loading": "Chargement..."
+  }
+}

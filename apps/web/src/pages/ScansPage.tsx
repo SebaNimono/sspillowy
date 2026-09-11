@@ -5,6 +5,7 @@ import { Toast, ToastMessage } from '../components/Toast';
 import { Scan, fetchScans, triggerScan } from '../api/client';
 import { FALLBACK_SCANS, REPO_NAMES } from '../api/fallbacks';
 import { Radar, Play, GitBranch, RefreshCw } from 'lucide-react';
+import { useI18n } from '../i18n/I18nProvider';
 
 interface PageProps {
   sidebarState: SidebarState;
@@ -25,6 +26,7 @@ export const ScansPage: React.FC<PageProps> = ({
   unreadCount,
   onGoToSite,
 }) => {
+  const { t } = useI18n();
   const [scans, setScans] = useState<Scan[]>(FALLBACK_SCANS);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<ToastMessage | null>(null);
@@ -80,8 +82,8 @@ export const ScansPage: React.FC<PageProps> = ({
     <div>
       <Toast toast={toast} onClose={() => setToast(null)} />
       <Header
-        title="Orquestación de Escaneos"
-        subtitle="Línea de tiempo de workers ARQ: Semgrep, Trivy, GitLeaks y OWASP ZAP"
+        title={t('pages.scans.title')}
+        subtitle={t('pages.scans.subtitle')}
         sidebarState={sidebarState}
         setSidebarState={setSidebarState}
         user={user}

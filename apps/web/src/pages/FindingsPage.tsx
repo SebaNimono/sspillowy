@@ -5,6 +5,8 @@ import { Toast, ToastMessage } from '../components/Toast';
 import { Finding, fetchFindings, updateFindingStatus } from '../api/client';
 import { FALLBACK_FINDINGS } from '../api/fallbacks';
 import { ShieldAlert, Filter, Sparkles, CheckCircle2, FileCode, ChevronRight, CircleSlash, Flag, Eye } from 'lucide-react';
+import { useI18n } from '../i18n/I18nProvider';
+import { formatFilePath } from '../utils/formatFilePath';
 
 interface PageProps {
   sidebarState: SidebarState;
@@ -25,6 +27,7 @@ export const FindingsPage: React.FC<PageProps> = ({
   unreadCount,
   onGoToSite,
 }) => {
+  const { t } = useI18n();
   const [findings, setFindings] = useState<Finding[]>(FALLBACK_FINDINGS);
   const [loading, setLoading] = useState(true);
   const [selectedEngine, setSelectedEngine] = useState<string>('all');
@@ -75,13 +78,13 @@ export const FindingsPage: React.FC<PageProps> = ({
   const getSeverityBadge = (severity: string) => {
     switch (severity) {
       case 'CRITICAL':
-        return <span className="badge badge-critical">Crítico</span>;
+        return <span className="badge badge-critical">{t('findings.critical')}</span>;
       case 'HIGH':
-        return <span className="badge badge-high">Alto</span>;
+        return <span className="badge badge-high">{t('findings.high')}</span>;
       case 'MEDIUM':
-        return <span className="badge badge-medium">Medio</span>;
+        return <span className="badge badge-medium">{t('findings.medium')}</span>;
       default:
-        return <span className="badge badge-low">Bajo</span>;
+        return <span className="badge badge-low">{t('findings.low')}</span>;
     }
   };
 
@@ -105,8 +108,8 @@ export const FindingsPage: React.FC<PageProps> = ({
       <Toast toast={toast} onClose={() => setToast(null)} />
 
       <Header
-        title="Matriz Unificada de Hallazgos"
-        subtitle="Consolidación determinista de escáneres con triaje asistido por IA (Human-in-the-loop)"
+        title={t('pages.findings.title')}
+        subtitle={t('pages.findings.subtitle')}
         sidebarState={sidebarState}
         setSidebarState={setSidebarState}
         user={user}
@@ -120,11 +123,11 @@ export const FindingsPage: React.FC<PageProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#656d76', fontSize: '0.85rem', fontWeight: 600 }}>
             <Filter size={16} color="#0969da" />
-            <span>Filtros de Auditoría:</span>
+            <span>{t('findings.auditFilters')}</span>
           </div>
 
           <select value={selectedEngine} onChange={(e) => setSelectedEngine(e.target.value)} className="filter-select">
-            <option value="all">Todos los Motores</option>
+            <option value="all">{t('findings.allEngines')}</option>
             <option value="semgrep">Semgrep (SAST)</option>
             <option value="trivy">Trivy (SCA / IaC)</option>
             <option value="gitleaks">GitLeaks (Secretos)</option>
@@ -132,15 +135,15 @@ export const FindingsPage: React.FC<PageProps> = ({
           </select>
 
           <select value={selectedSeverity} onChange={(e) => setSelectedSeverity(e.target.value)} className="filter-select">
-            <option value="all">Todas las Severidades</option>
-            <option value="CRITICAL">Crítico</option>
-            <option value="HIGH">Alto</option>
-            <option value="MEDIUM">Medio</option>
-            <option value="LOW">Bajo</option>
+            <option value="all">{t('findings.allSeverities')}</option>
+            <option value="CRITICAL">{t('findings.critical')}</option>
+            <option value="HIGH">{t('findings.high')}</option>
+            <option value="MEDIUM">{t('findings.medium')}</option>
+            <option value="LOW">{t('findings.low')}</option>
           </select>
 
           <select value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)} className="filter-select">
-            <option value="all">Todos los estados</option>
+            <option value="all">{t('findings.allStatuses')}</option>
             <option value="OPEN">OPEN</option>
             <option value="IN_REVIEW">IN_REVIEW</option>
             <option value="FIXED">FIXED</option>
@@ -154,24 +157,24 @@ export const FindingsPage: React.FC<PageProps> = ({
         <div className="card-header">
           <div className="card-title">
             <ShieldAlert size={20} color="#0969da" />
-            <span>Vulnerabilidades & Secretos Detectados ({findings.length})</span>
+            <span>{t('findings.detected', { count: findings.length })}</span>
           </div>
         </div>
 
         {loading ? (
-          <div style={{ color: '#656d76', padding: '2rem', textAlign: 'center' }}>Cargando hallazgos...</div>
+          <div style={{ color: '#656d76', padding: '2rem', textAlign: 'center' }}>{t('findings.loading')}</div>
         ) : (
           <div className="table-container">
             <table className="custom-table">
               <thead>
                 <tr>
-                  <th>Severidad</th>
-                  <th>Vulnerabilidad / Título</th>
-                  <th>Motor</th>
-                  <th>Estado HITL</th>
-                  <th>Archivo / Endpoint</th>
-                  <th>IA Triaje</th>
-                  <th>Acción</th>
+                  <th>{t('findings.severity')}</th>
+                  <th>{t('findings.titleCol')}</th>
+                  <th>{t('findings.engine')}</th>
+                  <th>{t('findings.statusHitl')}</th>
+                  <th>{t('findings.fileEndpoint')}</th>
+                  <th>{t('findings.aiTriage')}</th>
+                  <th>{t('findings.action')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -191,22 +194,22 @@ export const FindingsPage: React.FC<PageProps> = ({
                     <td>{getStatusBadge(f.status)}</td>
                     <td>
                       <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: '#0969da', fontWeight: 600 }}>
-                        {f.file_path || 'API Endpoint'} {f.line_number ? `:${f.line_number}` : ''}
+                        {formatFilePath(f.file_path) || t('findings.apiEndpoint')} {f.line_number ? `:${f.line_number}` : ''}
                       </div>
                     </td>
                     <td>
                       {f.ai_triaged ? (
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', color: '#8250df', fontSize: '0.8rem', fontWeight: 600 }}>
                           <Sparkles size={14} color="#8250df" />
-                          <span>Confianza {Math.round((f.ai_confidence || 0.9) * 100)}%</span>
+                          <span>{t('findings.confidence', { pct: Math.round((f.ai_confidence || 0.9) * 100) })}</span>
                         </span>
                       ) : (
-                        <span style={{ color: '#656d76', fontSize: '0.8rem' }}>Pendiente</span>
+                        <span style={{ color: '#656d76', fontSize: '0.8rem' }}>{t('findings.pending')}</span>
                       )}
                     </td>
                     <td>
                       <button className="btn btn-secondary" style={{ padding: '0.4rem 0.75rem', fontSize: '0.8rem' }} onClick={() => setActiveFinding(f)}>
-                        <span>Inspeccionar</span>
+                        <span>{t('findings.inspect')}</span>
                         <ChevronRight size={14} />
                       </button>
                     </td>
@@ -237,7 +240,10 @@ export const FindingsPage: React.FC<PageProps> = ({
             <div style={{ background: '#f6f8fa', borderRadius: '6px', padding: '0.85rem', marginBottom: '1rem', border: '1px solid var(--border-default)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#0969da', fontFamily: 'var(--font-mono)', fontSize: '0.85rem', fontWeight: 600 }}>
                 <FileCode size={16} />
-                <span>{activeFinding.file_path} {activeFinding.line_number ? `(Línea ${activeFinding.line_number})` : ''}</span>
+                <span>
+                  {formatFilePath(activeFinding.file_path) || t('findings.apiEndpoint')}
+                  {activeFinding.line_number ? ` (${t('findings.line', { n: activeFinding.line_number })})` : ''}
+                </span>
               </div>
             </div>
 
@@ -261,22 +267,22 @@ export const FindingsPage: React.FC<PageProps> = ({
             )}
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.55rem', marginTop: '1.5rem', flexWrap: 'wrap' }}>
-              <button className="btn btn-secondary" onClick={() => setActiveFinding(null)}>Cerrar</button>
-              <button className="btn btn-secondary" onClick={() => applyStatus('IN_REVIEW', 'En revisión', 'El hallazgo quedó en IN_REVIEW. La IA no cambia el estado.')}>
+              <button className="btn btn-secondary" onClick={() => setActiveFinding(null)}>{t('findings.close')}</button>
+              <button className="btn btn-secondary" onClick={() => applyStatus('IN_REVIEW', t('findings.inReview'), 'IN_REVIEW')}>
                 <Eye size={14} />
-                <span>En revisión</span>
+                <span>{t('findings.inReview')}</span>
               </button>
-              <button className="btn btn-secondary" onClick={() => applyStatus('FALSE_POSITIVE', 'Marcado como falso positivo', 'Registro auditado. Requiere justificación humana.')}>
+              <button className="btn btn-secondary" onClick={() => applyStatus('FALSE_POSITIVE', t('findings.falsePositive'), 'FALSE_POSITIVE')}>
                 <CircleSlash size={14} />
-                <span>Falso positivo</span>
+                <span>{t('findings.falsePositive')}</span>
               </button>
-              <button className="btn btn-secondary" onClick={() => applyStatus('ACCEPTED_RISK', 'Riesgo aceptado', 'Excepción registrada. Security Gate y Pulse quedan notificados.')}>
+              <button className="btn btn-secondary" onClick={() => applyStatus('ACCEPTED_RISK', t('findings.acceptRisk'), 'ACCEPTED_RISK')}>
                 <Flag size={14} />
-                <span>Aceptar riesgo</span>
+                <span>{t('findings.acceptRisk')}</span>
               </button>
-              <button className="btn btn-primary" onClick={() => applyStatus('FIXED', 'Parche aprobado', 'Firma humana registrada. Estado transicionado a FIXED.')}>
+              <button className="btn btn-primary" onClick={() => applyStatus('FIXED', t('findings.approveFixed'), 'FIXED')}>
                 <CheckCircle2 size={16} />
-                <span>Aprobar & FIXED</span>
+                <span>{t('findings.approveFixed')}</span>
               </button>
             </div>
           </div>

@@ -22,6 +22,7 @@ import { AnimatedNumber } from '../components/AnimatedNumber';
 import { DashboardSettings } from '../components/DashboardSettings';
 import { PillowAgent } from '../components/PillowAgent';
 import { PillowWidgetBoard } from '../components/PillowWidgetBoard';
+import { useI18n } from '../i18n/I18nProvider';
 import { DashboardStats, HeatmapData, AuditEvent, fetchStats, fetchHeatmap, fetchAuditLog } from '../api/client';
 import {
   ALERT_COLORS,
@@ -143,6 +144,7 @@ export const DashboardPage: React.FC<PageProps> = ({
   unreadCount,
   onGoToSite,
 }) => {
+  const { t } = useI18n();
   const [config, setConfig] = useState<DashboardConfig>(() => loadDashboardConfig());
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [heatmap, setHeatmap] = useState<HeatmapData | null>(null);
@@ -273,8 +275,8 @@ export const DashboardPage: React.FC<PageProps> = ({
   return (
     <div className="dash">
       <Header
-        title="Dashboard General DevSecOps"
-        subtitle="Métricas reales de tus repos y hallazgos — personaliza umbrales y bloques"
+        title={t('pages.dashboard.title')}
+        subtitle={t('pages.dashboard.subtitle')}
         healthScore={dataReady ? resolvedStats.overall_health_score : undefined}
         sidebarState={sidebarState}
         setSidebarState={setSidebarState}

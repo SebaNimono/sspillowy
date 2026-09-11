@@ -1,0 +1,110 @@
+{
+  "lang": {
+    "label": "Language",
+    "es": "Español",
+    "en": "English",
+    "pt": "Português",
+    "fr": "Français"
+  },
+  "nav": {
+    "dashboard": "Overview Dashboard",
+    "repositories": "Repositories",
+    "findings": "Findings Matrix",
+    "scans": "Scans",
+    "gates": "Security Gates (CI/CD)",
+    "notifications": "Notifications",
+    "reports": "ISO 27001 Reports",
+    "brandSub": "Web Hub • DevSecOps",
+    "hideMenu": "Hide menu",
+    "collapseMenu": "Collapse menu",
+    "expandMenu": "Expand menu"
+  },
+  "header": {
+    "healthScore": "Health Score",
+    "pulseSync": "Pulse App Sync: Active",
+    "notifications": "Notifications",
+    "viewAll": "View all",
+    "publicSite": "Public site",
+    "logout": "Sign out",
+    "openMenu": "Open navigation menu",
+    "keepMenuOpen": "Keep menu open"
+  },
+  "pages": {
+    "dashboard": {
+      "title": "DevSecOps Overview Dashboard",
+      "subtitle": "Live metrics from your repos and findings — customize thresholds and widgets"
+    },
+    "repositories": {
+      "title": "Repository Management",
+      "subtitle": "Monitored Git repositories, health status and on-demand scanning"
+    },
+    "findings": {
+      "title": "Unified Findings Matrix",
+      "subtitle": "Deterministic scanner consolidation with AI-assisted triage (Human-in-the-loop)"
+    },
+    "scans": {
+      "title": "Scan Orchestration",
+      "subtitle": "Worker timeline: Semgrep, Trivy, GitLeaks and OWASP ZAP"
+    },
+    "gates": {
+      "title": "Security Gates & CI/CD Rules",
+      "subtitle": "Deploy thresholds and mobile bypass control (SSPILLOWY Pulse)"
+    },
+    "notifications": {
+      "title": "Notification inbox",
+      "subtitle": "Secret alerts, Security Gate blocks and Pulse App events"
+    },
+    "reports": {
+      "title": "Reports & compliance",
+      "subtitle": "ISO/IEC 27001:2022 evidence packs, OWASP/CWE mapping and executive reports"
+    }
+  },
+  "findings": {
+    "auditFilters": "Audit filters:",
+    "allEngines": "All engines",
+    "allSeverities": "All severities",
+    "allStatuses": "All statuses",
+    "severity": "Severity",
+    "titleCol": "Vulnerability / Title",
+    "engine": "Engine",
+    "statusHitl": "HITL status",
+    "fileEndpoint": "File / Endpoint",
+    "aiTriage": "AI triage",
+    "action": "Action",
+    "loading": "Loading findings...",
+    "detected": "Detected vulnerabilities & secrets ({{count}})",
+    "inspect": "Inspect",
+    "pending": "Pending",
+    "confidence": "Confidence {{pct}}%",
+    "apiEndpoint": "API Endpoint",
+    "line": "Line {{n}}",
+    "close": "Close",
+    "inReview": "In review",
+    "falsePositive": "False positive",
+    "acceptRisk": "Accept risk",
+    "approveFixed": "Approve & FIXED",
+    "critical": "Critical",
+    "high": "High",
+    "medium": "Medium",
+    "low": "Low"
+  },
+  "repos": {
+    "newRepo": "+ New Repository",
+    "monitored": "Monitored repositories ({{count}})",
+    "status": "Status",
+    "name": "Repository name",
+    "branch": "Branch",
+    "health": "Health Score",
+    "criticals": "Critical",
+    "totalFindings": "Total findings",
+    "actions": "DevSecOps actions",
+    "runScan": "Run scan",
+    "criticalCount": "{{count}} Critical",
+    "findingsCount": "{{count}} findings"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "loading": "Loading..."
+  }
+}

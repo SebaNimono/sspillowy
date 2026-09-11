@@ -5,6 +5,7 @@ import { Toast, ToastMessage } from '../components/Toast';
 import { ComplianceReport, fetchComplianceReport, fetchFindings } from '../api/client';
 import { FALLBACK_COMPLIANCE, FALLBACK_FINDINGS } from '../api/fallbacks';
 import { FileArchive, Download, ShieldCheck, BookOpen } from 'lucide-react';
+import { useI18n } from '../i18n/I18nProvider';
 
 interface PageProps {
   sidebarState: SidebarState;
@@ -31,6 +32,7 @@ export const ReportsPage: React.FC<PageProps> = ({
   unreadCount,
   onGoToSite,
 }) => {
+  const { t } = useI18n();
   const [report, setReport] = useState<ComplianceReport>(FALLBACK_COMPLIANCE);
   const [toast, setToast] = useState<ToastMessage | null>(null);
 
@@ -83,8 +85,8 @@ export const ReportsPage: React.FC<PageProps> = ({
     <div>
       <Toast toast={toast} onClose={() => setToast(null)} />
       <Header
-        title="Informes y cumplimiento"
-        subtitle="Paquetes de evidencia ISO/IEC 27001:2022, mapeo OWASP/CWE y reportes ejecutivos"
+        title={t('pages.reports.title')}
+        subtitle={t('pages.reports.subtitle')}
         sidebarState={sidebarState}
         setSidebarState={setSidebarState}
         user={user}

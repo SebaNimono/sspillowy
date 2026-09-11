@@ -1,0 +1,110 @@
+{
+  "lang": {
+    "label": "Idioma",
+    "es": "Español",
+    "en": "English",
+    "pt": "Português",
+    "fr": "Français"
+  },
+  "nav": {
+    "dashboard": "Dashboard Geral",
+    "repositories": "Repositórios",
+    "findings": "Matriz de Achados",
+    "scans": "Varreduras",
+    "gates": "Security Gates (CI/CD)",
+    "notifications": "Notificações",
+    "reports": "Relatórios ISO 27001",
+    "brandSub": "Web Hub • DevSecOps",
+    "hideMenu": "Ocultar menu",
+    "collapseMenu": "Recolher menu",
+    "expandMenu": "Expandir menu"
+  },
+  "header": {
+    "healthScore": "Health Score",
+    "pulseSync": "Pulse App Sync: Ativa",
+    "notifications": "Notificações",
+    "viewAll": "Ver todas",
+    "publicSite": "Site público",
+    "logout": "Sair",
+    "openMenu": "Abrir menu de navegação",
+    "keepMenuOpen": "Manter menu aberto"
+  },
+  "pages": {
+    "dashboard": {
+      "title": "Dashboard Geral DevSecOps",
+      "subtitle": "Métricas reais dos seus repos e achados — personalize limiares e blocos"
+    },
+    "repositories": {
+      "title": "Gestão de Repositórios",
+      "subtitle": "Registro de repositórios Git monitorados, saúde e varredura sob demanda"
+    },
+    "findings": {
+      "title": "Matriz Unificada de Achados",
+      "subtitle": "Consolidação determinística de scanners com triagem assistida por IA (Human-in-the-loop)"
+    },
+    "scans": {
+      "title": "Orquestração de Varreduras",
+      "subtitle": "Linha do tempo dos workers: Semgrep, Trivy, GitLeaks e OWASP ZAP"
+    },
+    "gates": {
+      "title": "Security Gates & Regras CI/CD",
+      "subtitle": "Limiares de deploy e controle de bypass móvel (SSPILLOWY Pulse)"
+    },
+    "notifications": {
+      "title": "Caixa de notificações",
+      "subtitle": "Alertas de segredos, bloqueios de Security Gate e eventos do Pulse App"
+    },
+    "reports": {
+      "title": "Relatórios e conformidade",
+      "subtitle": "Pacotes de evidência ISO/IEC 27001:2022, mapeamento OWASP/CWE e relatórios executivos"
+    }
+  },
+  "findings": {
+    "auditFilters": "Filtros de auditoria:",
+    "allEngines": "Todos os motores",
+    "allSeverities": "Todas as severidades",
+    "allStatuses": "Todos os estados",
+    "severity": "Severidade",
+    "titleCol": "Vulnerabilidade / Título",
+    "engine": "Motor",
+    "statusHitl": "Estado HITL",
+    "fileEndpoint": "Arquivo / Endpoint",
+    "aiTriage": "Triagem IA",
+    "action": "Ação",
+    "loading": "Carregando achados...",
+    "detected": "Vulnerabilidades & segredos detectados ({{count}})",
+    "inspect": "Inspecionar",
+    "pending": "Pendente",
+    "confidence": "Confiança {{pct}}%",
+    "apiEndpoint": "API Endpoint",
+    "line": "Linha {{n}}",
+    "close": "Fechar",
+    "inReview": "Em revisão",
+    "falsePositive": "Falso positivo",
+    "acceptRisk": "Aceitar risco",
+    "approveFixed": "Aprovar & FIXED",
+    "critical": "Crítico",
+    "high": "Alto",
+    "medium": "Médio",
+    "low": "Baixo"
+  },
+  "repos": {
+    "newRepo": "+ Novo Repositório",
+    "monitored": "Repositórios monitorados ({{count}})",
+    "status": "Estado",
+    "name": "Nome do repositório",
+    "branch": "Branch",
+    "health": "Health Score",
+    "criticals": "Críticas",
+    "totalFindings": "Total de achados",
+    "actions": "Ações DevSecOps",
+    "runScan": "Executar varredura",
+    "criticalCount": "{{count}} Críticas",
+    "findingsCount": "{{count}} achados"
+  },
+  "common": {
+    "save": "Salvar",
+    "cancel": "Cancelar",
+    "loading": "Carregando..."
+  }
+}

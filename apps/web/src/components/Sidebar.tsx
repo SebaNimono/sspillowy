@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { LayoutDashboard, FolderGit2, ShieldAlert, Sliders, Minus, Plus, X, Radar, Bell, FileArchive } from 'lucide-react';
+import { useI18n } from '../i18n/I18nProvider';
 
 export type SidebarState = 'expanded' | 'collapsed' | 'hidden';
 
@@ -16,6 +17,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   sidebarState,
   setSidebarState,
 }) => {
+  const { t } = useI18n();
   const [activeHoverItem, setActiveHoverItem] = useState<string | null>(null);
 
   if (sidebarState === 'hidden') return null;
@@ -23,13 +25,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const isCollapsed = sidebarState === 'collapsed';
 
   const navItems = [
-    { id: 'dashboard', label: 'Dashboard General', icon: LayoutDashboard },
-    { id: 'repositories', label: 'Repositorios', icon: FolderGit2 },
-    { id: 'findings', label: 'Matriz de Hallazgos', icon: ShieldAlert },
-    { id: 'scans', label: 'Escaneos', icon: Radar },
-    { id: 'gates', label: 'Security Gates (CI/CD)', icon: Sliders },
-    { id: 'notifications', label: 'Notificaciones', icon: Bell },
-    { id: 'reports', label: 'Informes ISO 27001', icon: FileArchive },
+    { id: 'dashboard', label: t('nav.dashboard'), icon: LayoutDashboard },
+    { id: 'repositories', label: t('nav.repositories'), icon: FolderGit2 },
+    { id: 'findings', label: t('nav.findings'), icon: ShieldAlert },
+    { id: 'scans', label: t('nav.scans'), icon: Radar },
+    { id: 'gates', label: t('nav.gates'), icon: Sliders },
+    { id: 'notifications', label: t('nav.notifications'), icon: Bell },
+    { id: 'reports', label: t('nav.reports'), icon: FileArchive },
   ];
 
   return (
@@ -41,7 +43,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         padding: isCollapsed ? '0.75rem 0' : '1.25rem 0.85rem',
       }}
     >
-      {/* EXPANDED SIDEBAR HEADER (Top Controls & Brand) */}
       {!isCollapsed ? (
         <>
           <div
@@ -53,10 +54,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
               padding: '0 0.25rem',
             }}
           >
-            {/* Hide Button (X) */}
             <button
               onClick={() => setSidebarState('hidden')}
-              title="Ocultar menú completamente (X)"
+              title={t('nav.hideMenu')}
               style={{
                 background: 'transparent',
                 border: 'none',
@@ -71,10 +71,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <X size={18} />
             </button>
 
-            {/* Collapse Button (-) */}
             <button
               onClick={() => setSidebarState('collapsed')}
-              title="Colapsar menú (-)"
+              title={t('nav.collapseMenu')}
               style={{
                 background: 'transparent',
                 border: 'none',
@@ -96,12 +95,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
             <div>
               <div className="brand-title">SSPILLOWY</div>
-              <div className="brand-sub">Web Hub • DevSecOps</div>
+              <div className="brand-sub">{t('nav.brandSub')}</div>
             </div>
           </div>
         </>
       ) : (
-        /* COLLAPSED SIDEBAR HEADER (Logo -> X -> + Stacked Vertically) */
         <div
           style={{
             display: 'flex',
@@ -113,15 +111,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
             borderBottom: '1px solid #2d334a',
           }}
         >
-          {/* Logo Icon */}
           <div className="brand-icon" style={{ width: '32px', height: '32px', background: '#ffffff', padding: '3px' }}>
             <img src="/sspillowy_favicon.png" alt="Emblema" style={{ width: '22px', height: '22px', objectFit: 'contain' }} />
           </div>
 
-          {/* Hide Button (X) */}
           <button
             onClick={() => setSidebarState('hidden')}
-            title="Ocultar menú completamente (X)"
+            title={t('nav.hideMenu')}
             style={{
               background: 'transparent',
               border: 'none',
@@ -137,10 +133,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <X size={18} />
           </button>
 
-          {/* Expand Button (+) */}
           <button
             onClick={() => setSidebarState('expanded')}
-            title="Expandir menú (+)"
+            title={t('nav.expandMenu')}
             style={{
               background: 'transparent',
               border: 'none',
@@ -158,7 +153,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       )}
 
-      {/* Navigation Links */}
       <ul className="nav-list" style={{ marginTop: isCollapsed ? '0.25rem' : '1.25rem' }}>
         {navItems.map((item) => {
           const Icon = item.icon;
@@ -185,7 +179,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 {!isCollapsed && <span>{item.label}</span>}
               </button>
 
-              {/* Datadog Datatype Flyout Tooltip when Collapsed on Hover */}
               {isCollapsed && isHovered && (
                 <div
                   style={{
@@ -206,9 +199,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     pointerEvents: 'none',
                   }}
                 >
-                  <div style={{ fontSize: '0.65rem', textTransform: 'uppercase', color: '#9499b8', letterSpacing: '0.5px' }}>
-                    SECCIÓN
-                  </div>
                   {item.label}
                 </div>
               )}

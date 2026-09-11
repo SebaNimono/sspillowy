@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Activity, Bell, Smartphone, Menu, ChevronRight, LogOut, Globe } from 'lucide-react';
+import { Activity, Bell, Smartphone, Menu, ChevronRight, LogOut, Globe, Languages } from 'lucide-react';
 import { SidebarState } from './Sidebar';
 import { fetchNotifications, NotificationItem } from '../api/client';
 import { FALLBACK_NOTIFICATIONS } from '../api/fallbacks';
+import { useI18n } from '../i18n/I18nProvider';
+import { Locale } from '../i18n';
 
 interface HeaderProps {
   title: string;
@@ -29,9 +31,11 @@ export const Header: React.FC<HeaderProps> = ({
   unreadCount,
   onGoToSite,
 }) => {
+  const { t, locale, setLocale, locales } = useI18n();
   const [hoveringMenuBtn, setHoveringMenuBtn] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showNotifMenu, setShowNotifMenu] = useState(false);
+  const [showLangMenu, setShowLangMenu] = useState(false);
   const [preview, setPreview] = useState<NotificationItem[]>([]);
 
   useEffect(() => {
@@ -43,7 +47,6 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className="top-bar">
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-        {/* Top-Left 3-Lines Menu Icon Button when sidebar is hidden */}
         {sidebarState === 'hidden' && (
           <div
             style={{ position: 'relative' }}
@@ -62,12 +65,11 @@ export const Header: React.FC<HeaderProps> = ({
                 background: '#ffffff',
                 cursor: 'pointer',
               }}
-              title="Abrir menú de navegación"
+              title={t('header.openMenu')}
             >
               <Menu size={18} color="#1f2328" />
             </button>
 
-            {/* Datadog Peek Popup "Keep menu open" on hover */}
             {hoveringMenuBtn && (
               <div
                 style={{
@@ -92,7 +94,7 @@ export const Header: React.FC<HeaderProps> = ({
                 onClick={() => setSidebarState('expanded')}
               >
                 <ChevronRight size={14} color="#58a6ff" />
-                <span>Keep menu open</span>
+                <span>{t('header.keepMenuOpen')}</span>
               </div>
             )}
           </div>
@@ -105,7 +107,6 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-        {/* Security Health Score Pill Light */}
         {typeof healthScore === 'number' && (
         <div
           style={{
@@ -120,12 +121,11 @@ export const Header: React.FC<HeaderProps> = ({
           }}
         >
           <Activity size={14} color="#0969da" />
-          <span style={{ color: '#0969da', fontWeight: 600 }}>Health Score:</span>
+          <span style={{ color: '#0969da', fontWeight: 600 }}>{t('header.healthScore')}:</span>
           <strong style={{ color: '#0969da', fontSize: '0.95rem' }}>{healthScore}/100</strong>
         </div>
         )}
 
-        {/* Pulse Mobile App Sync Pill Light */}
         <div
           style={{
             display: 'flex',
@@ -142,15 +142,54 @@ export const Header: React.FC<HeaderProps> = ({
         >
           <span className="status-dot"></span>
           <Smartphone size={13} color="#1a7f37" />
-          <span>Pulse App Sync: Activa</span>
+          <span>{t('header.pulseSync')}</span>
         </div>
 
-        {/* Notifications Button */}
+        <div style={{ position: 'relative' }}>
+          <button
+            className="btn btn-secondary"
+            style={{ padding: '0.45rem 0.65rem', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+            onClick={() => { setShowLangMenu(!showLangMenu); setShowNotifMenu(false); setShowProfileMenu(false); }}
+            title={t('lang.label')}
+            aria-label={t('lang.label')}
+          >
+            <Languages size={16} color="#656d76" />
+            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#1f2328', textTransform: 'uppercase' }}>{locale}</span>
+          </button>
+          {showLangMenu && (
+            <div className="header-dropdown" style={{ width: '180px' }}>
+              <div style={{ padding: '0.55rem 0.75rem', borderBottom: '1px solid #d0d7de', fontWeight: 600, fontSize: '0.8rem' }}>
+                {t('lang.label')}
+              </div>
+              {locales.map((code) => (
+                <button
+                  key={code}
+                  type="button"
+                  onClick={() => { setLocale(code as Locale); setShowLangMenu(false); }}
+                  style={{
+                    width: '100%',
+                    textAlign: 'left',
+                    padding: '0.5rem 0.75rem',
+                    border: 'none',
+                    background: code === locale ? '#ddf4ff' : 'transparent',
+                    color: '#1f2328',
+                    fontSize: '0.8rem',
+                    fontWeight: code === locale ? 700 : 500,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {t(`lang.${code}`)}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div style={{ position: 'relative' }}>
           <button
             className="btn btn-secondary"
             style={{ padding: '0.45rem', borderRadius: '6px', position: 'relative' }}
-            onClick={() => setShowNotifMenu(!showNotifMenu)}
+            onClick={() => { setShowNotifMenu(!showNotifMenu); setShowLangMenu(false); setShowProfileMenu(false); }}
           >
             <Bell size={16} color="#656d76" />
             {(unreadCount || 0) > 0 && (
@@ -161,13 +200,13 @@ export const Header: React.FC<HeaderProps> = ({
           {showNotifMenu && (
             <div className="header-dropdown" style={{ width: '340px' }}>
               <div style={{ padding: '0.55rem 0.75rem', borderBottom: '1px solid #d0d7de', display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ fontWeight: 600, fontSize: '0.8rem' }}>Notificaciones</span>
+                <span style={{ fontWeight: 600, fontSize: '0.8rem' }}>{t('header.notifications')}</span>
                 <button
                   type="button"
                   onClick={() => { setShowNotifMenu(false); onNavigate?.('notifications'); }}
                   style={{ background: 'none', border: 'none', color: '#0969da', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}
                 >
-                  Ver todas
+                  {t('header.viewAll')}
                 </button>
               </div>
               {preview.map((item) => (
@@ -185,11 +224,10 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </div>
 
-        {/* User Profile Pill & Dropdown Menu */}
         {user && (
           <div style={{ position: 'relative' }}>
             <button
-              onClick={() => setShowProfileMenu(!showProfileMenu)}
+              onClick={() => { setShowProfileMenu(!showProfileMenu); setShowLangMenu(false); setShowNotifMenu(false); }}
               className="btn btn-secondary"
               style={{
                 padding: '0.35rem 0.75rem',
@@ -259,7 +297,7 @@ export const Header: React.FC<HeaderProps> = ({
                     }}
                   >
                     <Globe size={14} />
-                    <span>Sitio público</span>
+                    <span>{t('header.publicSite')}</span>
                   </button>
                 )}
 
@@ -281,7 +319,7 @@ export const Header: React.FC<HeaderProps> = ({
                   }}
                 >
                   <LogOut size={14} />
-                  <span>Cerrar sesión</span>
+                  <span>{t('header.logout')}</span>
                 </button>
               </div>
             )}

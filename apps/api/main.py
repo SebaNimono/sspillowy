@@ -150,8 +150,24 @@ def _repo_out(repo: Repository) -> RepositoryResponse:
     return RepositoryResponse.model_validate(repo)
 
 
+def _display_file_path(path: str | None) -> str | None:
+    """Oculta rutas temporales de clone (/tmp/sspillowy-scan-.../repo/)."""
+    if not path:
+        return None
+    s = str(path).replace("\\", "/").strip()
+    for marker in ("/repo/", "/vuln_sample/"):
+        if marker in s:
+            return s.split(marker, 1)[1]
+    if "sspillowy-scan-" in s:
+        parts = s.split("/")
+        if "repo" in parts:
+            return "/".join(parts[parts.index("repo") + 1 :])
+    return s
+
+
 def _finding_out(finding: Finding) -> FindingResponse:
-    return FindingResponse.model_validate(finding)
+    out = FindingResponse.model_validate(finding)
+    return out.model_copy(update={"file_path": _display_file_path(out.file_path)})
 
 
 def _scan_out(scan: Scan) -> ScanResponse:

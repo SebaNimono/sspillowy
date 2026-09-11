@@ -1,0 +1,110 @@
+{
+  "lang": {
+    "label": "Idioma",
+    "es": "Español",
+    "en": "English",
+    "pt": "Português",
+    "fr": "Français"
+  },
+  "nav": {
+    "dashboard": "Dashboard General",
+    "repositories": "Repositorios",
+    "findings": "Matriz de Hallazgos",
+    "scans": "Escaneos",
+    "gates": "Security Gates (CI/CD)",
+    "notifications": "Notificaciones",
+    "reports": "Informes ISO 27001",
+    "brandSub": "Web Hub • DevSecOps",
+    "hideMenu": "Ocultar menú",
+    "collapseMenu": "Colapsar menú",
+    "expandMenu": "Expandir menú"
+  },
+  "header": {
+    "healthScore": "Health Score",
+    "pulseSync": "Pulse App Sync: Activa",
+    "notifications": "Notificaciones",
+    "viewAll": "Ver todas",
+    "publicSite": "Sitio público",
+    "logout": "Cerrar sesión",
+    "openMenu": "Abrir menú de navegación",
+    "keepMenuOpen": "Mantener menú abierto"
+  },
+  "pages": {
+    "dashboard": {
+      "title": "Dashboard General DevSecOps",
+      "subtitle": "Métricas reales de tus repos y hallazgos — personaliza umbrales y bloques"
+    },
+    "repositories": {
+      "title": "Gestión de Repositorios",
+      "subtitle": "Registro de repositorios Git monitoreados, estado de salud y escaneo bajo demanda"
+    },
+    "findings": {
+      "title": "Matriz Unificada de Hallazgos",
+      "subtitle": "Consolidación determinista de escáneres con triaje asistido por IA (Human-in-the-loop)"
+    },
+    "scans": {
+      "title": "Orquestación de Escaneos",
+      "subtitle": "Línea de tiempo de workers: Semgrep, Trivy, GitLeaks y OWASP ZAP"
+    },
+    "gates": {
+      "title": "Security Gates & Reglas CI/CD",
+      "subtitle": "Configuración de umbrales de despliegue y control de bypass móvil (SSPILLOWY Pulse)"
+    },
+    "notifications": {
+      "title": "Bandeja de notificaciones",
+      "subtitle": "Alertas de secretos, bloqueos de Security Gate y eventos de Pulse App"
+    },
+    "reports": {
+      "title": "Informes y cumplimiento",
+      "subtitle": "Paquetes de evidencia ISO/IEC 27001:2022, mapeo OWASP/CWE y reportes ejecutivos"
+    }
+  },
+  "findings": {
+    "auditFilters": "Filtros de Auditoría:",
+    "allEngines": "Todos los Motores",
+    "allSeverities": "Todas las Severidades",
+    "allStatuses": "Todos los estados",
+    "severity": "Severidad",
+    "titleCol": "Vulnerabilidad / Título",
+    "engine": "Motor",
+    "statusHitl": "Estado HITL",
+    "fileEndpoint": "Archivo / Endpoint",
+    "aiTriage": "IA Triaje",
+    "action": "Acción",
+    "loading": "Cargando hallazgos...",
+    "detected": "Vulnerabilidades & Secretos Detectados ({{count}})",
+    "inspect": "Inspeccionar",
+    "pending": "Pendiente",
+    "confidence": "Confianza {{pct}}%",
+    "apiEndpoint": "API Endpoint",
+    "line": "Línea {{n}}",
+    "close": "Cerrar",
+    "inReview": "En revisión",
+    "falsePositive": "Falso positivo",
+    "acceptRisk": "Aceptar riesgo",
+    "approveFixed": "Aprobar & FIXED",
+    "critical": "Crítico",
+    "high": "Alto",
+    "medium": "Medio",
+    "low": "Bajo"
+  },
+  "repos": {
+    "newRepo": "+ Nuevo Repositorio",
+    "monitored": "Repositorios Monitoreados ({{count}})",
+    "status": "Estado",
+    "name": "Nombre Repositorio",
+    "branch": "Rama",
+    "health": "Health Score",
+    "criticals": "Críticas",
+    "totalFindings": "Total Hallazgos",
+    "actions": "Acciones DevSecOps",
+    "runScan": "Ejecutar Escaneo",
+    "criticalCount": "{{count}} Críticas",
+    "findingsCount": "{{count}} hallazgos"
+  },
+  "common": {
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "loading": "Cargando..."
+  }
+}

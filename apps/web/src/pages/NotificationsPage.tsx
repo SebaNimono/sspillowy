@@ -4,6 +4,7 @@ import { SidebarState } from '../components/Sidebar';
 import { NotificationItem, fetchNotifications, markAllNotificationsRead, markNotificationRead } from '../api/client';
 import { FALLBACK_NOTIFICATIONS } from '../api/fallbacks';
 import { Bell, CheckCheck, KeyRound, ShieldAlert, Sliders, Sparkles, Smartphone, Radar } from 'lucide-react';
+import { useI18n } from '../i18n/I18nProvider';
 
 interface PageProps {
   sidebarState: SidebarState;
@@ -43,6 +44,7 @@ export const NotificationsPage: React.FC<PageProps> = ({
   onGoToSite,
   onNotificationsChange,
 }) => {
+  const { t } = useI18n();
   const [items, setItems] = useState<NotificationItem[]>(FALLBACK_NOTIFICATIONS);
   const [filter, setFilter] = useState<'all' | 'unread' | 'critical'>('all');
 
@@ -91,8 +93,8 @@ export const NotificationsPage: React.FC<PageProps> = ({
   return (
     <div>
       <Header
-        title="Bandeja de notificaciones"
-        subtitle="Alertas de secretos, bloqueos de Security Gate y eventos de Pulse App"
+        title={t('pages.notifications.title')}
+        subtitle={t('pages.notifications.subtitle')}
         sidebarState={sidebarState}
         setSidebarState={setSidebarState}
         user={user}

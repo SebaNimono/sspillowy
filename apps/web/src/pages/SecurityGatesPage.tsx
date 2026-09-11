@@ -4,6 +4,7 @@ import { SidebarState } from '../components/Sidebar';
 import { Toast, ToastMessage } from '../components/Toast';
 import { SecurityGatePolicy, fetchSecurityGate, updateSecurityGate } from '../api/client';
 import { Sliders, Save, Smartphone } from 'lucide-react';
+import { useI18n } from '../i18n/I18nProvider';
 
 const DEFAULT_POLICY: SecurityGatePolicy = {
   id: 'default-policy',
@@ -26,6 +27,7 @@ interface PageProps {
 }
 
 export const SecurityGatesPage: React.FC<PageProps> = ({ sidebarState, setSidebarState, user, onLogout, onNavigate, unreadCount, onGoToSite }) => {
+  const { t } = useI18n();
   const [policy, setPolicy] = useState<SecurityGatePolicy>(DEFAULT_POLICY);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
@@ -62,8 +64,8 @@ export const SecurityGatesPage: React.FC<PageProps> = ({ sidebarState, setSideba
       <Toast toast={toast} onClose={() => setToast(null)} />
 
       <Header
-        title="Security Gates & Reglas CI/CD"
-        subtitle="Configuración de umbrales de despliegue y control de bypass móvil (SSPILLOWY Pulse)"
+        title={t('pages.gates.title')}
+        subtitle={t('pages.gates.subtitle')}
         sidebarState={sidebarState}
         setSidebarState={setSidebarState}
         user={user}
