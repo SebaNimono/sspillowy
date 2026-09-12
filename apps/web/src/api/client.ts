@@ -246,6 +246,10 @@ export async function fetchGithubWebhookInfo(): Promise<{
   return request('/webhooks/github/info');
 }
 
+export async function fetchSecurityGate(): Promise<SecurityGatePolicy> {
+  return request('/security-gates');
+}
+
 export async function checkSecurityGate(repositoryId?: string): Promise<GateCheckResult> {
   const qs = repositoryId ? `?repository_id=${encodeURIComponent(repositoryId)}` : '';
   return request(`/security-gates/check${qs}`);

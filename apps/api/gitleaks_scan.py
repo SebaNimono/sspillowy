@@ -6,6 +6,7 @@ import json
 import os
 import shutil
 import subprocess
+import tempfile
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -52,40 +53,44 @@ def run_gitleaks(target: Path, timeout: int = 180) -> list[dict]:
     if not gitleaks_available():
         raise RuntimeError("gitleaks no está instalado en el contenedor.")
 
-    out_file = target / "gitleaks-report.json"
-    if out_file.exists():
-        out_file.unlink()
+    # Fuera del árbol del repo: si no, Trivy escanea este JSON y marca falsos positivos.
+    out_file = Path(tempfile.gettempdir()) / f"gitleaks-{uuid.uuid4().hex}.json"
+    try:
+        cmd = [
+            "gitleaks",
+            "detect",
+            "--source",
+            str(target),
+            "--report-path",
+            str(out_file),
+            "--report-format",
+            "json",
+            "--no-git",
+            "--no-banner",
+        ]
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
 
-    cmd = [
-        "gitleaks",
-        "detect",
-        "--source",
-        str(target),
-        "--report-path",
-        str(out_file),
-        "--report-format",
-        "json",
-        "--no-git",
-        "--no-banner",
-    ]
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        if proc.returncode not in (0, 1):
+            err = (proc.stderr or proc.stdout or "gitleaks error").strip()[:500]
+            raise RuntimeError(f"gitleaks falló (code={proc.returncode}): {err}")
 
-    if proc.returncode not in (0, 1):
-        err = (proc.stderr or proc.stdout or "gitleaks error").strip()[:500]
-        raise RuntimeError(f"gitleaks falló (code={proc.returncode}): {err}")
+        if not out_file.exists():
+            return []
 
-    if not out_file.exists():
+        raw = out_file.read_text(encoding="utf-8", errors="replace").strip()
+        if not raw:
+            return []
+        data = json.loads(raw)
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict) and "Findings" in data:
+            return data.get("Findings") or []
         return []
-
-    raw = out_file.read_text(encoding="utf-8", errors="replace").strip()
-    if not raw:
-        return []
-    data = json.loads(raw)
-    if isinstance(data, list):
-        return data
-    if isinstance(data, dict) and "Findings" in data:
-        return data.get("Findings") or []
-    return []
+    finally:
+        try:
+            out_file.unlink(missing_ok=True)
+        except Exception:
+            pass
 
 
 def persist_gitleaks_findings(

@@ -180,6 +180,13 @@ def _refresh_repo_counters(db, repo: Repository) -> None:
     repo.open_criticals = sum(1 for f in opens if (f.severity or "").upper() == "CRITICAL")
     repo.open_highs = sum(1 for f in opens if (f.severity or "").upper() == "HIGH")
     repo.total_findings = len(opens)
+    sev = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFO": 0}
+    for f in opens:
+        k = (f.severity or "").upper()
+        if k in sev:
+            sev[k] += 1
+    penalty = sev["CRITICAL"] * 18 + sev["HIGH"] * 8 + sev["MEDIUM"] * 3 + sev["LOW"]
+    repo.health_score = max(0, min(100, 100 - penalty))
 
 
 def _repo_out(repo: Repository) -> RepositoryResponse:
