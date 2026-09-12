@@ -6,21 +6,25 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 ARG GITLEAKS_VERSION=8.21.2
-ARG TRIVY_VERSION=0.58.2
+# v0.58.2 no existe en GitHub → 404 HTML → "gzip: not in gzip format"
+ARG TRIVY_VERSION=0.74.0
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
     git \
     && rm -rf /var/lib/apt/lists/* \
-    && curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
-      | tar -xz -C /usr/local/bin gitleaks \
+    && curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+      -o /tmp/gitleaks.tgz \
+    && tar -xzf /tmp/gitleaks.tgz -C /usr/local/bin gitleaks \
     && chmod +x /usr/local/bin/gitleaks \
     && gitleaks version \
-    && curl -sSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
-      | tar -xz -C /usr/local/bin trivy \
+    && curl -fsSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
+      -o /tmp/trivy.tgz \
+    && tar -xzf /tmp/trivy.tgz -C /usr/local/bin trivy \
     && chmod +x /usr/local/bin/trivy \
-    && trivy --version
+    && trivy --version \
+    && rm -f /tmp/gitleaks.tgz /tmp/trivy.tgz
 
 COPY apps/api/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt \
