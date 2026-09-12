@@ -43,6 +43,7 @@ from packages.core_models import (  # noqa: E402
 )
 
 from github_oauth import router as github_auth_router  # noqa: E402
+from github_webhook import router as github_webhook_router  # noqa: E402
 from gitlab_oauth import router as gitlab_auth_router  # noqa: E402
 from google_oauth import router as google_auth_router  # noqa: E402
 from microsoft_oauth import router as microsoft_auth_router  # noqa: E402
@@ -117,6 +118,7 @@ app.include_router(email_verification_router)
 app.include_router(password_reset_router)
 app.include_router(pillow_router)
 app.include_router(github_auth_router)
+app.include_router(github_webhook_router)
 app.include_router(gitlab_auth_router)
 app.include_router(google_auth_router)
 app.include_router(microsoft_auth_router)

@@ -2,8 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Header } from '../components/Header';
 import { SidebarState } from '../components/Sidebar';
 import { Toast, ToastMessage } from '../components/Toast';
-import { Repository, Scan, ScanEngine, fetchRepositories, createRepository, triggerScan, fetchScans, deleteRepository } from '../api/client';
-import { FolderGit2, Plus, Play, GitBranch, RefreshCw, Trash2 } from 'lucide-react';
+import { Repository, Scan, ScanEngine, fetchRepositories, createRepository, triggerScan, fetchScans, deleteRepository, fetchGithubWebhookInfo } from '../api/client';
+import { FolderGit2, Plus, Play, GitBranch, RefreshCw, Trash2, Webhook } from 'lucide-react';
 import { useI18n } from '../i18n/I18nProvider';
 import { ConfirmModal } from '../components/ConfirmModal';
 
@@ -53,6 +53,25 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
   const [activeScans, setActiveScans] = useState<Record<string, ActiveScan>>({});
   const activeScansRef = useRef(activeScans);
   activeScansRef.current = activeScans;
+  const [webhookInfo, setWebhookInfo] = useState<{
+    endpoint: string;
+    secret_configured: boolean;
+    engines: string[];
+    instructions: string;
+  } | null>(null);
+
+  useEffect(() => {
+    fetchGithubWebhookInfo()
+      .then((info) =>
+        setWebhookInfo({
+          endpoint: info.endpoint,
+          secret_configured: info.secret_configured,
+          engines: info.engines,
+          instructions: info.instructions,
+        }),
+      )
+      .catch(() => setWebhookInfo(null));
+  }, []);
 
   const loadRepos = (quiet = false) => {
     if (!quiet) setLoading(true);
@@ -354,6 +373,47 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
               ? t('repos.scanningBanner', { name: scanningNames[0] })
               : `${t('repos.scanning')} ${scanningNames.join(', ')}`}
           </span>
+        </div>
+      )}
+
+      {webhookInfo && (
+        <div
+          className="card"
+          style={{
+            marginBottom: '1rem',
+            borderTop: `3px solid ${webhookInfo.secret_configured ? '#1a7f37' : '#9a6700'}`,
+          }}
+        >
+          <div className="card-header" style={{ marginBottom: '0.5rem' }}>
+            <div className="card-title">
+              <Webhook size={18} color={webhookInfo.secret_configured ? '#1a7f37' : '#9a6700'} />
+              <span>Webhook GitHub (escaneo al push / PR)</span>
+            </div>
+            <span
+              className={`badge ${webhookInfo.secret_configured ? 'badge-low' : 'badge-critical'}`}
+            >
+              {webhookInfo.secret_configured ? 'Secret OK' : 'Falta secret'}
+            </span>
+          </div>
+          <p style={{ fontSize: '0.8rem', color: '#656d76', marginBottom: '0.5rem', lineHeight: 1.45 }}>
+            {webhookInfo.instructions}
+          </p>
+          <code
+            style={{
+              display: 'block',
+              fontSize: '0.78rem',
+              background: '#f6f8fa',
+              padding: '0.55rem 0.7rem',
+              borderRadius: '6px',
+              border: '1px solid #d0d7de',
+              wordBreak: 'break-all',
+            }}
+          >
+            {webhookInfo.endpoint}
+          </code>
+          <p style={{ fontSize: '0.75rem', color: '#656d76', marginTop: '0.45rem' }}>
+            Motores: {webhookInfo.engines.join(' + ')}
+          </p>
         </div>
       )}
 

@@ -236,8 +236,14 @@ export async function fetchScans(): Promise<Scan[]> {
   return request('/scans');
 }
 
-export async function fetchSecurityGate(): Promise<SecurityGatePolicy> {
-  return request('/security-gates');
+export async function fetchGithubWebhookInfo(): Promise<{
+  endpoint: string;
+  events: string[];
+  secret_configured: boolean;
+  engines: string[];
+  instructions: string;
+}> {
+  return request('/webhooks/github/info');
 }
 
 export async function checkSecurityGate(repositoryId?: string): Promise<GateCheckResult> {
