@@ -31,6 +31,8 @@ export interface Finding {
   ai_summary?: string;
   ai_remediation?: string;
   created_at: string;
+  repository_name?: string | null;
+  triggered_by?: string | null;
 }
 
 export interface DashboardStats {
@@ -153,6 +155,15 @@ export async function createRepository(name: string, url: string, branch: string
   });
 }
 
+export async function deleteRepository(repositoryId: string): Promise<{ deleted: boolean; id: string; name: string }> {
+  return request(`/repositories/${repositoryId}`, { method: 'DELETE' });
+}
+
+export async function clearFindings(repositoryId?: string): Promise<{ deleted: number }> {
+  const qs = repositoryId ? `?repository_id=${encodeURIComponent(repositoryId)}` : '';
+  return request(`/findings${qs}`, { method: 'DELETE' });
+}
+
 export async function fetchFindings(engine?: string, severity?: string, statusFilter?: string): Promise<Finding[]> {
   const params = new URLSearchParams();
   if (engine) params.append('engine', engine);
@@ -170,11 +181,21 @@ export async function updateFindingStatus(findingId: string, status: Finding['st
   });
 }
 
-export async function triggerScan(repositoryId: string): Promise<Scan> {
+export type ScanEngine = 'semgrep' | 'gitleaks' | 'trivy';
+
+export async function triggerScan(
+  repositoryId: string,
+  engines: ScanEngine[] = ['semgrep', 'gitleaks', 'trivy'],
+  triggeredBy = 'web_hub',
+): Promise<Scan> {
   return request('/scans', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ repository_id: repositoryId, triggered_by: 'web_hub' }),
+    body: JSON.stringify({
+      repository_id: repositoryId,
+      triggered_by: triggeredBy,
+      engines,
+    }),
   });
 }
 

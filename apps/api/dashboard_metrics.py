@@ -53,9 +53,11 @@ def _finding_day(f: Finding) -> date | None:
 
 def compute_dashboard_stats(db: Session) -> dict:
     repos = db.query(Repository).filter(Repository.is_active.is_(True)).all()
-    scans_count = db.query(Scan).count()
+    scans_count = db.query(Scan).filter(Scan.status == "COMPLETED").count()
     all_findings = db.query(Finding).all()
+    # Dashboard = hallazgos activos (OPEN/IN_REVIEW); supersedidos no cuentan
     open_findings = [f for f in all_findings if (f.status or "") in OPEN_STATUSES]
+    visible = [f for f in all_findings if (f.status or "") != "SUPERSEDED"]
     sev = _severity_counts(open_findings)
 
     engine_counts: dict[str, int] = defaultdict(int)
@@ -66,7 +68,7 @@ def compute_dashboard_stats(db: Session) -> dict:
     trend: list[int] = []
     for i in range(6, -1, -1):
         day = today - timedelta(days=i)
-        trend.append(sum(1 for f in all_findings if _finding_day(f) == day))
+        trend.append(sum(1 for f in visible if _finding_day(f) == day and (f.status or "") in OPEN_STATUSES))
 
     return {
         "overall_health_score": _health_score(open_findings, repos),
@@ -86,7 +88,11 @@ def compute_dashboard_stats(db: Session) -> dict:
 def compute_heatmap(db: Session, weeks: int = 12) -> dict:
     days = weeks * 7 - 1
     today = datetime.now(timezone.utc).date()
-    findings = db.query(Finding).all()
+    findings = (
+        db.query(Finding)
+        .filter(Finding.status.in_(list(OPEN_STATUSES)))
+        .all()
+    )
     by_day: dict[date, int] = defaultdict(int)
     for f in findings:
         d = _finding_day(f)

@@ -2,11 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { Header } from '../components/Header';
 import { SidebarState } from '../components/Sidebar';
 import { Toast, ToastMessage } from '../components/Toast';
-import { Finding, fetchFindings, updateFindingStatus } from '../api/client';
-import { FALLBACK_FINDINGS } from '../api/fallbacks';
-import { ShieldAlert, Filter, Sparkles, CheckCircle2, FileCode, ChevronRight, CircleSlash, Flag, Eye } from 'lucide-react';
+import { Finding, fetchFindings, updateFindingStatus, clearFindings } from '../api/client';
+import { ShieldAlert, Filter, Sparkles, CheckCircle2, FileCode, ChevronRight, CircleSlash, Flag, Eye, Trash2, CalendarClock, User } from 'lucide-react';
 import { useI18n } from '../i18n/I18nProvider';
 import { formatFilePath } from '../utils/formatFilePath';
+import { formatDateTime } from '../utils/formatDateTime';
 
 interface PageProps {
   sidebarState: SidebarState;
@@ -28,21 +28,14 @@ export const FindingsPage: React.FC<PageProps> = ({
   onGoToSite,
 }) => {
   const { t } = useI18n();
-  const [findings, setFindings] = useState<Finding[]>(FALLBACK_FINDINGS);
+  const [findings, setFindings] = useState<Finding[]>([]);
   const [loading, setLoading] = useState(true);
+  const [clearing, setClearing] = useState(false);
   const [selectedEngine, setSelectedEngine] = useState<string>('all');
   const [selectedSeverity, setSelectedSeverity] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [activeFinding, setActiveFinding] = useState<Finding | null>(null);
   const [toast, setToast] = useState<ToastMessage | null>(null);
-
-  const applyLocalFilters = (source: Finding[]) => {
-    let filtered = source;
-    if (selectedEngine !== 'all') filtered = filtered.filter((f) => f.engine === selectedEngine);
-    if (selectedSeverity !== 'all') filtered = filtered.filter((f) => f.severity === selectedSeverity);
-    if (selectedStatus !== 'all') filtered = filtered.filter((f) => f.status === selectedStatus);
-    return filtered;
-  };
 
   const loadFindings = () => {
     setLoading(true);
@@ -51,17 +44,46 @@ export const FindingsPage: React.FC<PageProps> = ({
     const statusFilter = selectedStatus === 'all' ? undefined : selectedStatus;
 
     fetchFindings(engine, severity, statusFilter)
-      .then((data) => {
-        if (data && data.length > 0) setFindings(data);
-        else setFindings(applyLocalFilters(FALLBACK_FINDINGS));
+      .then((data) => setFindings(data || []))
+      .catch(() => {
+        setFindings([]);
+        setToast({
+          id: Date.now().toString(),
+          type: 'error',
+          title: 'Error',
+          message: 'No se pudieron cargar los hallazgos.',
+        });
       })
-      .catch(() => setFindings(applyLocalFilters(FALLBACK_FINDINGS)))
       .finally(() => setLoading(false));
   };
 
   useEffect(() => {
     loadFindings();
   }, [selectedEngine, selectedSeverity, selectedStatus]);
+
+  const handleClearMatrix = async () => {
+    if (!window.confirm('¿Vaciar toda la matriz de hallazgos? Podés volver a escanear los repos después.')) return;
+    setClearing(true);
+    try {
+      const res = await clearFindings();
+      setFindings([]);
+      setToast({
+        id: Date.now().toString(),
+        type: 'success',
+        title: 'Matriz vaciada',
+        message: `Se eliminaron ${res.deleted} hallazgos. Escaneá de nuevo desde Repositorios.`,
+      });
+    } catch (err) {
+      setToast({
+        id: Date.now().toString(),
+        type: 'error',
+        title: 'No se pudo vaciar',
+        message: err instanceof Error ? err.message : 'Error de API',
+      });
+    } finally {
+      setClearing(false);
+    }
+  };
 
   const applyStatus = async (status: Finding['status'], title: string, message: string) => {
     if (!activeFinding) return;
@@ -162,10 +184,23 @@ export const FindingsPage: React.FC<PageProps> = ({
             <ShieldAlert size={20} color="#0969da" />
             <span>{t('findings.detected', { count: findings.length })}</span>
           </div>
+          <button
+            className="btn btn-secondary"
+            style={{ color: '#cf222e', borderColor: '#ff8182' }}
+            disabled={clearing || findings.length === 0}
+            onClick={handleClearMatrix}
+          >
+            <Trash2 size={14} />
+            <span>{clearing ? t('common.loading') : 'Vaciar matriz'}</span>
+          </button>
         </div>
 
         {loading ? (
           <div style={{ color: '#656d76', padding: '2rem', textAlign: 'center' }}>{t('findings.loading')}</div>
+        ) : findings.length === 0 ? (
+          <div style={{ color: '#656d76', padding: '2rem', textAlign: 'center' }}>
+            Sin hallazgos. Ejecutá un escaneo desde Repositorios.
+          </div>
         ) : (
           <div className="table-container">
             <table className="custom-table">
@@ -176,7 +211,7 @@ export const FindingsPage: React.FC<PageProps> = ({
                   <th>{t('findings.engine')}</th>
                   <th>{t('findings.statusHitl')}</th>
                   <th>{t('findings.fileEndpoint')}</th>
-                  <th>{t('findings.aiTriage')}</th>
+                  <th>Detalles</th>
                   <th>{t('findings.action')}</th>
                 </tr>
               </thead>
@@ -186,8 +221,8 @@ export const FindingsPage: React.FC<PageProps> = ({
                     <td>{getSeverityBadge(f.severity)}</td>
                     <td>
                       <div style={{ fontWeight: 600, color: '#1f2328', fontSize: '0.9rem' }}>{f.title}</div>
-                      <div style={{ fontSize: '0.75rem', color: '#656d76', fontFamily: 'var(--font-mono)', marginTop: '0.1rem' }}>
-                        {f.cwe || f.owasp_category}
+                      <div style={{ fontSize: '0.75rem', color: '#656d76', marginTop: '0.1rem' }}>
+                        {f.repository_name || f.repository_id}
                         {f.iso_control ? ` · ${f.iso_control}` : ''}
                       </div>
                     </td>
@@ -201,14 +236,16 @@ export const FindingsPage: React.FC<PageProps> = ({
                       </div>
                     </td>
                     <td>
-                      {f.ai_triaged ? (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', color: '#8250df', fontSize: '0.8rem', fontWeight: 600 }}>
-                          <Sparkles size={14} color="#8250df" />
-                          <span>{t('findings.confidence', { pct: Math.round((f.ai_confidence || 0.9) * 100) })}</span>
-                        </span>
-                      ) : (
-                        <span style={{ color: '#656d76', fontSize: '0.8rem' }}>{t('findings.pending')}</span>
-                      )}
+                      <div style={{ fontSize: '0.75rem', color: '#656d76', lineHeight: 1.45 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                          <CalendarClock size={12} />
+                          {formatDateTime(f.created_at)}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', marginTop: '0.15rem' }}>
+                          <User size={12} />
+                          {f.triggered_by || 'web_hub'}
+                        </div>
+                      </div>
                     </td>
                     <td>
                       <button className="btn btn-secondary" style={{ padding: '0.4rem 0.75rem', fontSize: '0.8rem' }} onClick={() => setActiveFinding(f)}>
@@ -241,12 +278,18 @@ export const FindingsPage: React.FC<PageProps> = ({
             </p>
 
             <div style={{ background: '#f6f8fa', borderRadius: '6px', padding: '0.85rem', marginBottom: '1rem', border: '1px solid var(--border-default)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#0969da', fontFamily: 'var(--font-mono)', fontSize: '0.85rem', fontWeight: 600 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#0969da', fontFamily: 'var(--font-mono)', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.55rem' }}>
                 <FileCode size={16} />
                 <span>
                   {formatFilePath(activeFinding.file_path) || t('findings.apiEndpoint')}
                   {activeFinding.line_number ? ` (${t('findings.line', { n: activeFinding.line_number })})` : ''}
                 </span>
+              </div>
+              <div style={{ fontSize: '0.8rem', color: '#656d76', display: 'grid', gap: '0.25rem' }}>
+                <div><strong>Repo:</strong> {activeFinding.repository_name || activeFinding.repository_id}</div>
+                <div><strong>Detectado:</strong> {formatDateTime(activeFinding.created_at)}</div>
+                <div><strong>Usuario / origen:</strong> {activeFinding.triggered_by || 'web_hub'}</div>
+                {activeFinding.cwe ? <div><strong>CWE:</strong> {activeFinding.cwe}</div> : null}
               </div>
             </div>
 

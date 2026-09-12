@@ -14,6 +14,7 @@ from typing import List, Optional
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import joinedload
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
@@ -197,7 +198,22 @@ def _display_file_path(path: str | None) -> str | None:
 
 def _finding_out(finding: Finding) -> FindingResponse:
     out = FindingResponse.model_validate(finding)
-    return out.model_copy(update={"file_path": _display_file_path(out.file_path)})
+    repo_name = None
+    triggered = None
+    try:
+        if finding.repository is not None:
+            repo_name = finding.repository.name
+        if finding.scan is not None:
+            triggered = finding.scan.triggered_by
+    except Exception:
+        pass
+    return out.model_copy(
+        update={
+            "file_path": _display_file_path(out.file_path),
+            "repository_name": repo_name,
+            "triggered_by": triggered,
+        }
+    )
 
 
 def _scan_out(scan: Scan) -> ScanResponse:
@@ -489,8 +505,69 @@ async def list_findings(
         else:
             # Por defecto ocultar supersedidos (re-escaneos) para no inflar la matriz
             q = q.filter(Finding.status != "SUPERSEDED")
-        rows = q.order_by(Finding.created_at.desc()).all()
+        rows = (
+            q.options(joinedload(Finding.repository), joinedload(Finding.scan))
+            .order_by(Finding.created_at.desc())
+            .all()
+        )
         return [_finding_out(f) for f in rows]
+    finally:
+        db.close()
+
+
+@app.delete("/api/v1/findings", tags=["Findings"])
+async def clear_findings(repository_id: Optional[str] = None):
+    """Vacía la matriz (todos o por repo). Útil para demos / re-escanear limpio."""
+    _require_db()
+    db = SessionLocal()
+    try:
+        q = db.query(Finding)
+        if repository_id:
+            q = q.filter(Finding.repository_id == repository_id)
+        deleted = q.delete(synchronize_session=False)
+        repos = db.query(Repository).all()
+        if repository_id:
+            repos = [r for r in repos if r.id == repository_id]
+        for repo in repos:
+            repo.open_criticals = 0
+            repo.open_highs = 0
+            repo.total_findings = 0
+            repo.health_score = 100
+        _append_audit(
+            db,
+            "web_hub",
+            "FINDINGS_CLEARED",
+            repository_id or "all",
+            f"Matriz vaciada ({deleted} hallazgos eliminados).",
+        )
+        db.commit()
+        return {"deleted": deleted, "repository_id": repository_id}
+    finally:
+        db.close()
+
+
+@app.delete("/api/v1/repositories/{repository_id}", tags=["Repositories"])
+async def delete_repository(repository_id: str):
+    _require_db()
+    db = SessionLocal()
+    try:
+        repo = db.get(Repository, repository_id)
+        if not repo:
+            raise HTTPException(status_code=404, detail="Repositorio no encontrado")
+        name = repo.name
+        # Borrar hallazgos y scans primero por si cascade no está en DB remota
+        db.query(Finding).filter(Finding.repository_id == repository_id).delete(synchronize_session=False)
+        db.query(Scan).filter(Scan.repository_id == repository_id).delete(synchronize_session=False)
+        db.delete(repo)
+        _append_audit(
+            db,
+            "web_hub",
+            "REPO_DELETED",
+            name,
+            f"Repositorio {repository_id} eliminado con sus scans/hallazgos.",
+        )
+        db.commit()
+        return {"deleted": True, "id": repository_id, "name": name}
     finally:
         db.close()
 
@@ -535,6 +612,11 @@ async def trigger_scan(scan_in: ScanCreate, background_tasks: BackgroundTasks):
         repo = db.get(Repository, scan_in.repository_id)
         if not repo:
             raise HTTPException(status_code=404, detail="Repositorio no encontrado")
+        allowed = {"semgrep", "gitleaks", "trivy"}
+        engines = [e.lower().strip() for e in (scan_in.engines or []) if e]
+        engines = [e for e in engines if e in allowed]
+        if not engines:
+            engines = ["semgrep", "gitleaks", "trivy"]
         row = Scan(
             id=str(uuid.uuid4()),
             repository_id=scan_in.repository_id,
@@ -551,17 +633,18 @@ async def trigger_scan(scan_in: ScanCreate, background_tasks: BackgroundTasks):
         )
         db.add(row)
         repo.last_scan_at = _now()
+        engines_label = " + ".join(e.capitalize() for e in engines)
         _append_audit(
             db,
-            "web_hub",
+            scan_in.triggered_by or "web_hub",
             "SCAN_TRIGGERED",
             repo.name,
-            f"Escaneo {row.id} encolado · Semgrep + GitLeaks + Trivy (background).",
+            f"Escaneo {row.id} encolado · {engines_label} (background).",
         )
         db.commit()
         db.refresh(row)
         scan_id = row.id
-        background_tasks.add_task(run_repo_scan_job, scan_id)
+        background_tasks.add_task(run_repo_scan_job, scan_id, engines)
         return _scan_out(row)
     finally:
         db.close()

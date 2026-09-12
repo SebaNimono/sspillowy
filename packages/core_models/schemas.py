@@ -52,6 +52,8 @@ class FindingResponse(FindingBase):
     ai_summary: Optional[str] = None
     ai_remediation: Optional[str] = None
     created_at: datetime
+    repository_name: Optional[str] = None
+    triggered_by: Optional[str] = None
 
 # Repository Schemas
 class RepositoryBase(BaseModel):
@@ -79,6 +81,9 @@ class ScanCreate(BaseModel):
     repository_id: str
     triggered_by: str = "web_user"
     branch: str = "main"
+    # Motores a ejecutar (semgrep, gitleaks, trivy). Vacío = los tres disponibles.
+    engines: List[str] = Field(default_factory=lambda: ["semgrep", "gitleaks", "trivy"])
+
 
 class ScanResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)

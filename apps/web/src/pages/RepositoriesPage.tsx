@@ -2,8 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Header } from '../components/Header';
 import { SidebarState } from '../components/Sidebar';
 import { Toast, ToastMessage } from '../components/Toast';
-import { Repository, Scan, fetchRepositories, createRepository, triggerScan, fetchScans } from '../api/client';
-import { FolderGit2, Plus, Play, GitBranch, RefreshCw } from 'lucide-react';
+import { Repository, Scan, ScanEngine, fetchRepositories, createRepository, triggerScan, fetchScans, deleteRepository } from '../api/client';
+import { FolderGit2, Plus, Play, GitBranch, RefreshCw, Trash2 } from 'lucide-react';
 import { useI18n } from '../i18n/I18nProvider';
 
 interface PageProps {
@@ -33,6 +33,12 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
+  const [scanTarget, setScanTarget] = useState<{ id: string; name: string } | null>(null);
+  const [scanEngines, setScanEngines] = useState<Record<ScanEngine, boolean>>({
+    semgrep: true,
+    gitleaks: true,
+    trivy: true,
+  });
 
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
@@ -219,10 +225,28 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
     }
   };
 
-  const handleTriggerScan = async (repoId: string, repoName: string) => {
+  const openScanModal = (repoId: string, repoName: string) => {
     if (activeScans[repoId]) return;
+    setScanTarget({ id: repoId, name: repoName });
+    setScanEngines({ semgrep: true, gitleaks: true, trivy: true });
+  };
+
+  const handleTriggerScan = async () => {
+    if (!scanTarget) return;
+    const engines = (Object.keys(scanEngines) as ScanEngine[]).filter((k) => scanEngines[k]);
+    if (engines.length === 0) {
+      setToast({
+        id: Date.now().toString(),
+        type: 'error',
+        title: 'Elegí al menos un motor',
+        message: 'Semgrep, GitLeaks o Trivy.',
+      });
+      return;
+    }
+    const { id: repoId, name: repoName } = scanTarget;
+    setScanTarget(null);
     try {
-      const scan = await triggerScan(repoId);
+      const scan = await triggerScan(repoId, engines, user?.email || user?.name || 'web_hub');
       setActiveScans((prev) => ({
         ...prev,
         [repoId]: { scanId: scan.id, repoName, startedAt: Date.now() },
@@ -231,13 +255,39 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
         id: Date.now().toString(),
         type: 'info',
         title: t('repos.scanning'),
-        message: t('repos.scanningBanner', { name: repoName }),
+        message: `${engines.join(' + ')} · ${repoName}`,
       });
     } catch (err) {
       setToast({
         id: Date.now().toString(),
         type: 'error',
         title: 'No se pudo iniciar el escaneo',
+        message: err instanceof Error ? err.message : 'Error de API',
+      });
+    }
+  };
+
+  const handleDeleteRepo = async (repoId: string, repoName: string) => {
+    if (!window.confirm(`¿Eliminar el repositorio «${repoName}» y sus hallazgos/escaneos?`)) return;
+    try {
+      await deleteRepository(repoId);
+      setRepos((prev) => prev.filter((r) => r.id !== repoId));
+      setActiveScans((prev) => {
+        const next = { ...prev };
+        delete next[repoId];
+        return next;
+      });
+      setToast({
+        id: Date.now().toString(),
+        type: 'success',
+        title: 'Repositorio eliminado',
+        message: repoName,
+      });
+    } catch (err) {
+      setToast({
+        id: Date.now().toString(),
+        type: 'error',
+        title: 'No se pudo eliminar',
         message: err instanceof Error ? err.message : 'Error de API',
       });
     }
@@ -367,29 +417,40 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
                       </td>
                       <td style={{ fontWeight: 500, color: '#656d76' }}>{t('repos.findingsCount', { count: repo.total_findings })}</td>
                       <td>
-                        <button
-                          className="btn btn-secondary"
-                          style={{
-                            padding: '0.4rem 0.75rem',
-                            fontSize: '0.8rem',
-                            opacity: scanning ? 0.85 : 1,
-                            cursor: scanning ? 'wait' : 'pointer',
-                          }}
-                          disabled={scanning}
-                          onClick={() => handleTriggerScan(repo.id, repo.name)}
-                        >
-                          {scanning ? (
-                            <>
-                              <RefreshCw size={14} className="spin" color="#0969da" />
-                              <span>{t('repos.scanning')}</span>
-                            </>
-                          ) : (
-                            <>
-                              <Play size={14} color="#0969da" />
-                              <span>{t('repos.runScan')}</span>
-                            </>
-                          )}
-                        </button>
+                        <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                          <button
+                            className="btn btn-secondary"
+                            style={{
+                              padding: '0.4rem 0.75rem',
+                              fontSize: '0.8rem',
+                              opacity: scanning ? 0.85 : 1,
+                              cursor: scanning ? 'wait' : 'pointer',
+                            }}
+                            disabled={scanning}
+                            onClick={() => openScanModal(repo.id, repo.name)}
+                          >
+                            {scanning ? (
+                              <>
+                                <RefreshCw size={14} className="spin" color="#0969da" />
+                                <span>{t('repos.scanning')}</span>
+                              </>
+                            ) : (
+                              <>
+                                <Play size={14} color="#0969da" />
+                                <span>{t('repos.runScan')}</span>
+                              </>
+                            )}
+                          </button>
+                          <button
+                            className="btn btn-secondary"
+                            style={{ padding: '0.4rem 0.55rem', fontSize: '0.8rem', color: '#cf222e' }}
+                            disabled={scanning}
+                            title="Eliminar repositorio"
+                            onClick={() => handleDeleteRepo(repo.id, repo.name)}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -399,6 +460,57 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
           </div>
         )}
       </div>
+
+      {scanTarget && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '440px' }}>
+            <h2 style={{ fontSize: '1.15rem', marginBottom: '0.35rem', color: '#1f2328', fontWeight: 700 }}>
+              Configurar escaneo
+            </h2>
+            <p style={{ fontSize: '0.85rem', color: '#656d76', marginBottom: '1rem' }}>
+              Repo: <strong>{scanTarget.name}</strong>. Elegí qué motores correr.
+            </p>
+            {(
+              [
+                { id: 'semgrep' as const, label: 'Semgrep (SAST / código)' },
+                { id: 'gitleaks' as const, label: 'GitLeaks (secretos)' },
+                { id: 'trivy' as const, label: 'Trivy (deps / misconfig)' },
+              ]
+            ).map((opt) => (
+              <label
+                key={opt.id}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.55rem',
+                  padding: '0.55rem 0.65rem',
+                  marginBottom: '0.35rem',
+                  border: '1px solid #d0d7de',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  background: scanEngines[opt.id] ? '#ddf4ff' : '#fff',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={scanEngines[opt.id]}
+                  onChange={(e) => setScanEngines((prev) => ({ ...prev, [opt.id]: e.target.checked }))}
+                />
+                <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#1f2328' }}>{opt.label}</span>
+              </label>
+            ))}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.25rem' }}>
+              <button type="button" className="btn btn-secondary" onClick={() => setScanTarget(null)}>
+                {t('repos.cancel')}
+              </button>
+              <button type="button" className="btn btn-primary" onClick={handleTriggerScan}>
+                <Play size={14} />
+                <span>Iniciar escaneo</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showModal && (
         <div className="modal-overlay">

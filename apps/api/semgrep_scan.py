@@ -300,15 +300,20 @@ def finalize_scan(
     )
 
 
-def run_semgrep_scan_job(scan_id: str) -> None:
-    """Alias histórico → job multi-motor Semgrep + GitLeaks + Trivy."""
-    run_repo_scan_job(scan_id)
+def run_semgrep_scan_job(scan_id: str, engines: list[str] | None = None) -> None:
+    """Alias histórico → job multi-motor."""
+    run_repo_scan_job(scan_id, engines)
 
 
-def run_repo_scan_job(scan_id: str) -> None:
-    """Job en background: clone (o fixture) → Semgrep + GitLeaks + Trivy → Postgres."""
+def run_repo_scan_job(scan_id: str, engines: list[str] | None = None) -> None:
+    """Job en background: clone (o fixture) → motores seleccionados → Postgres."""
     from gitleaks_scan import gitleaks_available, persist_gitleaks_findings, run_gitleaks
     from trivy_scan import persist_trivy_findings, run_trivy_fs, trivy_available
+
+    wanted = {e.lower().strip() for e in (engines or ["semgrep", "gitleaks", "trivy"])}
+    wanted &= {"semgrep", "gitleaks", "trivy"}
+    if not wanted:
+        wanted = {"semgrep", "gitleaks", "trivy"}
 
     db = SessionLocal()
     work_parent: Path | None = None
@@ -366,71 +371,71 @@ def run_repo_scan_job(scan_id: str) -> None:
         errors: list[str] = []
         engines_ok: list[str] = []
 
-        # --- Semgrep ---
-        if semgrep_available():
-            try:
-                sg_results = _run_semgrep(target)
-                sg_counts = persist_semgrep_results(
-                    db, scan=scan, repo=repo, results=sg_results, scan_root=target
-                )
-                count_parts.append(sg_counts)
-                engine_notes.append(f"Semgrep {sum(sg_counts.values())}")
-                engines_ok.append("semgrep")
-            except Exception as exc:
-                errors.append(f"semgrep: {exc}")
-                _append_audit(
-                    db,
-                    "scan-worker",
-                    "ENGINE_FAILED",
-                    repo.name,
-                    f"Semgrep: {str(exc)[:400]}",
-                )
-        else:
-            errors.append("semgrep missing")
+        if "semgrep" in wanted:
+            if semgrep_available():
+                try:
+                    sg_results = _run_semgrep(target)
+                    sg_counts = persist_semgrep_results(
+                        db, scan=scan, repo=repo, results=sg_results, scan_root=target
+                    )
+                    count_parts.append(sg_counts)
+                    engine_notes.append(f"Semgrep {sum(sg_counts.values())}")
+                    engines_ok.append("semgrep")
+                except Exception as exc:
+                    errors.append(f"semgrep: {exc}")
+                    _append_audit(
+                        db,
+                        "scan-worker",
+                        "ENGINE_FAILED",
+                        repo.name,
+                        f"Semgrep: {str(exc)[:400]}",
+                    )
+            else:
+                errors.append("semgrep missing")
 
-        # --- GitLeaks ---
-        if gitleaks_available():
-            try:
-                gl_results = run_gitleaks(target)
-                gl_counts = persist_gitleaks_findings(
-                    db, scan=scan, repo=repo, results=gl_results, scan_root=target
-                )
-                count_parts.append(gl_counts)
-                engine_notes.append(f"GitLeaks {sum(gl_counts.values())}")
-                engines_ok.append("gitleaks")
-            except Exception as exc:
-                errors.append(f"gitleaks: {exc}")
-                _append_audit(
-                    db,
-                    "scan-worker",
-                    "ENGINE_FAILED",
-                    repo.name,
-                    f"GitLeaks: {str(exc)[:400]}",
-                )
-        else:
-            errors.append("gitleaks missing")
+        if "gitleaks" in wanted:
+            if gitleaks_available():
+                try:
+                    gl_results = run_gitleaks(target)
+                    gl_counts = persist_gitleaks_findings(
+                        db, scan=scan, repo=repo, results=gl_results, scan_root=target
+                    )
+                    count_parts.append(gl_counts)
+                    engine_notes.append(f"GitLeaks {sum(gl_counts.values())}")
+                    engines_ok.append("gitleaks")
+                except Exception as exc:
+                    errors.append(f"gitleaks: {exc}")
+                    _append_audit(
+                        db,
+                        "scan-worker",
+                        "ENGINE_FAILED",
+                        repo.name,
+                        f"GitLeaks: {str(exc)[:400]}",
+                    )
+            else:
+                errors.append("gitleaks missing")
 
-        # --- Trivy ---
-        if trivy_available():
-            try:
-                tv_results = run_trivy_fs(target)
-                tv_counts = persist_trivy_findings(
-                    db, scan=scan, repo=repo, results=tv_results, scan_root=target
-                )
-                count_parts.append(tv_counts)
-                engine_notes.append(f"Trivy {sum(tv_counts.values())}")
-                engines_ok.append("trivy")
-            except Exception as exc:
-                errors.append(f"trivy: {exc}")
-                _append_audit(
-                    db,
-                    "scan-worker",
-                    "ENGINE_FAILED",
-                    repo.name,
-                    f"Trivy: {str(exc)[:400]}",
-                )
-        else:
-            errors.append("trivy missing")
+        if "trivy" in wanted:
+            if trivy_available():
+                try:
+                    tv_results = run_trivy_fs(target)
+                    tv_counts = persist_trivy_findings(
+                        db, scan=scan, repo=repo, results=tv_results, scan_root=target
+                    )
+                    count_parts.append(tv_counts)
+                    engine_notes.append(f"Trivy {sum(tv_counts.values())}")
+                    engines_ok.append("trivy")
+                except Exception as exc:
+                    errors.append(f"trivy: {exc}")
+                    _append_audit(
+                        db,
+                        "scan-worker",
+                        "ENGINE_FAILED",
+                        repo.name,
+                        f"Trivy: {str(exc)[:400]}",
+                    )
+            else:
+                errors.append("trivy missing")
 
         if not count_parts:
             scan.status = "FAILED"
