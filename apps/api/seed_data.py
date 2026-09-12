@@ -110,7 +110,7 @@ SCANS = [
     {
         "id": "scan-pay-002",
         "repository_id": "repo-payment-gateway",
-        "status": "RUNNING",
+        "status": "COMPLETED",
         "triggered_by": "web_hub",
         "branch": "develop",
         "total_findings": 0,
@@ -119,7 +119,7 @@ SCANS = [
         "medium_count": 0,
         "low_count": 0,
         "created_at": _ago(hours=1),
-        "completed_at": None,
+        "completed_at": _ago(hours=1),
     },
 ]
 

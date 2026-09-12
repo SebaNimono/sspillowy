@@ -32,7 +32,7 @@ VALUES
   ('scan-api-001', 'repo-sspillowy-api', 'COMPLETED', 'webhook', 'main', 4, 1, 1, 1, 1, NOW() - INTERVAL '7 hours', NOW() - INTERVAL '6 hours'),
   ('scan-pay-001', 'repo-payment-gateway', 'COMPLETED', 'web_hub', 'develop', 5, 2, 2, 1, 0, NOW() - INTERVAL '4 hours', NOW() - INTERVAL '3 hours'),
   ('scan-auth-001', 'repo-auth-identity', 'COMPLETED', 'ci', 'main', 2, 0, 1, 1, 0, NOW() - INTERVAL '26 hours', NOW() - INTERVAL '1 day'),
-  ('scan-pay-002', 'repo-payment-gateway', 'RUNNING', 'web_hub', 'develop', 0, 0, 0, 0, 0, NOW() - INTERVAL '1 hour', NULL)
+  ('scan-pay-002', 'repo-payment-gateway', 'COMPLETED', 'web_hub', 'develop', 0, 0, 0, 0, 0, NOW() - INTERVAL '1 hour', NOW() - INTERVAL '1 hour')
 ON CONFLICT (id) DO UPDATE SET
   status = EXCLUDED.status,
   total_findings = EXCLUDED.total_findings,

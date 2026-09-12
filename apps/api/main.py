@@ -89,8 +89,11 @@ async def on_startup():
 
             stats = seed()
             print(f"[sspillowy] empty DB → seed applied: {stats}")
+        expired = _expire_stale_running_scans(db)
+        if expired:
+            print(f"[sspillowy] expired stale RUNNING scans: {expired}")
     except Exception as exc:
-        print(f"[sspillowy] seed skipped: {exc}")
+        print(f"[sspillowy] seed/cleanup skipped: {exc}")
     finally:
         db.close()
 
@@ -119,6 +122,31 @@ _READ_NOTIFICATION_IDS: set[str] = set()
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _expire_stale_running_scans(db) -> int:
+    """Marca como FAILED escaneos RUNNING demasiado viejos (jobs muertos / seed)."""
+    minutes = int(os.getenv("STALE_SCAN_MINUTES", "20"))
+    cutoff = _now() - timedelta(minutes=max(5, minutes))
+    rows = (
+        db.query(Scan)
+        .filter(Scan.status == "RUNNING", Scan.created_at < cutoff)
+        .all()
+    )
+    if not rows:
+        return 0
+    for scan in rows:
+        scan.status = "FAILED"
+        scan.completed_at = _now()
+        _append_audit(
+            db,
+            "scan-worker",
+            "SCAN_STALE_EXPIRED",
+            scan.id,
+            f"Escaneo RUNNING expirado (> {minutes} min). Marcado FAILED.",
+        )
+    db.commit()
+    return len(rows)
 
 
 def _require_db():
@@ -539,6 +567,7 @@ async def list_scans():
     _require_db()
     db = SessionLocal()
     try:
+        _expire_stale_running_scans(db)
         rows = db.query(Scan).order_by(Scan.created_at.desc()).all()
         return [_scan_out(s) for s in rows]
     finally:

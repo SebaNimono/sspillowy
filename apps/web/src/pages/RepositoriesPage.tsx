@@ -24,6 +24,8 @@ type ActiveScan = {
 
 const POLL_MS = 3000;
 const MAX_WAIT_MS = 12 * 60 * 1000; // repos grandes (maka, etc.)
+/** Solo retomar RUNNING recientes; los viejos son seed/jobs muertos. */
+const RESUME_MAX_AGE_MS = 20 * 60 * 1000;
 
 export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebarState, user, onLogout, onNavigate, unreadCount, onGoToSite }) => {
   const { t } = useI18n();
@@ -141,7 +143,12 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
     Promise.all([fetchRepositories(), fetchScans()])
       .then(([repoList, scans]) => {
         setRepos(repoList || []);
-        const running = (scans || []).filter((s) => (s.status || '').toUpperCase() === 'RUNNING');
+        const running = (scans || []).filter((s) => {
+          if ((s.status || '').toUpperCase() !== 'RUNNING') return false;
+          const started = Date.parse(s.created_at);
+          if (!Number.isFinite(started)) return false;
+          return Date.now() - started < RESUME_MAX_AGE_MS;
+        });
         if (!running.length) return;
         const nameById = new Map((repoList || []).map((r) => [r.id, r.name]));
         const latest: Record<string, ActiveScan> = {};
