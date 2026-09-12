@@ -3,6 +3,7 @@ export interface Repository {
   name: string;
   url: string;
   branch: string;
+  dast_url?: string | null;
   is_active: boolean;
   health_score: number;
   open_criticals: number;
@@ -147,11 +148,21 @@ export async function fetchRepositories(): Promise<Repository[]> {
   return request('/repositories');
 }
 
-export async function createRepository(name: string, url: string, branch: string): Promise<Repository> {
+export async function createRepository(
+  name: string,
+  url: string,
+  branch: string,
+  dastUrl?: string,
+): Promise<Repository> {
   return request('/repositories', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, url, branch }),
+    body: JSON.stringify({
+      name,
+      url,
+      branch,
+      dast_url: dastUrl?.trim() || null,
+    }),
   });
 }
 
@@ -181,12 +192,13 @@ export async function updateFindingStatus(findingId: string, status: Finding['st
   });
 }
 
-export type ScanEngine = 'semgrep' | 'gitleaks' | 'trivy';
+export type ScanEngine = 'semgrep' | 'gitleaks' | 'trivy' | 'owasp_zap';
 
 export async function triggerScan(
   repositoryId: string,
   engines: ScanEngine[] = ['semgrep', 'gitleaks', 'trivy'],
   triggeredBy = 'web_hub',
+  targetUrl?: string,
 ): Promise<Scan> {
   return request('/scans', {
     method: 'POST',
@@ -195,6 +207,7 @@ export async function triggerScan(
       repository_id: repositoryId,
       triggered_by: triggeredBy,
       engines,
+      ...(targetUrl?.trim() ? { target_url: targetUrl.trim() } : {}),
     }),
   });
 }

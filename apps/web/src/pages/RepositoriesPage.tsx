@@ -34,18 +34,21 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
-  const [scanTarget, setScanTarget] = useState<{ id: string; name: string } | null>(null);
+  const [scanTarget, setScanTarget] = useState<{ id: string; name: string; dastUrl?: string | null } | null>(null);
   const [scanEngines, setScanEngines] = useState<Record<ScanEngine, boolean>>({
     semgrep: true,
     gitleaks: true,
     trivy: true,
+    owasp_zap: false,
   });
+  const [scanDastUrl, setScanDastUrl] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
   const [branch, setBranch] = useState('main');
+  const [dastUrl, setDastUrl] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [activeScans, setActiveScans] = useState<Record<string, ActiveScan>>({});
   const activeScansRef = useRef(activeScans);
@@ -189,7 +192,7 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
     if (!name || !url) return;
     setSubmitting(true);
     try {
-      const newRepo = await createRepository(name, url, branch);
+      const newRepo = await createRepository(name, url, branch, dastUrl);
       setRepos([newRepo, ...repos]);
       setToast({
         id: Date.now().toString(),
@@ -200,12 +203,14 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
       setShowModal(false);
       setName('');
       setUrl('');
+      setDastUrl('');
     } catch (err) {
       const manualNewRepo: Repository = {
         id: `repo-${Date.now()}`,
         name,
         url,
         branch,
+        dast_url: dastUrl || null,
         is_active: true,
         health_score: 100,
         open_criticals: 0,
@@ -223,15 +228,17 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
       setShowModal(false);
       setName('');
       setUrl('');
+      setDastUrl('');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const openScanModal = (repoId: string, repoName: string) => {
-    if (activeScans[repoId]) return;
-    setScanTarget({ id: repoId, name: repoName });
-    setScanEngines({ semgrep: true, gitleaks: true, trivy: true });
+  const openScanModal = (repo: Repository) => {
+    if (activeScans[repo.id]) return;
+    setScanTarget({ id: repo.id, name: repo.name, dastUrl: repo.dast_url });
+    setScanEngines({ semgrep: true, gitleaks: true, trivy: true, owasp_zap: false });
+    setScanDastUrl(repo.dast_url || '');
   };
 
   const handleTriggerScan = async () => {
@@ -247,9 +254,15 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
       return;
     }
     const { id: repoId, name: repoName } = scanTarget;
+    const targetOverride = scanEngines.owasp_zap ? scanDastUrl : undefined;
     setScanTarget(null);
     try {
-      const scan = await triggerScan(repoId, engines, user?.email || user?.name || 'web_hub');
+      const scan = await triggerScan(
+        repoId,
+        engines,
+        user?.email || user?.name || 'web_hub',
+        targetOverride,
+      );
       setActiveScans((prev) => ({
         ...prev,
         [repoId]: { scanId: scan.id, repoName, startedAt: Date.now() },
@@ -435,7 +448,7 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
                               cursor: scanning ? 'wait' : 'pointer',
                             }}
                             disabled={scanning}
-                            onClick={() => openScanModal(repo.id, repo.name)}
+                            onClick={() => openScanModal(repo)}
                           >
                             {scanning ? (
                               <>
@@ -483,6 +496,7 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
                 { id: 'semgrep' as const, label: 'Semgrep (SAST / código)' },
                 { id: 'gitleaks' as const, label: 'GitLeaks (secretos)' },
                 { id: 'trivy' as const, label: 'Trivy (deps / misconfig)' },
+                { id: 'owasp_zap' as const, label: 'OWASP ZAP (DAST / URL)' },
               ]
             ).map((opt) => (
               <label
@@ -507,6 +521,32 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
                 <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#1f2328' }}>{opt.label}</span>
               </label>
             ))}
+            {scanEngines.owasp_zap && (
+              <div style={{ marginTop: '0.75rem', marginBottom: '0.25rem' }}>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: '#656d76', marginBottom: '0.35rem', fontWeight: 600 }}>
+                  {t('repos.dastUrlLabel')}
+                </label>
+                <input
+                  type="url"
+                  placeholder="https://sspillowy.com"
+                  value={scanDastUrl}
+                  onChange={(e) => setScanDastUrl(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '0.65rem',
+                    borderRadius: '6px',
+                    border: '1px solid var(--border-default)',
+                    background: '#ffffff',
+                    color: '#1f2328',
+                    outline: 'none',
+                    fontSize: '0.85rem',
+                  }}
+                />
+                <p style={{ fontSize: '0.75rem', color: '#656d76', marginTop: '0.35rem' }}>
+                  {t('repos.dastUrlHint')}
+                </p>
+              </div>
+            )}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.25rem' }}>
               <button type="button" className="btn btn-secondary" onClick={() => setScanTarget(null)}>
                 {t('repos.cancel')}
@@ -587,7 +627,7 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
                 />
               </div>
 
-              <div style={{ marginBottom: '1.5rem' }}>
+              <div style={{ marginBottom: '1rem' }}>
                 <label style={{ display: 'block', fontSize: '0.85rem', color: '#656d76', marginBottom: '0.35rem', fontWeight: 600 }}>
                   {t('repos.branchLabel')}
                 </label>
@@ -605,6 +645,30 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
                     outline: 'none',
                   }}
                 />
+              </div>
+
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', color: '#656d76', marginBottom: '0.35rem', fontWeight: 600 }}>
+                  {t('repos.dastUrlLabel')} <span style={{ fontWeight: 400 }}>({t('repos.optional')})</span>
+                </label>
+                <input
+                  type="url"
+                  placeholder="https://sspillowy.com"
+                  value={dastUrl}
+                  onChange={(e) => setDastUrl(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    borderRadius: '6px',
+                    border: '1px solid var(--border-default)',
+                    background: '#ffffff',
+                    color: '#1f2328',
+                    outline: 'none',
+                  }}
+                />
+                <p style={{ fontSize: '0.75rem', color: '#656d76', marginTop: '0.35rem' }}>
+                  {t('repos.dastUrlHint')}
+                </p>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>

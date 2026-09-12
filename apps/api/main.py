@@ -68,6 +68,7 @@ from models import (  # noqa: E402
 from semgrep_scan import run_repo_scan_job, semgrep_available  # noqa: E402
 from gitleaks_scan import gitleaks_available  # noqa: E402
 from trivy_scan import trivy_available  # noqa: E402
+from zap_scan import zap_available, zap_binary  # noqa: E402
 
 app = FastAPI(
     title="SSPILLOWY API Core",
@@ -384,7 +385,8 @@ async def health_check():
         "semgrep": "available" if semgrep_available() else "missing",
         "gitleaks": "available" if gitleaks_available() else "missing",
         "trivy": "available" if trivy_available() else "missing",
-        "redis_worker": "inline-background (semgrep+gitleaks+trivy)",
+        "owasp_zap": "full" if zap_binary() else ("baseline-lite" if zap_available() else "missing"),
+        "redis_worker": "inline-background (semgrep+gitleaks+trivy+zap)",
         "email_mailer": mailer_status(),
     }
 
@@ -460,6 +462,7 @@ async def create_repository(repo: RepositoryCreate):
             name=repo.name,
             url=repo.url,
             branch=repo.branch or "main",
+            dast_url=(repo.dast_url or "").strip() or None,
             is_active=True,
             health_score=100,
             open_criticals=0,
@@ -612,11 +615,15 @@ async def trigger_scan(scan_in: ScanCreate, background_tasks: BackgroundTasks):
         repo = db.get(Repository, scan_in.repository_id)
         if not repo:
             raise HTTPException(status_code=404, detail="Repositorio no encontrado")
-        allowed = {"semgrep", "gitleaks", "trivy"}
+        allowed = {"semgrep", "gitleaks", "trivy", "owasp_zap"}
         engines = [e.lower().strip() for e in (scan_in.engines or []) if e]
         engines = [e for e in engines if e in allowed]
         if not engines:
             engines = ["semgrep", "gitleaks", "trivy"]
+        target_url = (scan_in.target_url or getattr(repo, "dast_url", None) or "").strip() or None
+        if "owasp_zap" in engines and not target_url:
+            # Fallback global; el job también lo usa
+            target_url = os.getenv("ZAP_DEFAULT_TARGET", "https://sspillowy.com").strip() or None
         row = Scan(
             id=str(uuid.uuid4()),
             repository_id=scan_in.repository_id,
@@ -633,18 +640,20 @@ async def trigger_scan(scan_in: ScanCreate, background_tasks: BackgroundTasks):
         )
         db.add(row)
         repo.last_scan_at = _now()
-        engines_label = " + ".join(e.capitalize() for e in engines)
+        engines_label = " + ".join(e.replace("owasp_zap", "OWASP-ZAP") for e in engines)
         _append_audit(
             db,
             scan_in.triggered_by or "web_hub",
             "SCAN_TRIGGERED",
             repo.name,
-            f"Escaneo {row.id} encolado · {engines_label} (background).",
+            f"Escaneo {row.id} encolado · {engines_label}"
+            + (f" · DAST {target_url}" if target_url and "owasp_zap" in engines else "")
+            + " (background).",
         )
         db.commit()
         db.refresh(row)
         scan_id = row.id
-        background_tasks.add_task(run_repo_scan_job, scan_id, engines)
+        background_tasks.add_task(run_repo_scan_job, scan_id, engines, target_url)
         return _scan_out(row)
     finally:
         db.close()

@@ -300,20 +300,27 @@ def finalize_scan(
     )
 
 
-def run_semgrep_scan_job(scan_id: str, engines: list[str] | None = None) -> None:
+def run_semgrep_scan_job(
+    scan_id: str, engines: list[str] | None = None, target_url: str | None = None
+) -> None:
     """Alias histórico → job multi-motor."""
-    run_repo_scan_job(scan_id, engines)
+    run_repo_scan_job(scan_id, engines, target_url)
 
 
-def run_repo_scan_job(scan_id: str, engines: list[str] | None = None) -> None:
-    """Job en background: clone (o fixture) → motores seleccionados → Postgres."""
+def run_repo_scan_job(
+    scan_id: str, engines: list[str] | None = None, target_url: str | None = None
+) -> None:
+    """Job en background: clone (o fixture) → motores SAST/SCA + DAST ZAP → Postgres."""
     from gitleaks_scan import gitleaks_available, persist_gitleaks_findings, run_gitleaks
     from trivy_scan import persist_trivy_findings, run_trivy_fs, trivy_available
+    from zap_scan import persist_zap_findings, run_zap_scan
 
     wanted = {e.lower().strip() for e in (engines or ["semgrep", "gitleaks", "trivy"])}
-    wanted &= {"semgrep", "gitleaks", "trivy"}
+    wanted &= {"semgrep", "gitleaks", "trivy", "owasp_zap"}
     if not wanted:
         wanted = {"semgrep", "gitleaks", "trivy"}
+
+    needs_clone = bool(wanted & {"semgrep", "gitleaks", "trivy"})
 
     db = SessionLocal()
     work_parent: Path | None = None
@@ -328,50 +335,52 @@ def run_repo_scan_job(scan_id: str, engines: list[str] | None = None) -> None:
             db.commit()
             return
 
-        work_parent = Path(tempfile.mkdtemp(prefix="sspillowy-scan-"))
-        clone_dir = work_parent / "repo"
         source_note = ""
-        target: Path
+        target: Path | None = None
 
-        fallback_ok = _env_true("SEMGREP_FALLBACK_FIXTURE", "true") or _env_true(
-            "SCAN_FALLBACK_FIXTURE", "true"
-        )
-
-        try:
-            _clone_repo(repo.url, scan.branch or repo.branch or "main", clone_dir)
-            target = clone_dir
-            source_note = f"clone {repo.url}@{scan.branch}"
-        except Exception as clone_exc:
-            if fallback_ok and FIXTURE_DIR.exists():
-                target = FIXTURE_DIR
-                source_note = f"fixture local (clone falló: {clone_exc})"
-                _append_audit(
-                    db,
-                    "scan-worker",
-                    "SCAN_CLONE_FALLBACK",
-                    repo.name,
-                    f"No se pudo clonar {repo.url}. Escaneando fixture vuln_sample. Detalle: {str(clone_exc)[:300]}",
-                )
-                db.commit()
-            else:
-                scan.status = "FAILED"
-                scan.completed_at = _now()
-                _append_audit(
-                    db,
-                    "scan-worker",
-                    "SCAN_FAILED",
-                    repo.name,
-                    f"Clone falló: {str(clone_exc)[:400]}",
-                )
-                db.commit()
-                return
+        if needs_clone:
+            work_parent = Path(tempfile.mkdtemp(prefix="sspillowy-scan-"))
+            clone_dir = work_parent / "repo"
+            fallback_ok = _env_true("SEMGREP_FALLBACK_FIXTURE", "true") or _env_true(
+                "SCAN_FALLBACK_FIXTURE", "true"
+            )
+            try:
+                _clone_repo(repo.url, scan.branch or repo.branch or "main", clone_dir)
+                target = clone_dir
+                source_note = f"clone {repo.url}@{scan.branch}"
+            except Exception as clone_exc:
+                if fallback_ok and FIXTURE_DIR.exists():
+                    target = FIXTURE_DIR
+                    source_note = f"fixture local (clone falló: {clone_exc})"
+                    _append_audit(
+                        db,
+                        "scan-worker",
+                        "SCAN_CLONE_FALLBACK",
+                        repo.name,
+                        f"No se pudo clonar {repo.url}. Escaneando fixture vuln_sample. Detalle: {str(clone_exc)[:300]}",
+                    )
+                    db.commit()
+                else:
+                    scan.status = "FAILED"
+                    scan.completed_at = _now()
+                    _append_audit(
+                        db,
+                        "scan-worker",
+                        "SCAN_FAILED",
+                        repo.name,
+                        f"Clone falló: {str(clone_exc)[:400]}",
+                    )
+                    db.commit()
+                    return
+        else:
+            source_note = "dast-only (sin clone)"
 
         engine_notes: list[str] = []
         count_parts: list[dict[str, int]] = []
         errors: list[str] = []
         engines_ok: list[str] = []
 
-        if "semgrep" in wanted:
+        if "semgrep" in wanted and target is not None:
             if semgrep_available():
                 try:
                     sg_results = _run_semgrep(target)
@@ -393,7 +402,7 @@ def run_repo_scan_job(scan_id: str, engines: list[str] | None = None) -> None:
             else:
                 errors.append("semgrep missing")
 
-        if "gitleaks" in wanted:
+        if "gitleaks" in wanted and target is not None:
             if gitleaks_available():
                 try:
                     gl_results = run_gitleaks(target)
@@ -415,7 +424,7 @@ def run_repo_scan_job(scan_id: str, engines: list[str] | None = None) -> None:
             else:
                 errors.append("gitleaks missing")
 
-        if "trivy" in wanted:
+        if "trivy" in wanted and target is not None:
             if trivy_available():
                 try:
                     tv_results = run_trivy_fs(target)
@@ -436,6 +445,32 @@ def run_repo_scan_job(scan_id: str, engines: list[str] | None = None) -> None:
                     )
             else:
                 errors.append("trivy missing")
+
+        if "owasp_zap" in wanted:
+            dast = (
+                (target_url or "").strip()
+                or (getattr(repo, "dast_url", None) or "").strip()
+                or os.getenv("ZAP_DEFAULT_TARGET", "https://sspillowy.com").strip()
+            )
+            try:
+                zap_results = run_zap_scan(dast)
+                zap_counts = persist_zap_findings(
+                    db, scan=scan, repo=repo, results=zap_results
+                )
+                count_parts.append(zap_counts)
+                engine_notes.append(f"ZAP {sum(zap_counts.values())}@{dast}")
+                engines_ok.append("owasp_zap")
+                if not source_note or source_note.startswith("dast"):
+                    source_note = f"DAST {dast}"
+            except Exception as exc:
+                errors.append(f"owasp_zap: {exc}")
+                _append_audit(
+                    db,
+                    "scan-worker",
+                    "ENGINE_FAILED",
+                    repo.name,
+                    f"OWASP ZAP: {str(exc)[:400]}",
+                )
 
         if not count_parts:
             scan.status = "FAILED"

@@ -60,6 +60,7 @@ class RepositoryBase(BaseModel):
     name: str
     url: str
     branch: str = "main"
+    dast_url: Optional[str] = None
 
 class RepositoryCreate(RepositoryBase):
     pass
@@ -81,8 +82,10 @@ class ScanCreate(BaseModel):
     repository_id: str
     triggered_by: str = "web_user"
     branch: str = "main"
-    # Motores a ejecutar (semgrep, gitleaks, trivy). Vacío = los tres disponibles.
+    # Motores: semgrep, gitleaks, trivy, owasp_zap
     engines: List[str] = Field(default_factory=lambda: ["semgrep", "gitleaks", "trivy"])
+    # Override de URL DAST (si no, usa repo.dast_url o ZAP_DEFAULT_TARGET)
+    target_url: Optional[str] = None
 
 
 class ScanResponse(BaseModel):

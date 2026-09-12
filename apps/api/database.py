@@ -91,6 +91,7 @@ def init_db() -> bool:
             conn.execute(
                 text("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_expires_at TIMESTAMPTZ")
             )
+            conn.execute(text("ALTER TABLE repositories ADD COLUMN IF NOT EXISTS dast_url TEXT"))
             conn.execute(
                 text(
                     """

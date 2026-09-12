@@ -60,6 +60,8 @@ class Repository(Base):
     last_scan_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     owner_user_id = Column(String, ForeignKey("users.id"), nullable=True, index=True)
+    # URL HTTP(S) para DAST (OWASP ZAP baseline). Opcional.
+    dast_url = Column(String, nullable=True)
 
     scans = relationship("Scan", back_populates="repository", cascade="all, delete-orphan")
     findings = relationship("Finding", back_populates="repository", cascade="all, delete-orphan")

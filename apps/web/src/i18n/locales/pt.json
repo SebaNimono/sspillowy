@@ -114,6 +114,9 @@
     "nameLabel": "Nome",
     "urlLabel": "URL (GitHub / GitLab)",
     "branchLabel": "Branch",
+    "dastUrlLabel": "URL DAST (OWASP ZAP)",
+    "dastUrlHint": "URL HTTP(S) a varrer. Se vazio, usa https://sspillowy.com ou ZAP_DEFAULT_TARGET.",
+    "optional": "opcional",
     "cancel": "Cancelar",
     "save": "Registrar",
     "deleteTitle": "Eliminar repositório",
@@ -123,7 +126,7 @@
     "scanConfigHint": "Repo: {{name}}. Escolha quais motores executar.",
     "scanStart": "Iniciar varredura",
     "enginesRequired": "Escolha pelo menos um motor",
-    "enginesRequiredMsg": "Semgrep, GitLeaks ou Trivy."
+    "enginesRequiredMsg": "Semgrep, GitLeaks, Trivy ou OWASP ZAP."
   },
   "common": {
     "save": "Salvar",
