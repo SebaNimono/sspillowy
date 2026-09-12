@@ -60,6 +60,24 @@ export interface SecurityGatePolicy {
   enabled: boolean;
 }
 
+export interface GateCheckResult {
+  allowed: boolean;
+  decision: 'PASSED' | 'BLOCKED' | 'DISABLED' | string;
+  reasons: string[];
+  summary: string;
+  open_critical: number;
+  open_high: number;
+  open_secrets: number;
+  max_critical_allowed: number;
+  max_high_allowed: number;
+  block_on_secrets: boolean;
+  require_ciso_approval_for_bypass: boolean;
+  policy_name: string;
+  policy_id: string;
+  repository_id?: string | null;
+  repository_name?: string | null;
+}
+
 export interface Scan {
   id: string;
   repository_id: string;
@@ -71,6 +89,8 @@ export interface Scan {
   high_count: number;
   medium_count: number;
   low_count: number;
+  gate_status?: string | null;
+  gate_detail?: string | null;
   created_at: string;
   completed_at?: string | null;
 }
@@ -218,6 +238,16 @@ export async function fetchScans(): Promise<Scan[]> {
 
 export async function fetchSecurityGate(): Promise<SecurityGatePolicy> {
   return request('/security-gates');
+}
+
+export async function checkSecurityGate(repositoryId?: string): Promise<GateCheckResult> {
+  const qs = repositoryId ? `?repository_id=${encodeURIComponent(repositoryId)}` : '';
+  return request(`/security-gates/check${qs}`);
+}
+
+export async function evaluateSecurityGate(repositoryId?: string): Promise<GateCheckResult> {
+  const qs = repositoryId ? `?repository_id=${encodeURIComponent(repositoryId)}` : '';
+  return request(`/security-gates/evaluate${qs}`, { method: 'POST' });
 }
 
 export async function updateSecurityGate(policy: SecurityGatePolicy): Promise<SecurityGatePolicy> {

@@ -281,6 +281,9 @@ def finalize_scan(
     source_note: str,
     engines_note: str,
 ) -> None:
+    from gate_eval import evaluate_gate
+    from models import SecurityGate
+
     total = sum(counts.values())
     scan.status = "COMPLETED"
     scan.completed_at = _now()
@@ -297,6 +300,23 @@ def finalize_scan(
         "SCAN_COMPLETED",
         repo.name,
         f"{engines_note} · {total} hallazgos · {source_note}",
+    )
+
+    # Evaluar Security Gate con hallazgos abiertos del repo (incluye este escaneo)
+    gate = db.get(SecurityGate, "default-policy")
+    if not gate:
+        gate = SecurityGate(id="default-policy")
+        db.add(gate)
+        db.flush()
+    ev = evaluate_gate(db, gate, repository_id=repo.id)
+    scan.gate_status = ev.decision if ev.decision != "DISABLED" else "SKIPPED"
+    scan.gate_detail = ev.summary()[:2000]
+    _append_audit(
+        db,
+        "security-gate",
+        "GATE_PASSED" if ev.allowed else "GATE_BLOCK",
+        repo.name,
+        scan.gate_detail,
     )
 
 

@@ -59,6 +59,8 @@ CREATE TABLE IF NOT EXISTS scans (
   high_count INTEGER DEFAULT 0,
   medium_count INTEGER DEFAULT 0,
   low_count INTEGER DEFAULT 0,
+  gate_status TEXT,
+  gate_detail TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   completed_at TIMESTAMPTZ
 );
@@ -121,4 +123,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_token TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_token_expires_at TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_expires_at TIMESTAMPTZ;
+ALTER TABLE repositories ADD COLUMN IF NOT EXISTS dast_url TEXT;
+ALTER TABLE scans ADD COLUMN IF NOT EXISTS gate_status TEXT;
+ALTER TABLE scans ADD COLUMN IF NOT EXISTS gate_detail TEXT;
 UPDATE users SET email_verified = TRUE WHERE email_verified IS NOT TRUE;

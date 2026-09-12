@@ -113,6 +113,7 @@ export const ScansPage: React.FC<PageProps> = ({
               <thead>
                 <tr>
                   <th>Estado</th>
+                  <th>Gate</th>
                   <th>Scan ID</th>
                   <th>Repositorio</th>
                   <th>Disparador</th>
@@ -126,6 +127,23 @@ export const ScansPage: React.FC<PageProps> = ({
                 {scans.map((scan) => (
                   <tr key={scan.id}>
                     <td>{statusBadge(scan.status)}</td>
+                    <td>
+                      {scan.gate_status === 'BLOCKED' ? (
+                        <span className="badge badge-critical" title={scan.gate_detail || ''}>
+                          BLOCKED
+                        </span>
+                      ) : scan.gate_status === 'PASSED' ? (
+                        <span className="badge badge-low" title={scan.gate_detail || ''}>
+                          PASSED
+                        </span>
+                      ) : scan.gate_status === 'SKIPPED' ? (
+                        <span className="badge badge-engine" title={scan.gate_detail || ''}>
+                          SKIPPED
+                        </span>
+                      ) : (
+                        <span style={{ color: '#8c959f', fontSize: '0.8rem' }}>—</span>
+                      )}
+                    </td>
                     <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: '#0969da', fontWeight: 600 }}>{scan.id}</td>
                     <td style={{ fontWeight: 600 }}>{REPO_NAMES[scan.repository_id] || scan.repository_id}</td>
                     <td>

@@ -101,6 +101,8 @@ class ScanResponse(BaseModel):
     high_count: int = 0
     medium_count: int = 0
     low_count: int = 0
+    gate_status: Optional[str] = None  # PASSED | BLOCKED | SKIPPED
+    gate_detail: Optional[str] = None
     created_at: datetime
     completed_at: Optional[datetime] = None
 
@@ -113,6 +115,26 @@ class SecurityGatePolicy(BaseModel):
     block_on_secrets: bool = True
     require_ciso_approval_for_bypass: bool = True
     enabled: bool = True
+
+
+class GateCheckResponse(BaseModel):
+    """Resultado de evaluación del gate (para consola + CI)."""
+
+    allowed: bool
+    decision: str  # PASSED | BLOCKED | DISABLED
+    reasons: List[str] = Field(default_factory=list)
+    summary: str = ""
+    open_critical: int = 0
+    open_high: int = 0
+    open_secrets: int = 0
+    max_critical_allowed: int = 0
+    max_high_allowed: int = 0
+    block_on_secrets: bool = True
+    require_ciso_approval_for_bypass: bool = True
+    policy_name: str = ""
+    policy_id: str = "default-policy"
+    repository_id: Optional[str] = None
+    repository_name: Optional[str] = None
 
 # Dashboard Stats Schema
 class DashboardStats(BaseModel):

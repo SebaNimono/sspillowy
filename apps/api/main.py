@@ -32,6 +32,7 @@ from packages.core_models import (  # noqa: E402
     ScanCreate,
     ScanResponse,
     SecurityGatePolicy,
+    GateCheckResponse,
     DashboardStats,
     NotificationType,
     NotificationResponse,
@@ -65,6 +66,7 @@ from models import (  # noqa: E402
     Scan,
     SecurityGate,
 )
+from gate_eval import evaluate_gate  # noqa: E402
 from semgrep_scan import run_repo_scan_job, semgrep_available  # noqa: E402
 from gitleaks_scan import gitleaks_available  # noqa: E402
 from trivy_scan import trivy_available  # noqa: E402
@@ -318,8 +320,9 @@ def _build_notifications(db) -> list[dict]:
         )
 
     gate = _ensure_default_gate(db)
-    open_crit = db.query(Finding).filter(Finding.status.in_(["OPEN", "IN_REVIEW"]), Finding.severity == "CRITICAL").count()
-    if gate.enabled and open_crit > (gate.max_critical_allowed or 0):
+    # Notificación GATE_BLOCK si la org entera falla el gate
+    org_ev = evaluate_gate(db, gate, repository_id=None)
+    if org_ev.decision == "BLOCKED":
         items.insert(
             0,
             {
@@ -327,7 +330,7 @@ def _build_notifications(db) -> list[dict]:
                 "type": NotificationType.GATE_BLOCK,
                 "severity": SeverityLevel.CRITICAL,
                 "title": "Security Gate: pipeline bloqueado",
-                "message": f"Hay {open_crit} critical abiertos (máx. permitido: {gate.max_critical_allowed}).",
+                "message": org_ev.summary()[:240],
                 "repository_id": None,
                 "finding_id": None,
                 "read": "notif-gate-block" in _READ_NOTIFICATION_IDS,
@@ -681,6 +684,74 @@ async def get_security_gate():
         db.close()
 
 
+def _gate_check_response(db, *, repository_id: str | None) -> GateCheckResponse:
+    gate = _ensure_default_gate(db)
+    repo_name = None
+    if repository_id:
+        repo = db.get(Repository, repository_id)
+        if not repo:
+            raise HTTPException(status_code=404, detail="Repositorio no encontrado")
+        repo_name = repo.name
+    ev = evaluate_gate(db, gate, repository_id=repository_id)
+    return GateCheckResponse(
+        allowed=ev.allowed,
+        decision=ev.decision,
+        reasons=ev.reasons,
+        summary=ev.summary(),
+        open_critical=ev.open_critical,
+        open_high=ev.open_high,
+        open_secrets=ev.open_secrets,
+        max_critical_allowed=ev.max_critical_allowed,
+        max_high_allowed=ev.max_high_allowed,
+        block_on_secrets=ev.block_on_secrets,
+        require_ciso_approval_for_bypass=ev.require_ciso_approval_for_bypass,
+        policy_name=ev.policy_name,
+        policy_id=gate.id,
+        repository_id=repository_id,
+        repository_name=repo_name,
+    )
+
+
+@app.get(
+    "/api/v1/security-gates/check",
+    response_model=GateCheckResponse,
+    tags=["Security Gates"],
+)
+async def check_security_gate(repository_id: Optional[str] = None):
+    """Evalúa la política ahora (org o un repo). Para consola y CI: mirar `allowed`."""
+    _require_db()
+    db = SessionLocal()
+    try:
+        return _gate_check_response(db, repository_id=repository_id)
+    finally:
+        db.close()
+
+
+@app.post(
+    "/api/v1/security-gates/evaluate",
+    response_model=GateCheckResponse,
+    tags=["Security Gates"],
+)
+async def evaluate_security_gate(repository_id: Optional[str] = None):
+    """Igual que check; deja auditoría GATE_EVALUATED."""
+    _require_db()
+    db = SessionLocal()
+    try:
+        out = _gate_check_response(db, repository_id=repository_id)
+        target = out.repository_name or "organization"
+        _append_audit(
+            db,
+            "web_hub",
+            "GATE_PASSED" if out.allowed else "GATE_BLOCK",
+            target,
+            out.summary,
+        )
+        db.commit()
+        return out
+    finally:
+        db.close()
+
+
 @app.post("/api/v1/security-gates", response_model=SecurityGatePolicy, tags=["Security Gates"])
 async def update_security_gate(policy: SecurityGatePolicy):
     _require_db()
@@ -699,7 +770,7 @@ async def update_security_gate(policy: SecurityGatePolicy):
             "GATE_UPDATED",
             policy.name,
             f"Umbrales: critical≤{policy.max_critical_allowed}, high≤{policy.max_high_allowed}, "
-            f"block_secrets={policy.block_on_secrets}.",
+            f"block_secrets={policy.block_on_secrets}, enabled={policy.enabled}.",
         )
         db.commit()
         db.refresh(gate)

@@ -80,6 +80,9 @@ class Scan(Base):
     high_count = Column(Integer, default=0)
     medium_count = Column(Integer, default=0)
     low_count = Column(Integer, default=0)
+    # PASSED | BLOCKED | SKIPPED | None (aún no evaluado)
+    gate_status = Column(String, nullable=True)
+    gate_detail = Column(Text, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     completed_at = Column(DateTime, nullable=True)
 
