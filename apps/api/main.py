@@ -64,7 +64,8 @@ from models import (  # noqa: E402
     Scan,
     SecurityGate,
 )
-from semgrep_scan import run_semgrep_scan_job, semgrep_available  # noqa: E402
+from semgrep_scan import run_repo_scan_job, semgrep_available  # noqa: E402
+from gitleaks_scan import gitleaks_available  # noqa: E402
 
 app = FastAPI(
     title="SSPILLOWY API Core",
@@ -336,7 +337,8 @@ async def health_check():
         "database": "postgresql (ok)" if db_ok else "unavailable",
         "data_source": "postgresql" if db_ok else "none",
         "semgrep": "available" if semgrep_available() else "missing",
-        "redis_worker": "inline-background (semgrep)",
+        "gitleaks": "available" if gitleaks_available() else "missing",
+        "redis_worker": "inline-background (semgrep+gitleaks)",
         "email_mailer": mailer_status(),
     }
 
@@ -521,12 +523,12 @@ async def trigger_scan(scan_in: ScanCreate, background_tasks: BackgroundTasks):
             "web_hub",
             "SCAN_TRIGGERED",
             repo.name,
-            f"Escaneo {row.id} encolado · motor Semgrep (background).",
+            f"Escaneo {row.id} encolado · Semgrep + GitLeaks (background).",
         )
         db.commit()
         db.refresh(row)
         scan_id = row.id
-        background_tasks.add_task(run_semgrep_scan_job, scan_id)
+        background_tasks.add_task(run_repo_scan_job, scan_id)
         return _scan_out(row)
     finally:
         db.close()

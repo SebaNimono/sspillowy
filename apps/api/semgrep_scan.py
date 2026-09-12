@@ -205,11 +205,10 @@ def persist_semgrep_results(
     scan: Scan,
     repo: Repository,
     results: list[dict],
-    source_note: str,
     scan_root: Path | None = None,
 ) -> dict[str, int]:
+    """Persiste findings Semgrep. No cierra el Scan (el job multi-motor lo hace)."""
     counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFO": 0}
-    # Limitar volumen por escaneo (Railway / demo)
     max_findings = int(os.getenv("SEMGREP_MAX_FINDINGS", "40"))
     for result in results[:max_findings]:
         extra = result.get("extra") or {}
@@ -241,7 +240,26 @@ def persist_semgrep_results(
             created_at=_now(),
         )
         db.add(finding)
+    return counts
 
+
+def _merge_counts(*parts: dict[str, int]) -> dict[str, int]:
+    out = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFO": 0}
+    for part in parts:
+        for k, v in part.items():
+            out[k] = out.get(k, 0) + int(v or 0)
+    return out
+
+
+def finalize_scan(
+    db,
+    *,
+    scan: Scan,
+    repo: Repository,
+    counts: dict[str, int],
+    source_note: str,
+    engines_note: str,
+) -> None:
     total = sum(counts.values())
     scan.status = "COMPLETED"
     scan.completed_at = _now()
@@ -254,16 +272,23 @@ def persist_semgrep_results(
     _refresh_repo_counters(db, repo)
     _append_audit(
         db,
-        "semgrep-worker",
+        "scan-worker",
         "SCAN_COMPLETED",
         repo.name,
-        f"Semgrep OK · {total} hallazgos · {source_note}",
+        f"{engines_note} · {total} hallazgos · {source_note}",
     )
-    return counts
 
 
 def run_semgrep_scan_job(scan_id: str) -> None:
-    """Job en background (FastAPI BackgroundTasks)."""
+    """Alias histórico → job multi-motor Semgrep + GitLeaks."""
+    run_repo_scan_job(scan_id)
+
+
+def run_repo_scan_job(scan_id: str) -> None:
+    """Job en background: clone (o fixture) → Semgrep + GitLeaks → Postgres."""
+    # Import local para evitar ciclo al cargar módulos
+    from gitleaks_scan import gitleaks_available, persist_gitleaks_findings, run_gitleaks
+
     db = SessionLocal()
     work_parent: Path | None = None
     try:
@@ -282,17 +307,21 @@ def run_semgrep_scan_job(scan_id: str) -> None:
         source_note = ""
         target: Path
 
+        fallback_ok = _env_true("SEMGREP_FALLBACK_FIXTURE", "true") or _env_true(
+            "SCAN_FALLBACK_FIXTURE", "true"
+        )
+
         try:
             _clone_repo(repo.url, scan.branch or repo.branch or "main", clone_dir)
             target = clone_dir
             source_note = f"clone {repo.url}@{scan.branch}"
         except Exception as clone_exc:
-            if _env_true("SEMGREP_FALLBACK_FIXTURE", "true") and FIXTURE_DIR.exists():
+            if fallback_ok and FIXTURE_DIR.exists():
                 target = FIXTURE_DIR
                 source_note = f"fixture local (clone falló: {clone_exc})"
                 _append_audit(
                     db,
-                    "semgrep-worker",
+                    "scan-worker",
                     "SCAN_CLONE_FALLBACK",
                     repo.name,
                     f"No se pudo clonar {repo.url}. Escaneando fixture vuln_sample. Detalle: {str(clone_exc)[:300]}",
@@ -303,7 +332,7 @@ def run_semgrep_scan_job(scan_id: str) -> None:
                 scan.completed_at = _now()
                 _append_audit(
                     db,
-                    "semgrep-worker",
+                    "scan-worker",
                     "SCAN_FAILED",
                     repo.name,
                     f"Clone falló: {str(clone_exc)[:400]}",
@@ -311,35 +340,85 @@ def run_semgrep_scan_job(scan_id: str) -> None:
                 db.commit()
                 return
 
-        try:
-            results = _run_semgrep(target)
-            persist_semgrep_results(
-                db,
-                scan=scan,
-                repo=repo,
-                results=results,
-                source_note=source_note,
-                scan_root=target,
-            )
-            db.commit()
-        except Exception as scan_exc:
+        engine_notes: list[str] = []
+        count_parts: list[dict[str, int]] = []
+        errors: list[str] = []
+
+        # --- Semgrep ---
+        if semgrep_available():
+            try:
+                sg_results = _run_semgrep(target)
+                sg_counts = persist_semgrep_results(
+                    db, scan=scan, repo=repo, results=sg_results, scan_root=target
+                )
+                count_parts.append(sg_counts)
+                engine_notes.append(f"Semgrep {sum(sg_counts.values())}")
+            except Exception as exc:
+                errors.append(f"semgrep: {exc}")
+                _append_audit(
+                    db,
+                    "scan-worker",
+                    "ENGINE_FAILED",
+                    repo.name,
+                    f"Semgrep: {str(exc)[:400]}",
+                )
+        else:
+            errors.append("semgrep missing")
+
+        # --- GitLeaks ---
+        if gitleaks_available():
+            try:
+                gl_results = run_gitleaks(target)
+                gl_counts = persist_gitleaks_findings(
+                    db, scan=scan, repo=repo, results=gl_results, scan_root=target
+                )
+                count_parts.append(gl_counts)
+                engine_notes.append(f"GitLeaks {sum(gl_counts.values())}")
+            except Exception as exc:
+                errors.append(f"gitleaks: {exc}")
+                _append_audit(
+                    db,
+                    "scan-worker",
+                    "ENGINE_FAILED",
+                    repo.name,
+                    f"GitLeaks: {str(exc)[:400]}",
+                )
+        else:
+            errors.append("gitleaks missing")
+
+        if not count_parts:
             scan.status = "FAILED"
             scan.completed_at = _now()
             _append_audit(
                 db,
-                "semgrep-worker",
+                "scan-worker",
                 "SCAN_FAILED",
                 repo.name,
-                f"Semgrep falló: {str(scan_exc)[:400]}",
+                f"Ningún motor produjo resultados. {'; '.join(errors)[:400]}",
             )
             db.commit()
+            return
+
+        merged = _merge_counts(*count_parts)
+        note = " + ".join(engine_notes) if engine_notes else "scan"
+        if errors:
+            note += f" (parcial: {'; '.join(errors)[:160]})"
+        finalize_scan(
+            db,
+            scan=scan,
+            repo=repo,
+            counts=merged,
+            source_note=source_note,
+            engines_note=note,
+        )
+        db.commit()
     except Exception as exc:
         try:
             scan = db.get(Scan, scan_id)
             if scan:
                 scan.status = "FAILED"
                 scan.completed_at = _now()
-                _append_audit(db, "semgrep-worker", "SCAN_FAILED", scan_id, str(exc)[:400])
+                _append_audit(db, "scan-worker", "SCAN_FAILED", scan_id, str(exc)[:400])
                 db.commit()
         except Exception:
             db.rollback()

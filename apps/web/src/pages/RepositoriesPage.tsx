@@ -94,14 +94,14 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
   };
 
   const handleTriggerScan = async (repoId: string, repoName: string) => {
-    setScanStatus(`Semgrep en curso para ${repoName} (clone + análisis)…`);
+    setScanStatus(`Semgrep + GitLeaks en curso para ${repoName}…`);
     try {
       await triggerScan(repoId);
       setToast({
         id: Date.now().toString(),
         type: 'info',
         title: 'Escaneo iniciado',
-        message: `Semgrep está analizando ${repoName}. En unos segundos refresca Hallazgos / Escaneos.`,
+        message: `Semgrep + GitLeaks analizan ${repoName}. En unos segundos refresca Hallazgos / Escaneos.`,
       });
       // Dar tiempo al background job y refrescar contadores del repo
       setTimeout(() => {
