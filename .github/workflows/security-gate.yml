@@ -1,0 +1,34 @@
+name: SSPILLOWY Security Gate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  security-gate:
+    name: Check Security Gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluar gate SSPILLOWY
+        env:
+          SSPILLOWY_API_URL: ${{ vars.SSPILLOWY_API_URL || 'https://api.sspillowy.com' }}
+          REPO_URL: https://github.com/${{ github.repository }}
+        run: |
+          set -euo pipefail
+          API="${SSPILLOWY_API_URL%/}"
+          ENC_URL=$(python3 -c "import urllib.parse, os; print(urllib.parse.quote(os.environ['REPO_URL'], safe=''))")
+          echo "Consultando Security Gate para $REPO_URL"
+          RESP=$(curl -fsS --retry 3 --retry-delay 2 \
+            "${API}/api/v1/security-gates/check?repository_url=${ENC_URL}")
+          echo "$RESP" | python3 -m json.tool
+          ALLOWED=$(echo "$RESP" | python3 -c "import sys,json; print(str(json.load(sys.stdin).get('allowed')).lower())")
+          DECISION=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('decision'))")
+          SUMMARY=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('summary',''))")
+          echo "decision=$DECISION allowed=$ALLOWED"
+          echo "$SUMMARY"
+          if [ "$ALLOWED" != "true" ]; then
+            echo "::error::Security Gate BLOCKED — corrige hallazgos o ajusta la política en SSPILLOWY"
+            exit 1
+          fi
+          echo "Security Gate PASSED"

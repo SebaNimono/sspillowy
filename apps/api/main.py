@@ -693,6 +693,33 @@ async def get_security_gate():
         db.close()
 
 
+def _resolve_repository_id(db, repository_id: Optional[str], repository_url: Optional[str]) -> Optional[str]:
+    if repository_id:
+        return repository_id
+    if not repository_url:
+        return None
+    from github_webhook import _find_repo
+
+    repo = _find_repo(
+        db,
+        html_url=repository_url,
+        clone_url=repository_url if repository_url.endswith(".git") else f"{repository_url.rstrip('/')}.git",
+        full_name=None,
+    )
+    # También probar full_name owner/repo
+    if not repo and "github.com/" in repository_url.lower():
+        full = repository_url.lower().split("github.com/", 1)[-1].strip("/")
+        if full.endswith(".git"):
+            full = full[: -len(".git")]
+        repo = _find_repo(db, html_url=None, clone_url=None, full_name=full)
+    if not repo:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Repositorio no registrado en SSPILLOWY: {repository_url}",
+        )
+    return repo.id
+
+
 def _gate_check_response(db, *, repository_id: str | None) -> GateCheckResponse:
     gate = _ensure_default_gate(db)
     repo_name = None
@@ -726,12 +753,16 @@ def _gate_check_response(db, *, repository_id: str | None) -> GateCheckResponse:
     response_model=GateCheckResponse,
     tags=["Security Gates"],
 )
-async def check_security_gate(repository_id: Optional[str] = None):
+async def check_security_gate(
+    repository_id: Optional[str] = None,
+    repository_url: Optional[str] = None,
+):
     """Evalúa la política ahora (org o un repo). Para consola y CI: mirar `allowed`."""
     _require_db()
     db = SessionLocal()
     try:
-        return _gate_check_response(db, repository_id=repository_id)
+        rid = _resolve_repository_id(db, repository_id, repository_url)
+        return _gate_check_response(db, repository_id=rid)
     finally:
         db.close()
 
@@ -741,12 +772,16 @@ async def check_security_gate(repository_id: Optional[str] = None):
     response_model=GateCheckResponse,
     tags=["Security Gates"],
 )
-async def evaluate_security_gate(repository_id: Optional[str] = None):
+async def evaluate_security_gate(
+    repository_id: Optional[str] = None,
+    repository_url: Optional[str] = None,
+):
     """Igual que check; deja auditoría GATE_EVALUATED."""
     _require_db()
     db = SessionLocal()
     try:
-        out = _gate_check_response(db, repository_id=repository_id)
+        rid = _resolve_repository_id(db, repository_id, repository_url)
+        out = _gate_check_response(db, repository_id=rid)
         target = out.repository_name or "organization"
         _append_audit(
             db,
