@@ -16,6 +16,7 @@ from models import AuditEvent, Finding, Repository, Scan
 
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "vuln_sample"
 OPEN_STATUSES = ("OPEN", "IN_REVIEW")
+ACTIVE_STATUSES = ("OPEN", "IN_REVIEW")
 
 
 def _now() -> datetime:
@@ -173,10 +174,11 @@ def relative_file_path(raw: str | None, scan_root: Path | None = None) -> str | 
 
 def _refresh_repo_counters(db, repo: Repository) -> None:
     findings = db.query(Finding).filter(Finding.repository_id == repo.id).all()
-    opens = [f for f in findings if (f.status or "") in OPEN_STATUSES]
+    opens = [f for f in findings if (f.status or "") in ACTIVE_STATUSES]
     repo.open_criticals = sum(1 for f in opens if (f.severity or "").upper() == "CRITICAL")
     repo.open_highs = sum(1 for f in opens if (f.severity or "").upper() == "HIGH")
-    repo.total_findings = len(findings)
+    # Total = hallazgos activos (no acumulados de escaneos viejos)
+    repo.total_findings = len(opens)
     sev = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFO": 0}
     for f in opens:
         k = (f.severity or "").upper()
@@ -184,6 +186,25 @@ def _refresh_repo_counters(db, repo: Repository) -> None:
             sev[k] += 1
     penalty = sev["CRITICAL"] * 18 + sev["HIGH"] * 8 + sev["MEDIUM"] * 3 + sev["LOW"]
     repo.health_score = max(0, min(100, 100 - penalty))
+
+
+def _supersede_previous_findings(db, *, repo_id: str, engines: list[str], keep_scan_id: str) -> int:
+    """Cierra hallazgos abiertos de escaneos anteriores para no acumular al re-escanear."""
+    if not engines:
+        return 0
+    rows = (
+        db.query(Finding)
+        .filter(
+            Finding.repository_id == repo_id,
+            Finding.status.in_(list(ACTIVE_STATUSES)),
+            Finding.engine.in_(engines),
+            Finding.scan_id != keep_scan_id,
+        )
+        .all()
+    )
+    for f in rows:
+        f.status = "SUPERSEDED"
+    return len(rows)
 
 
 def _append_audit(db, actor: str, action: str, target: str, detail: str) -> None:
@@ -280,14 +301,14 @@ def finalize_scan(
 
 
 def run_semgrep_scan_job(scan_id: str) -> None:
-    """Alias histórico → job multi-motor Semgrep + GitLeaks."""
+    """Alias histórico → job multi-motor Semgrep + GitLeaks + Trivy."""
     run_repo_scan_job(scan_id)
 
 
 def run_repo_scan_job(scan_id: str) -> None:
-    """Job en background: clone (o fixture) → Semgrep + GitLeaks → Postgres."""
-    # Import local para evitar ciclo al cargar módulos
+    """Job en background: clone (o fixture) → Semgrep + GitLeaks + Trivy → Postgres."""
     from gitleaks_scan import gitleaks_available, persist_gitleaks_findings, run_gitleaks
+    from trivy_scan import persist_trivy_findings, run_trivy_fs, trivy_available
 
     db = SessionLocal()
     work_parent: Path | None = None
@@ -343,6 +364,7 @@ def run_repo_scan_job(scan_id: str) -> None:
         engine_notes: list[str] = []
         count_parts: list[dict[str, int]] = []
         errors: list[str] = []
+        engines_ok: list[str] = []
 
         # --- Semgrep ---
         if semgrep_available():
@@ -353,6 +375,7 @@ def run_repo_scan_job(scan_id: str) -> None:
                 )
                 count_parts.append(sg_counts)
                 engine_notes.append(f"Semgrep {sum(sg_counts.values())}")
+                engines_ok.append("semgrep")
             except Exception as exc:
                 errors.append(f"semgrep: {exc}")
                 _append_audit(
@@ -374,6 +397,7 @@ def run_repo_scan_job(scan_id: str) -> None:
                 )
                 count_parts.append(gl_counts)
                 engine_notes.append(f"GitLeaks {sum(gl_counts.values())}")
+                engines_ok.append("gitleaks")
             except Exception as exc:
                 errors.append(f"gitleaks: {exc}")
                 _append_audit(
@@ -385,6 +409,28 @@ def run_repo_scan_job(scan_id: str) -> None:
                 )
         else:
             errors.append("gitleaks missing")
+
+        # --- Trivy ---
+        if trivy_available():
+            try:
+                tv_results = run_trivy_fs(target)
+                tv_counts = persist_trivy_findings(
+                    db, scan=scan, repo=repo, results=tv_results, scan_root=target
+                )
+                count_parts.append(tv_counts)
+                engine_notes.append(f"Trivy {sum(tv_counts.values())}")
+                engines_ok.append("trivy")
+            except Exception as exc:
+                errors.append(f"trivy: {exc}")
+                _append_audit(
+                    db,
+                    "scan-worker",
+                    "ENGINE_FAILED",
+                    repo.name,
+                    f"Trivy: {str(exc)[:400]}",
+                )
+        else:
+            errors.append("trivy missing")
 
         if not count_parts:
             scan.status = "FAILED"
@@ -398,6 +444,18 @@ def run_repo_scan_job(scan_id: str) -> None:
             )
             db.commit()
             return
+
+        superseded = _supersede_previous_findings(
+            db, repo_id=repo.id, engines=engines_ok, keep_scan_id=scan.id
+        )
+        if superseded:
+            _append_audit(
+                db,
+                "scan-worker",
+                "FINDINGS_SUPERSEDED",
+                repo.name,
+                f"{superseded} hallazgos previos marcados SUPERSEDED tras nuevo escaneo.",
+            )
 
         merged = _merge_counts(*count_parts)
         note = " + ".join(engine_notes) if engine_notes else "scan"

@@ -96,6 +96,8 @@ export const FindingsPage: React.FC<PageProps> = ({
         return <span className="badge" style={{ background: '#ddf4ff', color: '#0969da', border: '1px solid #54aeff' }}>IN_REVIEW</span>;
       case 'FALSE_POSITIVE':
         return <span className="badge badge-engine">FALSE_POSITIVE</span>;
+      case 'SUPERSEDED':
+        return <span className="badge" style={{ background: '#f6f8fa', color: '#656d76', border: '1px solid #d0d7de' }}>SUPERSEDED</span>;
       case 'ACCEPTED_RISK':
         return <span className="badge badge-medium">ACCEPTED_RISK</span>;
       default:
@@ -149,6 +151,7 @@ export const FindingsPage: React.FC<PageProps> = ({
             <option value="FIXED">FIXED</option>
             <option value="FALSE_POSITIVE">FALSE_POSITIVE</option>
             <option value="ACCEPTED_RISK">ACCEPTED_RISK</option>
+            <option value="SUPERSEDED">SUPERSEDED</option>
           </select>
         </div>
       </div>

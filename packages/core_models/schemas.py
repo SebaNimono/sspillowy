@@ -22,6 +22,7 @@ class FindingStatus(str, Enum):
     ACCEPTED_RISK = "ACCEPTED_RISK"
     FIXED = "FIXED"
     FALSE_POSITIVE = "FALSE_POSITIVE"
+    SUPERSEDED = "SUPERSEDED"
 
 # Finding Schemas
 class FindingBase(BaseModel):

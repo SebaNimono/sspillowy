@@ -25,7 +25,7 @@ export interface Finding {
   cwe?: string;
   owasp_category?: string;
   iso_control?: string;
-  status: 'OPEN' | 'IN_REVIEW' | 'ACCEPTED_RISK' | 'FIXED' | 'FALSE_POSITIVE';
+  status: 'OPEN' | 'IN_REVIEW' | 'ACCEPTED_RISK' | 'FIXED' | 'FALSE_POSITIVE' | 'SUPERSEDED';
   ai_triaged: boolean;
   ai_confidence?: number;
   ai_summary?: string;

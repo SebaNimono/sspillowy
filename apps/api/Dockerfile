@@ -6,6 +6,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 ARG GITLEAKS_VERSION=8.21.2
+ARG TRIVY_VERSION=0.58.2
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
@@ -15,7 +16,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
       | tar -xz -C /usr/local/bin gitleaks \
     && chmod +x /usr/local/bin/gitleaks \
-    && gitleaks version
+    && gitleaks version \
+    && curl -sSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
+      | tar -xz -C /usr/local/bin trivy \
+    && chmod +x /usr/local/bin/trivy \
+    && trivy --version
 
 COPY apps/api/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt \

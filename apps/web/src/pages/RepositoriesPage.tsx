@@ -403,14 +403,17 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
       {showModal && (
         <div className="modal-overlay">
           <div className="modal-content">
-            <h2 style={{ fontSize: '1.2rem', marginBottom: '1rem', color: '#1f2328', fontWeight: 700 }}>
-              Registrar Nuevo Repositorio Git
+            <h2 style={{ fontSize: '1.2rem', marginBottom: '0.35rem', color: '#1f2328', fontWeight: 700 }}>
+              {t('repos.registerTitle')}
             </h2>
+            <p style={{ fontSize: '0.8rem', color: '#656d76', marginBottom: '1rem' }}>
+              {t('repos.registerHint')}
+            </p>
 
             <form onSubmit={handleAddRepo}>
               <div style={{ marginBottom: '1rem' }}>
                 <label style={{ display: 'block', fontSize: '0.85rem', color: '#656d76', marginBottom: '0.35rem', fontWeight: 600 }}>
-                  Nombre del Repositorio
+                  {t('repos.nameLabel')}
                 </label>
                 <input
                   type="text"
@@ -432,7 +435,7 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
 
               <div style={{ marginBottom: '1rem' }}>
                 <label style={{ display: 'block', fontSize: '0.85rem', color: '#656d76', marginBottom: '0.35rem', fontWeight: 600 }}>
-                  URL de Repositorio (GitHub / GitLab / Bitbucket)
+                  {t('repos.urlLabel')}
                 </label>
                 <input
                   type="text"
@@ -454,7 +457,7 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
 
               <div style={{ marginBottom: '1.5rem' }}>
                 <label style={{ display: 'block', fontSize: '0.85rem', color: '#656d76', marginBottom: '0.35rem', fontWeight: 600 }}>
-                  Rama Principal
+                  {t('repos.branchLabel')}
                 </label>
                 <input
                   type="text"
@@ -474,10 +477,10 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
                 <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>
-                  Cancelar
+                  {t('repos.cancel')}
                 </button>
                 <button type="submit" className="btn btn-primary" disabled={submitting}>
-                  {submitting ? 'Guardando...' : 'Registrar Repositorio'}
+                  {submitting ? t('common.loading') : t('repos.save')}
                 </button>
               </div>
             </form>

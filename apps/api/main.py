@@ -66,6 +66,7 @@ from models import (  # noqa: E402
 )
 from semgrep_scan import run_repo_scan_job, semgrep_available  # noqa: E402
 from gitleaks_scan import gitleaks_available  # noqa: E402
+from trivy_scan import trivy_available  # noqa: E402
 
 app = FastAPI(
     title="SSPILLOWY API Core",
@@ -172,7 +173,7 @@ def _refresh_repo_counters(db, repo: Repository) -> None:
     opens = [f for f in findings if (f.status or "") in ("OPEN", "IN_REVIEW")]
     repo.open_criticals = sum(1 for f in opens if (f.severity or "").upper() == "CRITICAL")
     repo.open_highs = sum(1 for f in opens if (f.severity or "").upper() == "HIGH")
-    repo.total_findings = len(findings)
+    repo.total_findings = len(opens)
 
 
 def _repo_out(repo: Repository) -> RepositoryResponse:
@@ -366,7 +367,8 @@ async def health_check():
         "data_source": "postgresql" if db_ok else "none",
         "semgrep": "available" if semgrep_available() else "missing",
         "gitleaks": "available" if gitleaks_available() else "missing",
-        "redis_worker": "inline-background (semgrep+gitleaks)",
+        "trivy": "available" if trivy_available() else "missing",
+        "redis_worker": "inline-background (semgrep+gitleaks+trivy)",
         "email_mailer": mailer_status(),
     }
 
@@ -484,6 +486,9 @@ async def list_findings(
             q = q.filter(Finding.severity == severity.value)
         if finding_status:
             q = q.filter(Finding.status == finding_status.value)
+        else:
+            # Por defecto ocultar supersedidos (re-escaneos) para no inflar la matriz
+            q = q.filter(Finding.status != "SUPERSEDED")
         rows = q.order_by(Finding.created_at.desc()).all()
         return [_finding_out(f) for f in rows]
     finally:
@@ -551,7 +556,7 @@ async def trigger_scan(scan_in: ScanCreate, background_tasks: BackgroundTasks):
             "web_hub",
             "SCAN_TRIGGERED",
             repo.name,
-            f"Escaneo {row.id} encolado · Semgrep + GitLeaks (background).",
+            f"Escaneo {row.id} encolado · Semgrep + GitLeaks + Trivy (background).",
         )
         db.commit()
         db.refresh(row)

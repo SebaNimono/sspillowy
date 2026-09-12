@@ -1,0 +1,4 @@
+# Dependencias viejas a propósito para que Trivy encuentre CVEs en el fixture.
+Django==1.11.29
+PyYAML==5.1
+requests==2.19.1
