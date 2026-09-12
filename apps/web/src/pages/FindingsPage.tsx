@@ -201,7 +201,7 @@ export const FindingsPage: React.FC<PageProps> = ({
           <div style={{ color: '#656d76', padding: '2rem', textAlign: 'center' }}>{t('findings.loading')}</div>
         ) : findings.length === 0 ? (
           <div style={{ color: '#656d76', padding: '2rem', textAlign: 'center' }}>
-            Sin hallazgos. Ejecutá un escaneo desde Repositorios.
+            Sin hallazgos. Ejecute un escaneo desde Repositorios.
           </div>
         ) : (
           <div className="table-container">
