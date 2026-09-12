@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Header } from '../components/Header';
 import { SidebarState } from '../components/Sidebar';
 import { Toast, ToastMessage } from '../components/Toast';
@@ -45,26 +45,28 @@ export const SecurityGatesPage: React.FC<PageProps> = ({
   const { t } = useI18n();
   const [policy, setPolicy] = useState<SecurityGatePolicy>(DEFAULT_POLICY);
   const [check, setCheck] = useState<GateCheckResult | null>(null);
+  const [loadingStatus, setLoadingStatus] = useState(true);
   const [saving, setSaving] = useState(false);
   const [evaluating, setEvaluating] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
 
-  const loadCheck = useCallback(() => {
-    checkSecurityGate()
-      .then(setCheck)
-      .catch(() => setCheck(null));
-  }, []);
-
   useEffect(() => {
-    fetchSecurityGate()
-      .then((data) => {
-        if (data) setPolicy(data);
-      })
-      .catch(() => {
-        setPolicy(DEFAULT_POLICY);
-      });
-    loadCheck();
-  }, [loadCheck]);
+    let cancelled = false;
+    setLoadingStatus(true);
+    Promise.all([
+      fetchSecurityGate().catch(() => DEFAULT_POLICY),
+      checkSecurityGate().catch(() => null),
+    ]).then(([pol, result]) => {
+      if (cancelled) return;
+      if (pol) setPolicy(pol);
+      setCheck(result);
+    }).finally(() => {
+      if (!cancelled) setLoadingStatus(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleSave = async () => {
     if (!policy) return;
@@ -133,6 +135,12 @@ export const SecurityGatesPage: React.FC<PageProps> = ({
         unreadCount={unreadCount}
         onGoToSite={onGoToSite}
       />
+
+      {loadingStatus && !check && (
+        <div className="card" style={{ marginBottom: '1rem' }}>
+          <p style={{ color: '#656d76', margin: 0 }}>Evaluando Security Gate…</p>
+        </div>
+      )}
 
       {check && (
         <div
@@ -207,7 +215,7 @@ export const SecurityGatesPage: React.FC<PageProps> = ({
           <div>
             <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#1f2328' }}>Gate habilitado</div>
             <div style={{ color: '#656d76', fontSize: '0.8rem' }}>
-              Si está apagado, los escaneos quedan SKIPPED y CI puede continuar.
+              Si está apagado: decisión DISABLED, CI puede continuar y no se avisa a Pulse.
             </div>
           </div>
           <input

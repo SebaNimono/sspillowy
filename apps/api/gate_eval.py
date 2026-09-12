@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from sqlalchemy import func
+
 from models import Finding, SecurityGate
 
 
@@ -36,6 +38,17 @@ class GateEvaluation:
         return "BLOCKED · " + "; ".join(self.reasons)
 
 
+def _count_open(db, *, severity: str | None = None, engine: str | None = None, repository_id: str | None = None) -> int:
+    q = db.query(func.count(Finding.id)).filter(Finding.status.in_(OPEN_STATUSES))
+    if repository_id:
+        q = q.filter(Finding.repository_id == repository_id)
+    if severity:
+        q = q.filter(func.upper(Finding.severity) == severity.upper())
+    if engine:
+        q = q.filter(func.lower(Finding.engine) == engine.lower())
+    return int(q.scalar() or 0)
+
+
 def evaluate_gate(
     db,
     gate: SecurityGate,
@@ -43,19 +56,15 @@ def evaluate_gate(
     repository_id: str | None = None,
 ) -> GateEvaluation:
     """Evalúa la política activa sobre hallazgos OPEN/IN_REVIEW (repo o org)."""
-    q = db.query(Finding).filter(Finding.status.in_(OPEN_STATUSES))
-    if repository_id:
-        q = q.filter(Finding.repository_id == repository_id)
-
-    findings = q.all()
-    open_critical = sum(1 for f in findings if (f.severity or "").upper() == "CRITICAL")
-    open_high = sum(1 for f in findings if (f.severity or "").upper() == "HIGH")
-    open_secrets = sum(1 for f in findings if (f.engine or "").lower() == "gitleaks")
-
     max_c = int(gate.max_critical_allowed or 0)
     max_h = int(gate.max_high_allowed or 0)
     block_secrets = bool(gate.block_on_secrets)
     ciso = bool(gate.require_ciso_approval_for_bypass)
+
+    # Conteos SQL (rápido) — no cargar todos los hallazgos a memoria
+    open_critical = _count_open(db, severity="CRITICAL", repository_id=repository_id)
+    open_high = _count_open(db, severity="HIGH", repository_id=repository_id)
+    open_secrets = _count_open(db, engine="gitleaks", repository_id=repository_id)
 
     result = GateEvaluation(
         decision="DISABLED",
@@ -72,7 +81,7 @@ def evaluate_gate(
     )
 
     if not gate.enabled:
-        result.reasons = ["Política deshabilitada."]
+        result.reasons = ["Política deshabilitada · no se notifica a Pulse ni se bloquea CI."]
         return result
 
     reasons: list[str] = []
@@ -88,7 +97,10 @@ def evaluate_gate(
         result.allowed = False
         result.reasons = reasons
         if ciso:
-            result.reasons.append("Bypass requiere aprobación CISO (Pulse).")
+            # Pulse aún no conecta el bypass; solo indica la política
+            result.reasons.append(
+                "Bypass (cuando Pulse esté conectado): requiere aprobación CISO."
+            )
     else:
         result.decision = "PASSED"
         result.allowed = True
