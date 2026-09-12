@@ -100,26 +100,37 @@
     "actions": "Acciones",
     "runScan": "Ejecutar Escaneo",
     "scanning": "En proceso…",
-    "scanningBanner": "Escaneando {{name}} (Semgrep + GitLeaks + Trivy). Avisamos al terminar.",
+    "scanningBanner": "Escaneando {{name}} (Semgrep + GitLeaks + Trivy). Se avisará al terminar.",
     "scanDone": "Escaneo de {{name}} listo",
     "scanDoneMsg": "{{count}} hallazgos en este escaneo · health actualizado.",
     "scanFailed": "Escaneo de {{name}} falló",
-    "scanFailedMsg": "Revisá Escaneos o reintentá. El repo puede ser muy grande o el clone falló.",
+    "scanFailedMsg": "Revise Escaneos o intente de nuevo. El repo puede ser muy grande o el clone falló.",
     "scanTimeout": "Escaneo de {{name}} sigue en curso",
-    "scanTimeoutMsg": "Tarda más de lo habitual. Podés esperar o revisar Escaneos.",
+    "scanTimeoutMsg": "Tarda más de lo habitual. Puede esperar o revisar Escaneos.",
     "criticalCount": "{{count}} Críticas",
     "findingsCount": "{{count}} abiertos",
     "registerTitle": "Registrar repositorio",
-    "registerHint": "Pegá la URL pública del repo. Más adelante: conectar con GitHub OAuth.",
+    "registerHint": "Pegue la URL pública del repo. Más adelante: conectar con GitHub OAuth.",
     "nameLabel": "Nombre",
     "urlLabel": "URL (GitHub / GitLab)",
     "branchLabel": "Rama",
     "cancel": "Cancelar",
-    "save": "Registrar"
+    "save": "Registrar",
+    "deleteTitle": "Eliminar repositorio",
+    "deleteMsg": "Se eliminará «{{name}}» junto con sus hallazgos y escaneos. Esta acción no se puede deshacer.",
+    "deleteConfirm": "Eliminar",
+    "scanConfigTitle": "Configurar escaneo",
+    "scanConfigHint": "Repo: {{name}}. Elige qué motores ejecutar.",
+    "scanStart": "Iniciar escaneo",
+    "enginesRequired": "Elige al menos un motor",
+    "enginesRequiredMsg": "Semgrep, GitLeaks o Trivy."
   },
   "common": {
     "save": "Guardar",
     "cancel": "Cancelar",
-    "loading": "Cargando..."
+    "loading": "Cargando...",
+    "confirm": "Confirmar",
+    "delete": "Eliminar",
+    "processing": "Procesando…"
   }
 }

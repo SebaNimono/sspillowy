@@ -54,7 +54,34 @@ function initialView(): AppView {
   const legal = legalFromLocation();
   if (legal) return legal;
   if (resetTokenFromLocation()) return 'reset-password';
+  try {
+    // Si hay sesión guardada, no mandar al landing al recargar
+    if (localStorage.getItem('sspillowy_user')) return 'console';
+  } catch {
+    // ignore
+  }
   return 'site';
+}
+
+const CONSOLE_TAB_KEY = 'sspillowy_console_tab';
+const VALID_TABS = new Set([
+  'dashboard',
+  'repositories',
+  'findings',
+  'scans',
+  'gates',
+  'notifications',
+  'reports',
+]);
+
+function initialConsoleTab(): string {
+  try {
+    const saved = localStorage.getItem(CONSOLE_TAB_KEY);
+    if (saved && VALID_TABS.has(saved)) return saved;
+  } catch {
+    // ignore
+  }
+  return 'dashboard';
 }
 
 function pathForView(view: AppView): string {
@@ -65,7 +92,7 @@ function pathForView(view: AppView): string {
 export const App: React.FC = () => {
   const [view, setView] = useState<AppView>(initialView);
   const [resetToken, setResetToken] = useState<string | null>(() => resetTokenFromLocation());
-  const [activeTab, setActiveTab] = useState<string>('dashboard');
+  const [activeTab, setActiveTabState] = useState<string>(initialConsoleTab);
   const [unreadCount, setUnreadCount] = useState(0);
   const [bootstrapping, setBootstrapping] = useState(true);
   const [oauthError, setOauthError] = useState<string | null>(null);
@@ -80,6 +107,15 @@ export const App: React.FC = () => {
     }
     return null;
   });
+
+  const setActiveTab = (tab: string) => {
+    setActiveTabState(tab);
+    try {
+      localStorage.setItem(CONSOLE_TAB_KEY, tab);
+    } catch {
+      // ignore
+    }
+  };
 
   const goHome = () => {
     window.history.pushState({}, '', '/');
@@ -191,9 +227,11 @@ export const App: React.FC = () => {
   const handleLogout = () => {
     setUser(null);
     setView('site');
+    setActiveTabState('dashboard');
     window.history.pushState({}, '', '/');
     try {
       localStorage.removeItem('sspillowy_user');
+      localStorage.removeItem(CONSOLE_TAB_KEY);
     } catch {
       // ignore
     }

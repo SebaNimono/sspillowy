@@ -115,11 +115,22 @@
     "urlLabel": "URL (GitHub / GitLab)",
     "branchLabel": "Branch",
     "cancel": "Cancelar",
-    "save": "Registrar"
+    "save": "Registrar",
+    "deleteTitle": "Eliminar repositório",
+    "deleteMsg": "Isso excluirá «{{name}}» e seus achados/varreduras. Não pode ser desfeito.",
+    "deleteConfirm": "Eliminar",
+    "scanConfigTitle": "Configurar varredura",
+    "scanConfigHint": "Repo: {{name}}. Escolha quais motores executar.",
+    "scanStart": "Iniciar varredura",
+    "enginesRequired": "Escolha pelo menos um motor",
+    "enginesRequiredMsg": "Semgrep, GitLeaks ou Trivy."
   },
   "common": {
     "save": "Salvar",
     "cancel": "Cancelar",
-    "loading": "Carregando..."
+    "loading": "Carregando...",
+    "confirm": "Confirmar",
+    "delete": "Eliminar",
+    "processing": "Processando…"
   }
 }

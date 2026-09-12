@@ -115,11 +115,22 @@
     "urlLabel": "URL (GitHub / GitLab)",
     "branchLabel": "Branch",
     "cancel": "Cancel",
-    "save": "Register"
+    "save": "Register",
+    "deleteTitle": "Delete repository",
+    "deleteMsg": "This will delete «{{name}}» and its findings/scans. This cannot be undone.",
+    "deleteConfirm": "Delete",
+    "scanConfigTitle": "Configure scan",
+    "scanConfigHint": "Repo: {{name}}. Choose which engines to run.",
+    "scanStart": "Start scan",
+    "enginesRequired": "Choose at least one engine",
+    "enginesRequiredMsg": "Semgrep, GitLeaks, or Trivy."
   },
   "common": {
     "save": "Save",
     "cancel": "Cancel",
-    "loading": "Loading..."
+    "loading": "Loading...",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "processing": "Processing…"
   }
 }

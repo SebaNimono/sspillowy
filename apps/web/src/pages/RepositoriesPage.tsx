@@ -5,6 +5,7 @@ import { Toast, ToastMessage } from '../components/Toast';
 import { Repository, Scan, ScanEngine, fetchRepositories, createRepository, triggerScan, fetchScans, deleteRepository } from '../api/client';
 import { FolderGit2, Plus, Play, GitBranch, RefreshCw, Trash2 } from 'lucide-react';
 import { useI18n } from '../i18n/I18nProvider';
+import { ConfirmModal } from '../components/ConfirmModal';
 
 interface PageProps {
   sidebarState: SidebarState;
@@ -39,6 +40,8 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
     gitleaks: true,
     trivy: true,
   });
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
@@ -238,8 +241,8 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
       setToast({
         id: Date.now().toString(),
         type: 'error',
-        title: 'Elegí al menos un motor',
-        message: 'Semgrep, GitLeaks o Trivy.',
+        title: t('repos.enginesRequired'),
+        message: t('repos.enginesRequiredMsg'),
       });
       return;
     }
@@ -267,8 +270,10 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
     }
   };
 
-  const handleDeleteRepo = async (repoId: string, repoName: string) => {
-    if (!window.confirm(`¿Eliminar el repositorio «${repoName}» y sus hallazgos/escaneos?`)) return;
+  const handleDeleteRepo = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    const { id: repoId, name: repoName } = deleteTarget;
     try {
       await deleteRepository(repoId);
       setRepos((prev) => prev.filter((r) => r.id !== repoId));
@@ -277,6 +282,7 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
         delete next[repoId];
         return next;
       });
+      setDeleteTarget(null);
       setToast({
         id: Date.now().toString(),
         type: 'success',
@@ -290,6 +296,8 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
         title: 'No se pudo eliminar',
         message: err instanceof Error ? err.message : 'Error de API',
       });
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -446,7 +454,7 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
                             style={{ padding: '0.4rem 0.55rem', fontSize: '0.8rem', color: '#cf222e' }}
                             disabled={scanning}
                             title="Eliminar repositorio"
-                            onClick={() => handleDeleteRepo(repo.id, repo.name)}
+                            onClick={() => setDeleteTarget({ id: repo.id, name: repo.name })}
                           >
                             <Trash2 size={14} />
                           </button>
@@ -465,10 +473,10 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
         <div className="modal-overlay">
           <div className="modal-content" style={{ maxWidth: '440px' }}>
             <h2 style={{ fontSize: '1.15rem', marginBottom: '0.35rem', color: '#1f2328', fontWeight: 700 }}>
-              Configurar escaneo
+              {t('repos.scanConfigTitle')}
             </h2>
             <p style={{ fontSize: '0.85rem', color: '#656d76', marginBottom: '1rem' }}>
-              Repo: <strong>{scanTarget.name}</strong>. Elegí qué motores correr.
+              {t('repos.scanConfigHint', { name: scanTarget.name })}
             </p>
             {(
               [
@@ -505,12 +513,24 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
               </button>
               <button type="button" className="btn btn-primary" onClick={handleTriggerScan}>
                 <Play size={14} />
-                <span>Iniciar escaneo</span>
+                <span>{t('repos.scanStart')}</span>
               </button>
             </div>
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        open={Boolean(deleteTarget)}
+        title={t('repos.deleteTitle')}
+        message={t('repos.deleteMsg', { name: deleteTarget?.name || '' })}
+        confirmLabel={t('repos.deleteConfirm')}
+        cancelLabel={t('repos.cancel')}
+        danger
+        busy={deleting}
+        onCancel={() => !deleting && setDeleteTarget(null)}
+        onConfirm={handleDeleteRepo}
+      />
 
       {showModal && (
         <div className="modal-overlay">

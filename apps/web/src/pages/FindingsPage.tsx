@@ -7,6 +7,7 @@ import { ShieldAlert, Filter, Sparkles, CheckCircle2, FileCode, ChevronRight, Ci
 import { useI18n } from '../i18n/I18nProvider';
 import { formatFilePath } from '../utils/formatFilePath';
 import { formatDateTime } from '../utils/formatDateTime';
+import { ConfirmModal } from '../components/ConfirmModal';
 
 interface PageProps {
   sidebarState: SidebarState;
@@ -31,6 +32,7 @@ export const FindingsPage: React.FC<PageProps> = ({
   const [findings, setFindings] = useState<Finding[]>([]);
   const [loading, setLoading] = useState(true);
   const [clearing, setClearing] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
   const [selectedEngine, setSelectedEngine] = useState<string>('all');
   const [selectedSeverity, setSelectedSeverity] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
@@ -62,16 +64,16 @@ export const FindingsPage: React.FC<PageProps> = ({
   }, [selectedEngine, selectedSeverity, selectedStatus]);
 
   const handleClearMatrix = async () => {
-    if (!window.confirm('¿Vaciar toda la matriz de hallazgos? Podés volver a escanear los repos después.')) return;
     setClearing(true);
     try {
       const res = await clearFindings();
       setFindings([]);
+      setConfirmClear(false);
       setToast({
         id: Date.now().toString(),
         type: 'success',
         title: 'Matriz vaciada',
-        message: `Se eliminaron ${res.deleted} hallazgos. Escaneá de nuevo desde Repositorios.`,
+        message: `Se eliminaron ${res.deleted} hallazgos. Ejecute un escaneo de nuevo desde Repositorios.`,
       });
     } catch (err) {
       setToast({
@@ -188,7 +190,7 @@ export const FindingsPage: React.FC<PageProps> = ({
             className="btn btn-secondary"
             style={{ color: '#cf222e', borderColor: '#ff8182' }}
             disabled={clearing || findings.length === 0}
-            onClick={handleClearMatrix}
+            onClick={() => setConfirmClear(true)}
           >
             <Trash2 size={14} />
             <span>{clearing ? t('common.loading') : 'Vaciar matriz'}</span>
@@ -260,6 +262,18 @@ export const FindingsPage: React.FC<PageProps> = ({
           </div>
         )}
       </div>
+
+      <ConfirmModal
+        open={confirmClear}
+        title="Vaciar matriz de hallazgos"
+        message="Se eliminarán todos los hallazgos. Puede volver a escanear los repositorios después. Esta acción no se puede deshacer."
+        confirmLabel="Vaciar matriz"
+        cancelLabel={t('common.cancel')}
+        danger
+        busy={clearing}
+        onCancel={() => !clearing && setConfirmClear(false)}
+        onConfirm={handleClearMatrix}
+      />
 
       {activeFinding && (
         <div className="modal-overlay">

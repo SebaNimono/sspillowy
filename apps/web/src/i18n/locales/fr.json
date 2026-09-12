@@ -115,11 +115,22 @@
     "urlLabel": "URL (GitHub / GitLab)",
     "branchLabel": "Branche",
     "cancel": "Annuler",
-    "save": "Enregistrer"
+    "save": "Enregistrer",
+    "deleteTitle": "Supprimer le dépôt",
+    "deleteMsg": "Cela supprimera «{{name}}» ainsi que ses findings/scans. Action irréversible.",
+    "deleteConfirm": "Supprimer",
+    "scanConfigTitle": "Configurer le scan",
+    "scanConfigHint": "Dépôt : {{name}}. Choisissez les moteurs à exécuter.",
+    "scanStart": "Lancer le scan",
+    "enginesRequired": "Choisissez au moins un moteur",
+    "enginesRequiredMsg": "Semgrep, GitLeaks ou Trivy."
   },
   "common": {
     "save": "Enregistrer",
     "cancel": "Annuler",
-    "loading": "Chargement..."
+    "loading": "Chargement...",
+    "confirm": "Confirmer",
+    "delete": "Supprimer",
+    "processing": "Traitement…"
   }
 }
