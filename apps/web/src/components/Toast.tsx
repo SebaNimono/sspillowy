@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import toast, { Toaster, Toast as HotToast } from 'react-hot-toast';
 import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
 
 export interface ToastMessage {
@@ -8,84 +9,99 @@ export interface ToastMessage {
   message: string;
 }
 
-interface ToastProps {
-  toast: ToastMessage | null;
-  onClose: () => void;
-}
+const borderFor = (type: ToastMessage['type']) => {
+  if (type === 'success') return '#1f883d';
+  if (type === 'error') return '#cf222e';
+  return '#0969da';
+};
 
-export const Toast: React.FC<ToastProps> = ({ toast, onClose }) => {
-  useEffect(() => {
-    if (!toast) return;
-    const timer = setTimeout(() => {
-      onClose();
-    }, 4000);
-    return () => clearTimeout(timer);
-  }, [toast, onClose]);
+const iconFor = (type: ToastMessage['type']) => {
+  if (type === 'success') return <CheckCircle2 size={18} color="#1a7f37" />;
+  if (type === 'error') return <AlertCircle size={18} color="#cf222e" />;
+  return <Info size={18} color="#0969da" />;
+};
 
-  if (!toast) return null;
-
-  const getBorderColor = () => {
-    switch (toast.type) {
-      case 'success':
-        return '#1f883d';
-      case 'error':
-        return '#cf222e';
-      default:
-        return '#0969da';
-    }
-  };
-
-  const getIcon = () => {
-    switch (toast.type) {
-      case 'success':
-        return <CheckCircle2 size={18} color="#1a7f37" />;
-      case 'error':
-        return <AlertCircle size={18} color="#cf222e" />;
-      default:
-        return <Info size={18} color="#0969da" />;
-    }
-  };
-
+function ToastCard({
+  t,
+  message,
+}: {
+  t: HotToast;
+  message: Omit<ToastMessage, 'id'>;
+}) {
   return (
     <div
-      className="custom-toast"
-      style={{
-        position: 'fixed',
-        top: '20px',
-        right: '24px',
-        zIndex: 2000,
-        background: '#ffffff',
-        border: '1px solid #d0d7de',
-        borderLeft: `4px solid ${getBorderColor()}`,
-        borderRadius: '8px',
-        padding: '0.9rem 1.15rem',
-        boxShadow: '0 8px 24px rgba(140, 149, 159, 0.25)',
-        display: 'flex',
-        alignItems: 'flex-start',
-        gap: '0.75rem',
-        minWidth: '320px',
-        maxWidth: '450px',
-      }}
+      className={`sspillowy-hot-toast ${t.visible ? 'sspillowy-hot-toast--in' : 'sspillowy-hot-toast--out'}`}
+      style={{ borderLeftColor: borderFor(message.type) }}
+      role="status"
     >
-      <div style={{ marginTop: '2px' }}>{getIcon()}</div>
-      <div style={{ flex: 1 }}>
-        <div style={{ fontWeight: 600, fontSize: '0.875rem', color: '#1f2328' }}>{toast.title}</div>
-        <div style={{ fontSize: '0.8rem', color: '#656d76', marginTop: '0.15rem' }}>{toast.message}</div>
+      <div className="sspillowy-hot-toast__icon">{iconFor(message.type)}</div>
+      <div className="sspillowy-hot-toast__body">
+        <div className="sspillowy-hot-toast__title">{message.title}</div>
+        {message.message ? (
+          <div className="sspillowy-hot-toast__msg">{message.message}</div>
+        ) : null}
       </div>
       <button
-        onClick={onClose}
-        style={{
-          background: 'transparent',
-          border: 'none',
-          cursor: 'pointer',
-          color: '#8c959f',
-          padding: '2px',
-          display: 'flex',
-          alignItems: 'center',
-        }}
+        type="button"
+        className="sspillowy-hot-toast__close"
+        aria-label="Cerrar"
+        onClick={() => toast.dismiss(t.id)}
       >
         <X size={16} />
       </button>
     </div>
   );
+}
+
+/** API nueva: toast estilo SSPILLOWY vía react-hot-toast */
+export function showToast(input: {
+  type?: ToastMessage['type'];
+  title: string;
+  message?: string;
+  duration?: number;
+}) {
+  const payload = {
+    type: input.type || 'info',
+    title: input.title,
+    message: input.message || '',
+  };
+  return toast.custom((t) => <ToastCard t={t} message={payload} />, {
+    duration: input.duration ?? 4000,
+    position: 'top-right',
+  });
+}
+
+/** Montar una sola vez en la app (esquina superior derecha). */
+export const AppToaster: React.FC = () => (
+  <Toaster
+    position="top-right"
+    gutter={10}
+    containerStyle={{ top: 20, right: 24, zIndex: 4000 }}
+    toastOptions={{ duration: 4000 }}
+  />
+);
+
+interface ToastProps {
+  toast: ToastMessage | null;
+  onClose: () => void;
+}
+
+/**
+ * Puente con el patrón viejo (state + <Toast />).
+ * Delega en react-hot-toast y limpia el state.
+ */
+export const Toast: React.FC<ToastProps> = ({ toast: msg, onClose }) => {
+  useEffect(() => {
+    if (!msg) return;
+    showToast({
+      type: msg.type,
+      title: msg.title,
+      message: msg.message,
+    });
+    onClose();
+    // Solo al cambiar el mensaje (id), no cuando cambia la identidad de onClose
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [msg?.id]);
+
+  return null;
 };

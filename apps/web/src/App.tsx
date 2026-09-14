@@ -14,6 +14,7 @@ import { ReportsPage } from './pages/ReportsPage';
 import { fetchNotifications, fetchAuthSession } from './api/client';
 import { FALLBACK_NOTIFICATIONS } from './api/fallbacks';
 import { CookieBanner } from './components/CookieBanner';
+import { AppToaster } from './components/Toast';
 
 type AppView = 'site' | 'login' | 'console' | LegalDoc | 'reset-password';
 
@@ -89,7 +90,14 @@ function pathForView(view: AppView): string {
   return '/';
 }
 
-export const App: React.FC = () => {
+export const App: React.FC = () => (
+  <>
+    <AppToaster />
+    <AppShell />
+  </>
+);
+
+const AppShell: React.FC = () => {
   const [view, setView] = useState<AppView>(initialView);
   const [resetToken, setResetToken] = useState<string | null>(() => resetTokenFromLocation());
   const [activeTab, setActiveTabState] = useState<string>(initialConsoleTab);

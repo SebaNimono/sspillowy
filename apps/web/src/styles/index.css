@@ -487,6 +487,76 @@ body {
   animation: slideIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* react-hot-toast · estética SSPILLOWY (consola GitHub-like) */
+.sspillowy-hot-toast {
+  background: #ffffff;
+  border: 1px solid var(--border-default);
+  border-left: 4px solid var(--accent-blue);
+  border-radius: 8px;
+  padding: 0.9rem 1.15rem;
+  box-shadow: 0 8px 24px rgba(140, 149, 159, 0.25);
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  min-width: 320px;
+  max-width: 450px;
+  font-family: var(--font-sans);
+}
+
+.sspillowy-hot-toast--in {
+  animation: slideIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sspillowy-hot-toast--out {
+  animation: sspillowyToastOut 0.18s ease forwards;
+}
+
+@keyframes sspillowyToastOut {
+  to {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+.sspillowy-hot-toast__icon {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.sspillowy-hot-toast__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.sspillowy-hot-toast__title {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--fg-default);
+  line-height: 1.35;
+}
+
+.sspillowy-hot-toast__msg {
+  font-size: 0.8rem;
+  color: var(--fg-muted);
+  margin-top: 0.15rem;
+  line-height: 1.4;
+}
+
+.sspillowy-hot-toast__close {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--fg-subtle);
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.sspillowy-hot-toast__close:hover {
+  color: var(--fg-default);
+}
+
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
