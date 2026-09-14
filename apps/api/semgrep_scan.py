@@ -361,8 +361,9 @@ def run_repo_scan_job(
         if needs_clone:
             work_parent = Path(tempfile.mkdtemp(prefix="sspillowy-scan-"))
             clone_dir = work_parent / "repo"
-            fallback_ok = _env_true("SEMGREP_FALLBACK_FIXTURE", "true") or _env_true(
-                "SCAN_FALLBACK_FIXTURE", "true"
+            # Por defecto NO usar fixture en prod: inventa hallazgos y rompe el Security Gate.
+            fallback_ok = _env_true("SEMGREP_FALLBACK_FIXTURE", "false") or _env_true(
+                "SCAN_FALLBACK_FIXTURE", "false"
             )
             try:
                 _clone_repo(repo.url, scan.branch or repo.branch or "main", clone_dir)
