@@ -487,74 +487,40 @@ body {
   animation: slideIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* react-hot-toast · estética SSPILLOWY (consola GitHub-like) */
-.sspillowy-hot-toast {
-  background: #ffffff;
-  border: 1px solid var(--border-default);
-  border-left: 4px solid var(--accent-blue);
-  border-radius: 8px;
-  padding: 0.9rem 1.15rem;
-  box-shadow: 0 8px 24px rgba(140, 149, 159, 0.25);
-  display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-  min-width: 320px;
-  max-width: 450px;
+/* Sileo · estética SSPILLOWY (consola clara, esquina superior derecha) */
+:root {
+  --sileo-width: 360px;
+  --sileo-height: 42px;
+  --sileo-state-success: #1a7f37;
+  --sileo-state-error: #cf222e;
+  --sileo-state-info: #0969da;
+  --sileo-state-warning: #9a6700;
+  --sileo-state-loading: #656d76;
+  --sileo-state-action: #8250df;
+}
+
+[data-sileo-viewport] {
+  z-index: 4000 !important;
   font-family: var(--font-sans);
 }
 
-.sspillowy-hot-toast--in {
-  animation: slideIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+[data-sileo-title] {
+  text-transform: none !important;
+  font-weight: 600 !important;
+  font-size: 0.875rem !important;
+  letter-spacing: 0;
 }
 
-.sspillowy-hot-toast--out {
-  animation: sspillowyToastOut 0.18s ease forwards;
+/* fill blanco → descripción legible (Sileo “dark” theme asume fill claro) */
+[data-sileo-viewport] [data-sileo-description] {
+  color: #656d76 !important;
+  font-size: 0.8rem !important;
+  line-height: 1.4 !important;
+  padding: 0.85rem 1rem !important;
 }
 
-@keyframes sspillowyToastOut {
-  to {
-    opacity: 0;
-    transform: translateY(-6px);
-  }
-}
-
-.sspillowy-hot-toast__icon {
-  margin-top: 2px;
-  flex-shrink: 0;
-}
-
-.sspillowy-hot-toast__body {
-  flex: 1;
-  min-width: 0;
-}
-
-.sspillowy-hot-toast__title {
-  font-weight: 600;
-  font-size: 0.875rem;
-  color: var(--fg-default);
-  line-height: 1.35;
-}
-
-.sspillowy-hot-toast__msg {
-  font-size: 0.8rem;
-  color: var(--fg-muted);
-  margin-top: 0.15rem;
-  line-height: 1.4;
-}
-
-.sspillowy-hot-toast__close {
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  color: var(--fg-subtle);
-  padding: 2px;
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-}
-
-.sspillowy-hot-toast__close:hover {
-  color: var(--fg-default);
+[data-sileo-badge] {
+  border-radius: 6px !important;
 }
 
 @keyframes spin {
