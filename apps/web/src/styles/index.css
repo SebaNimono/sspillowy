@@ -490,7 +490,7 @@ body {
 /* Sileo · estética SSPILLOWY (consola clara, esquina superior derecha) */
 :root {
   --sileo-width: 360px;
-  --sileo-height: 42px;
+  --sileo-height: 44px;
   --sileo-state-success: #1a7f37;
   --sileo-state-error: #cf222e;
   --sileo-state-info: #0969da;
@@ -504,23 +504,36 @@ body {
   font-family: var(--font-sans);
 }
 
+/* Separación fuerte del canvas #f6f8fa (el fill blanco solo no alcanza) */
+[data-sileo-toast] {
+  filter:
+    drop-shadow(0 0 0.5px rgba(31, 35, 40, 0.35))
+    drop-shadow(0 2px 4px rgba(31, 35, 40, 0.1))
+    drop-shadow(0 12px 28px rgba(31, 35, 40, 0.22));
+}
+
 [data-sileo-title] {
   text-transform: none !important;
-  font-weight: 600 !important;
+  font-weight: 700 !important;
   font-size: 0.875rem !important;
   letter-spacing: 0;
 }
 
-/* fill blanco → descripción legible (Sileo “dark” theme asume fill claro) */
 [data-sileo-viewport] [data-sileo-description] {
-  color: #656d76 !important;
-  font-size: 0.8rem !important;
-  line-height: 1.4 !important;
-  padding: 0.85rem 1rem !important;
+  color: #1f2328 !important;
+  font-size: 0.8125rem !important;
+  line-height: 1.45 !important;
+  padding: 0.9rem 1.05rem !important;
+  opacity: 0.85;
 }
 
 [data-sileo-badge] {
-  border-radius: 6px !important;
+  border-radius: 7px !important;
+}
+
+/* Capa de contenido opaca al expandir (evita que se vea la UI de detrás) */
+[data-sileo-content][data-visible="true"] [data-sileo-description] {
+  background: transparent;
 }
 
 @keyframes spin {

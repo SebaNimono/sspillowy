@@ -11,8 +11,8 @@ export interface ToastMessage {
 const BASE_OPTS = {
   position: 'top-right' as const,
   fill: '#ffffff',
-  roundness: 10,
-  duration: 4000,
+  roundness: 12,
+  duration: 4500,
 };
 
 /** API: toast SSPILLOWY vía Sileo (esquina superior derecha). */
@@ -42,8 +42,8 @@ export const AppToaster: React.FC = () => (
     offset={{ top: 20, right: 24 }}
     options={{
       fill: '#ffffff',
-      roundness: 10,
-      duration: 4000,
+      roundness: 12,
+      duration: 4500,
     }}
   />
 );
