@@ -49,6 +49,10 @@ def run_trivy_fs(target: Path, timeout: int = 300) -> list[dict]:
 
     # Cache en /tmp para no llenar el FS de la app
     cache_dir = os.getenv("TRIVY_CACHE_DIR", "/tmp/trivy-cache")
+    skip_dirs = os.getenv(
+        "TRIVY_SKIP_DIRS",
+        "fixtures,node_modules,defectdojo,mockup_movil,ppt,.git,dist,build",
+    )
     cmd = [
         "trivy",
         "fs",
@@ -58,6 +62,8 @@ def run_trivy_fs(target: Path, timeout: int = 300) -> list[dict]:
         str(out_file),
         "--scanners",
         os.getenv("TRIVY_SCANNERS", "vuln,misconfig,secret"),
+        "--skip-dirs",
+        skip_dirs,
         "--quiet",
         "--cache-dir",
         cache_dir,
@@ -138,7 +144,14 @@ def run_trivy_fs(target: Path, timeout: int = 300) -> list[dict]:
                 }
             )
 
-    return flat
+    # No reportar laboratorio/fixture del propio monorepo
+    cleaned = []
+    for item in flat:
+        path = str(item.get("file_path") or "").replace("\\", "/").lower()
+        if "fixtures/" in path or "vuln_sample" in path:
+            continue
+        cleaned.append(item)
+    return cleaned
 
 
 def persist_trivy_findings(

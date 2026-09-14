@@ -121,6 +121,16 @@ def _run_semgrep(target: Path, timeout: int = 300) -> list[dict]:
 
     config = os.getenv("SEMGREP_CONFIG", "p/ci").strip() or "p/ci"
     out_file = target / "semgrep-out.json"
+    excludes = [
+        "fixtures",
+        "node_modules",
+        "defectdojo",
+        "mockup_movil",
+        "ppt",
+        "dist",
+        "build",
+        ".git",
+    ]
     cmd = [
         "semgrep",
         "scan",
@@ -132,8 +142,10 @@ def _run_semgrep(target: Path, timeout: int = 300) -> list[dict]:
         "off",
         "-o",
         str(out_file),
-        str(target),
     ]
+    for ex in excludes:
+        cmd.extend(["--exclude", ex])
+    cmd.append(str(target))
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
     # Semgrep puede devolver 0 (ok) o 1 (hallazgos); ambos son válidos si hay JSON
     payload = ""

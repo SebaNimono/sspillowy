@@ -68,7 +68,27 @@ def run_gitleaks(target: Path, timeout: int = 180) -> list[dict]:
             "--no-git",
             "--no-banner",
         ]
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        # Excluir demos/fixtures (secretos intencionales para laboratorio)
+        ignore = Path(tempfile.gettempdir()) / f"gitleaks-ignore-{uuid.uuid4().hex}"
+        ignore.write_text(
+            "\n".join(
+                [
+                    "**/fixtures/**",
+                    "**/vuln_sample/**",
+                    "**/node_modules/**",
+                    "**/defectdojo/**",
+                    "**/mockup_movil/**",
+                    "**/ppt/**",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        cmd.extend(["--ignore-path", str(ignore)])
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        finally:
+            ignore.unlink(missing_ok=True)
 
         if proc.returncode not in (0, 1):
             err = (proc.stderr or proc.stdout or "gitleaks error").strip()[:500]
@@ -82,10 +102,20 @@ def run_gitleaks(target: Path, timeout: int = 180) -> list[dict]:
             return []
         data = json.loads(raw)
         if isinstance(data, list):
-            return data
-        if isinstance(data, dict) and "Findings" in data:
-            return data.get("Findings") or []
-        return []
+            findings = data
+        elif isinstance(data, dict) and "Findings" in data:
+            findings = data.get("Findings") or []
+        else:
+            findings = []
+        # Red de seguridad: no reportar secretos del laboratorio/fixture
+        cleaned = []
+        for item in findings:
+            path = str(item.get("File") or item.get("file") or item.get("Path") or "").replace("\\", "/")
+            low = path.lower()
+            if "fixtures/" in low or "vuln_sample" in low:
+                continue
+            cleaned.append(item)
+        return cleaned
     finally:
         try:
             out_file.unlink(missing_ok=True)
