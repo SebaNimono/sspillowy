@@ -46,37 +46,57 @@ def _clone_repo(url: str, branch: str, dest: Path, timeout: int = 180) -> None:
     clone_url = _normalize_clone_url(url)
     token = os.getenv("GITHUB_TOKEN", "").strip() or os.getenv("GH_TOKEN", "").strip()
     env = os.environ.copy()
-    # Auth opcional para repos privados GitHub
-    if token and "github.com" in clone_url and "://" in clone_url:
-        clone_url = clone_url.replace("https://", f"https://x-access-token:{token}@")
-        clone_url = clone_url.replace("http://", f"http://x-access-token:{token}@")
+    # Sin TTY en Railway: git no debe pedir usuario/contraseña interactivo
+    # (error típico: "could not read Username for 'https://github.com': No such device")
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    env["GCM_INTERACTIVE"] = "never"
+    env.pop("GIT_ASKPASS", None)
+    env.pop("SSH_ASKPASS", None)
 
-    cmd = [
-        "git",
-        "clone",
-        "--depth",
-        "1",
-        "--single-branch",
-        "--branch",
-        branch or "main",
-        clone_url,
-        str(dest),
-    ]
-    proc = subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-        env=env,
-    )
+    # Auth opcional para repos privados o anti rate-limit de GitHub
+    if token and "github.com" in clone_url and "://" in clone_url:
+        # Evitar doble inyección si la URL ya trae credenciales
+        if "@github.com" not in clone_url.split("://", 1)[-1]:
+            clone_url = clone_url.replace("https://", f"https://x-access-token:{token}@", 1)
+            clone_url = clone_url.replace("http://", f"http://x-access-token:{token}@", 1)
+
+    def _run(branch_name: str) -> subprocess.CompletedProcess[str]:
+        cmd = [
+            "git",
+            "-c",
+            "credential.helper=",
+            "-c",
+            "advice.detachedHead=false",
+            "clone",
+            "--depth",
+            "1",
+            "--single-branch",
+            "--branch",
+            branch_name or "main",
+            clone_url,
+            str(dest),
+        ]
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=env)
+
+    if dest.exists():
+        shutil.rmtree(dest, ignore_errors=True)
+
+    proc = _run(branch or "main")
+    if proc.returncode != 0 and branch and branch != "main":
+        if dest.exists():
+            shutil.rmtree(dest, ignore_errors=True)
+        proc = _run("main")
+
     if proc.returncode != 0:
-        # reintento en default branch si la rama no existe
-        if branch and branch != "main":
-            cmd[cmd.index("--branch") + 1] = "main"
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=env)
-        if proc.returncode != 0:
-            err = (proc.stderr or proc.stdout or "clone failed").strip()[:500]
-            raise RuntimeError(f"git clone falló: {err}")
+        err = (proc.stderr or proc.stdout or "clone failed").strip()[:500]
+        hint = ""
+        low = err.lower()
+        if "could not read username" in low or "authentication failed" in low or "auth" in low:
+            hint = (
+                " GitHub pidió autenticación (repo privado o rate-limit anónimo). "
+                "En Railway configura GITHUB_TOKEN (classic con repo read, o fine-grained Contents: Read)."
+            )
+        raise RuntimeError(f"git clone falló: {err}.{hint}")
 
 
 def _map_severity(raw: str | None) -> str:
