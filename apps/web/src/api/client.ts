@@ -78,6 +78,20 @@ export interface GateCheckResult {
   repository_name?: string | null;
 }
 
+export interface GateBypassRequest {
+  id: string;
+  repository_id?: string | null;
+  repository_name?: string | null;
+  reason: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXPIRED' | string;
+  requested_by: string;
+  decided_by?: string | null;
+  decision_note?: string | null;
+  expires_at?: string | null;
+  created_at: string;
+  decided_at?: string | null;
+}
+
 export interface Scan {
   id: string;
   repository_id: string;
@@ -303,6 +317,39 @@ export async function updateSecurityGate(policy: SecurityGatePolicy): Promise<Se
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(policy),
+  });
+}
+
+export async function fetchGateBypasses(status?: string): Promise<GateBypassRequest[]> {
+  const qs = status ? `?status=${encodeURIComponent(status)}` : '';
+  return request(`/security-gates/bypasses${qs}`);
+}
+
+export async function createGateBypass(body: {
+  reason: string;
+  repository_id?: string | null;
+  expires_hours?: number;
+}): Promise<GateBypassRequest> {
+  return request('/security-gates/bypasses', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function approveGateBypass(id: string, note?: string): Promise<GateBypassRequest> {
+  return request(`/security-gates/bypasses/${id}/approve`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ note: note || null }),
+  });
+}
+
+export async function rejectGateBypass(id: string, note?: string): Promise<GateBypassRequest> {
+  return request(`/security-gates/bypasses/${id}/reject`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ note: note || null }),
   });
 }
 

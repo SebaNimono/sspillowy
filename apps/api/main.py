@@ -53,6 +53,7 @@ from password_auth import router as password_auth_router  # noqa: E402
 from email_verification import router as email_verification_router  # noqa: E402
 from password_reset import router as password_reset_router  # noqa: E402
 from pillow_agent import router as pillow_router  # noqa: E402
+from gate_bypass import router as gate_bypass_router  # noqa: E402
 from database import init_db, db_ping, SessionLocal  # noqa: E402
 from email_service import mailer_status  # noqa: E402
 from dashboard_metrics import (  # noqa: E402
@@ -122,6 +123,7 @@ app.include_router(github_webhook_router)
 app.include_router(gitlab_auth_router)
 app.include_router(google_auth_router)
 app.include_router(microsoft_auth_router)
+app.include_router(gate_bypass_router)
 
 # Estado de lectura de notificaciones (efímero por instancia; hallazgos sí son persistentes)
 _READ_NOTIFICATION_IDS: set[str] = set()

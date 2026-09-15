@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Header } from '../components/Header';
 import { SidebarState } from '../components/Sidebar';
 import { Toast, ToastMessage } from '../components/Toast';
+import { ApiOfflineBanner } from '../components/ApiOfflineBanner';
 import { Scan, fetchScans, triggerScan } from '../api/client';
-import { FALLBACK_SCANS, REPO_NAMES } from '../api/fallbacks';
 import { Radar, Play, GitBranch, RefreshCw } from 'lucide-react';
 import { useI18n } from '../i18n/I18nProvider';
 
@@ -27,18 +27,22 @@ export const ScansPage: React.FC<PageProps> = ({
   onGoToSite,
 }) => {
   const { t } = useI18n();
-  const [scans, setScans] = useState<Scan[]>(FALLBACK_SCANS);
+  const [scans, setScans] = useState<Scan[]>([]);
   const [loading, setLoading] = useState(true);
+  const [apiOffline, setApiOffline] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
 
   const loadScans = () => {
     setLoading(true);
     fetchScans()
       .then((data) => {
-        if (data && data.length > 0) setScans(data);
-        else setScans(FALLBACK_SCANS);
+        setApiOffline(false);
+        setScans(data || []);
       })
-      .catch(() => setScans(FALLBACK_SCANS))
+      .catch(() => {
+        setApiOffline(true);
+        setScans([]);
+      })
       .finally(() => setLoading(false));
   };
 
@@ -99,6 +103,8 @@ export const ScansPage: React.FC<PageProps> = ({
         onGoToSite={onGoToSite}
       />
 
+      {apiOffline && <ApiOfflineBanner />}
+
       <div className="card">
         <div className="card-header">
           <div className="card-title">
@@ -130,6 +136,13 @@ export const ScansPage: React.FC<PageProps> = ({
                 </tr>
               </thead>
               <tbody>
+                {!loading && scans.length === 0 && (
+                  <tr>
+                    <td colSpan={9} style={{ textAlign: 'center', color: '#656d76', padding: '2rem' }}>
+                      No hay escaneos registrados.
+                    </td>
+                  </tr>
+                )}
                 {scans.map((scan) => (
                   <tr key={scan.id}>
                     <td>{statusBadge(scan)}</td>
@@ -142,6 +155,10 @@ export const ScansPage: React.FC<PageProps> = ({
                         <span className="badge badge-low" title={scan.gate_detail || ''}>
                           PASSED
                         </span>
+                      ) : scan.gate_status === 'BYPASSED' ? (
+                        <span className="badge" style={{ background: '#fbefff', color: '#8250df', border: '1px solid #d2a8ff' }} title={scan.gate_detail || ''}>
+                          BYPASSED
+                        </span>
                       ) : scan.gate_status === 'SKIPPED' ? (
                         <span className="badge badge-engine" title={scan.gate_detail || ''}>
                           SKIPPED
@@ -151,7 +168,7 @@ export const ScansPage: React.FC<PageProps> = ({
                       )}
                     </td>
                     <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: '#0969da', fontWeight: 600 }}>{scan.id}</td>
-                    <td style={{ fontWeight: 600 }}>{REPO_NAMES[scan.repository_id] || scan.repository_id}</td>
+                    <td style={{ fontWeight: 600, fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>{scan.repository_id}</td>
                     <td>
                       <span className="badge badge-engine">{scan.triggered_by}</span>
                     </td>

@@ -3,7 +3,7 @@ import { Header } from '../components/Header';
 import { SidebarState } from '../components/Sidebar';
 import { Toast, ToastMessage } from '../components/Toast';
 import { ComplianceReport, fetchComplianceReport, fetchFindings } from '../api/client';
-import { FALLBACK_COMPLIANCE, FALLBACK_FINDINGS } from '../api/fallbacks';
+import { ApiOfflineBanner } from '../components/ApiOfflineBanner';
 import { FileArchive, Download, ShieldCheck, BookOpen } from 'lucide-react';
 import { useI18n } from '../i18n/I18nProvider';
 
@@ -33,24 +33,36 @@ export const ReportsPage: React.FC<PageProps> = ({
   onGoToSite,
 }) => {
   const { t } = useI18n();
-  const [report, setReport] = useState<ComplianceReport>(FALLBACK_COMPLIANCE);
+  const emptyReport: ComplianceReport = {
+    standard: 'ISO/IEC 27001:2022',
+    period: '—',
+    health_score: 0,
+    controls: [],
+    generated_at: new Date().toISOString(),
+    evidence_pack_ready: false,
+  };
+  const [report, setReport] = useState<ComplianceReport>(emptyReport);
+  const [apiOffline, setApiOffline] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
 
   useEffect(() => {
     fetchComplianceReport()
       .then((data) => {
+        setApiOffline(false);
         if (data) setReport(data);
       })
-      .catch(() => setReport(FALLBACK_COMPLIANCE));
+      .catch(() => {
+        setApiOffline(true);
+        setReport(emptyReport);
+      });
   }, []);
 
   const downloadPack = async () => {
-    let findings = FALLBACK_FINDINGS;
+    let findings: Awaited<ReturnType<typeof fetchFindings>> = [];
     try {
-      const remote = await fetchFindings();
-      if (remote?.length) findings = remote;
+      findings = (await fetchFindings()) || [];
     } catch {
-      findings = FALLBACK_FINDINGS;
+      findings = [];
     }
 
     const pack = {
@@ -95,6 +107,8 @@ export const ReportsPage: React.FC<PageProps> = ({
         unreadCount={unreadCount}
         onGoToSite={onGoToSite}
       />
+
+      {apiOffline && <ApiOfflineBanner />}
 
       <div className="stats-grid">
         <div className="stat-card">

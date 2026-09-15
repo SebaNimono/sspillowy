@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Header } from '../components/Header';
 import { SidebarState } from '../components/Sidebar';
 import { NotificationItem, fetchNotifications, markAllNotificationsRead, markNotificationRead } from '../api/client';
-import { FALLBACK_NOTIFICATIONS } from '../api/fallbacks';
+import { ApiOfflineBanner } from '../components/ApiOfflineBanner';
 import { Bell, CheckCheck, KeyRound, ShieldAlert, Sliders, Sparkles, Smartphone, Radar } from 'lucide-react';
 import { useI18n } from '../i18n/I18nProvider';
 
@@ -45,16 +45,20 @@ export const NotificationsPage: React.FC<PageProps> = ({
   onNotificationsChange,
 }) => {
   const { t } = useI18n();
-  const [items, setItems] = useState<NotificationItem[]>(FALLBACK_NOTIFICATIONS);
+  const [items, setItems] = useState<NotificationItem[]>([]);
   const [filter, setFilter] = useState<'all' | 'unread' | 'critical'>('all');
+  const [apiOffline, setApiOffline] = useState(false);
 
   const load = () => {
     fetchNotifications()
       .then((data) => {
-        if (data?.length) setItems(data);
-        else setItems(FALLBACK_NOTIFICATIONS);
+        setApiOffline(false);
+        setItems(data || []);
       })
-      .catch(() => setItems(FALLBACK_NOTIFICATIONS));
+      .catch(() => {
+        setApiOffline(true);
+        setItems([]);
+      });
   };
 
   useEffect(() => {
@@ -103,6 +107,8 @@ export const NotificationsPage: React.FC<PageProps> = ({
         unreadCount={unreadCount}
         onGoToSite={onGoToSite}
       />
+
+      {apiOffline && <ApiOfflineBanner />}
 
       <div className="card" style={{ padding: '1rem 1.5rem', marginBottom: '1.5rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>

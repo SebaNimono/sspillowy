@@ -14,7 +14,7 @@ OPEN_STATUSES = ("OPEN", "IN_REVIEW")
 
 @dataclass
 class GateEvaluation:
-    decision: str  # PASSED | BLOCKED | DISABLED
+    decision: str  # PASSED | BLOCKED | DISABLED | BYPASSED
     allowed: bool
     reasons: list[str] = field(default_factory=list)
     open_critical: int = 0
@@ -26,10 +26,13 @@ class GateEvaluation:
     require_ciso_approval_for_bypass: bool = True
     policy_name: str = ""
     repository_id: str | None = None
+    bypass_id: str | None = None
 
     def summary(self) -> str:
         if self.decision == "DISABLED":
             return "Gate deshabilitado · se permite continuar."
+        if self.decision == "BYPASSED":
+            return "BYPASSED · excepción CISO activa · " + "; ".join(self.reasons[:2])
         if self.allowed:
             return (
                 f"PASSED · crit={self.open_critical}/{self.max_critical_allowed} · "
@@ -93,13 +96,33 @@ def evaluate_gate(
         reasons.append(f"Secretos GitLeaks abiertos: {open_secrets} (bloqueo estricto)")
 
     if reasons:
+        # ¿Hay bypass CISO aprobado y vigente?
+        try:
+            from gate_bypass import find_active_bypass
+
+            active = find_active_bypass(db, repository_id)
+        except Exception:
+            active = None
+
+        if active:
+            exp = active.expires_at.isoformat() if active.expires_at else "sin fecha"
+            result.decision = "BYPASSED"
+            result.allowed = True
+            result.bypass_id = active.id
+            result.reasons = [
+                f"Excepción CISO activa hasta {exp}",
+                f"Solicitado por {active.requested_by}",
+                f"Motivo: {active.reason[:240]}",
+                *reasons,
+            ]
+            return result
+
         result.decision = "BLOCKED"
         result.allowed = False
         result.reasons = reasons
         if ciso:
-            # Pulse aún no conecta el bypass; solo indica la política
             result.reasons.append(
-                "Bypass (cuando Pulse esté conectado): requiere aprobación CISO."
+                "Para continuar: solicita bypass CISO en Security Gates (hub) o vía Pulse cuando esté conectado."
             )
     else:
         result.decision = "PASSED"

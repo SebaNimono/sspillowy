@@ -130,4 +130,18 @@ ALTER TABLE scans ADD COLUMN IF NOT EXISTS gate_status TEXT;
 ALTER TABLE scans ADD COLUMN IF NOT EXISTS gate_detail TEXT;
 ALTER TABLE scans ADD COLUMN IF NOT EXISTS progress_stage TEXT;
 ALTER TABLE scans ADD COLUMN IF NOT EXISTS progress_detail TEXT;
+
+CREATE TABLE IF NOT EXISTS gate_bypass_requests (
+  id TEXT PRIMARY KEY,
+  repository_id TEXT REFERENCES repositories (id) ON DELETE SET NULL,
+  reason TEXT NOT NULL,
+  status TEXT DEFAULT 'PENDING',
+  requested_by TEXT NOT NULL,
+  decided_by TEXT,
+  decision_note TEXT,
+  expires_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  decided_at TIMESTAMPTZ
+);
+
 UPDATE users SET email_verified = TRUE WHERE email_verified IS NOT TRUE;

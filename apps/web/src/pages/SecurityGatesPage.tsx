@@ -2,15 +2,23 @@ import React, { useEffect, useState } from 'react';
 import { Header } from '../components/Header';
 import { SidebarState } from '../components/Sidebar';
 import { Toast, ToastMessage } from '../components/Toast';
+import { ApiOfflineBanner } from '../components/ApiOfflineBanner';
 import {
+  GateBypassRequest,
   GateCheckResult,
+  Repository,
   SecurityGatePolicy,
+  approveGateBypass,
   checkSecurityGate,
+  createGateBypass,
   evaluateSecurityGate,
+  fetchGateBypasses,
+  fetchRepositories,
   fetchSecurityGate,
+  rejectGateBypass,
   updateSecurityGate,
 } from '../api/client';
-import { Sliders, Save, Smartphone, ShieldCheck, ShieldAlert, RefreshCw } from 'lucide-react';
+import { Sliders, Save, ShieldCheck, ShieldAlert, RefreshCw, Unlock } from 'lucide-react';
 import { useI18n } from '../i18n/I18nProvider';
 
 const DEFAULT_POLICY: SecurityGatePolicy = {
@@ -46,23 +54,48 @@ export const SecurityGatesPage: React.FC<PageProps> = ({
   const [policy, setPolicy] = useState<SecurityGatePolicy>(DEFAULT_POLICY);
   const [check, setCheck] = useState<GateCheckResult | null>(null);
   const [loadingStatus, setLoadingStatus] = useState(true);
+  const [apiOffline, setApiOffline] = useState(false);
   const [saving, setSaving] = useState(false);
   const [evaluating, setEvaluating] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
+  const [bypasses, setBypasses] = useState<GateBypassRequest[]>([]);
+  const [repos, setRepos] = useState<Repository[]>([]);
+  const [bypassReason, setBypassReason] = useState('');
+  const [bypassRepoId, setBypassRepoId] = useState('');
+  const [bypassHours, setBypassHours] = useState(24);
+  const [bypassBusy, setBypassBusy] = useState(false);
+
+  const loadBypasses = () =>
+    fetchGateBypasses()
+      .then(setBypasses)
+      .catch(() => setBypasses([]));
 
   useEffect(() => {
     let cancelled = false;
     setLoadingStatus(true);
     Promise.all([
-      fetchSecurityGate().catch(() => DEFAULT_POLICY),
-      checkSecurityGate().catch(() => null),
-    ]).then(([pol, result]) => {
-      if (cancelled) return;
-      if (pol) setPolicy(pol);
-      setCheck(result);
-    }).finally(() => {
-      if (!cancelled) setLoadingStatus(false);
-    });
+      fetchSecurityGate(),
+      checkSecurityGate(),
+      fetchGateBypasses().catch(() => [] as GateBypassRequest[]),
+      fetchRepositories().catch(() => [] as Repository[]),
+    ])
+      .then(([pol, result, byps, repoList]) => {
+        if (cancelled) return;
+        setApiOffline(false);
+        if (pol) setPolicy(pol);
+        setCheck(result);
+        setBypasses(byps || []);
+        setRepos(repoList || []);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setApiOffline(true);
+          setCheck(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingStatus(false);
+      });
     return () => {
       cancelled = true;
     };
@@ -117,8 +150,99 @@ export const SecurityGatesPage: React.FC<PageProps> = ({
     }
   };
 
+  const handleRequestBypass = async () => {
+    if (bypassReason.trim().length < 8) {
+      setToast({
+        id: Date.now().toString(),
+        type: 'error',
+        title: 'Motivo corto',
+        message: 'Explica al menos 8 caracteres (quién, por qué, hasta cuándo).',
+      });
+      return;
+    }
+    setBypassBusy(true);
+    try {
+      await createGateBypass({
+        reason: bypassReason.trim(),
+        repository_id: bypassRepoId || null,
+        expires_hours: bypassHours,
+      });
+      setBypassReason('');
+      await loadBypasses();
+      setToast({
+        id: Date.now().toString(),
+        type: 'success',
+        title: 'Bypass solicitado',
+        message: 'Queda PENDING hasta aprobación CISO.',
+      });
+    } catch (err) {
+      setToast({
+        id: Date.now().toString(),
+        type: 'error',
+        title: 'No se pudo solicitar',
+        message: err instanceof Error ? err.message : 'Error de API',
+      });
+    } finally {
+      setBypassBusy(false);
+    }
+  };
+
+  const handleApprove = async (id: string) => {
+    setBypassBusy(true);
+    try {
+      await approveGateBypass(id);
+      await loadBypasses();
+      const result = await evaluateSecurityGate();
+      setCheck(result);
+      setToast({
+        id: Date.now().toString(),
+        type: 'success',
+        title: 'Bypass aprobado',
+        message: result.summary,
+      });
+    } catch (err) {
+      setToast({
+        id: Date.now().toString(),
+        type: 'error',
+        title: 'Aprobación fallida',
+        message: err instanceof Error ? err.message : 'Error de API',
+      });
+    } finally {
+      setBypassBusy(false);
+    }
+  };
+
+  const handleReject = async (id: string) => {
+    setBypassBusy(true);
+    try {
+      await rejectGateBypass(id);
+      await loadBypasses();
+      setToast({
+        id: Date.now().toString(),
+        type: 'info',
+        title: 'Bypass rechazado',
+        message: 'La solicitud quedó REJECTED.',
+      });
+    } catch (err) {
+      setToast({
+        id: Date.now().toString(),
+        type: 'error',
+        title: 'Rechazo fallido',
+        message: err instanceof Error ? err.message : 'Error de API',
+      });
+    } finally {
+      setBypassBusy(false);
+    }
+  };
+
   const decisionColor =
-    check?.decision === 'BLOCKED' ? '#cf222e' : check?.decision === 'PASSED' ? '#1a7f37' : '#656d76';
+    check?.decision === 'BLOCKED'
+      ? '#cf222e'
+      : check?.decision === 'BYPASSED'
+        ? '#8250df'
+        : check?.decision === 'PASSED'
+          ? '#1a7f37'
+          : '#656d76';
 
   return (
     <div>
@@ -126,7 +250,7 @@ export const SecurityGatesPage: React.FC<PageProps> = ({
 
       <Header
         title={t('pages.gates.title')}
-        subtitle={t('pages.gates.subtitle')}
+        subtitle="Umbrales de despliegue y bypass CISO en el hub"
         sidebarState={sidebarState}
         setSidebarState={setSidebarState}
         user={user}
@@ -136,7 +260,9 @@ export const SecurityGatesPage: React.FC<PageProps> = ({
         onGoToSite={onGoToSite}
       />
 
-      {loadingStatus && !check && (
+      {apiOffline && <ApiOfflineBanner />}
+
+      {loadingStatus && !check && !apiOffline && (
         <div className="card" style={{ marginBottom: '1rem' }}>
           <p style={{ color: '#656d76', margin: 0 }}>Evaluando Security Gate…</p>
         </div>
@@ -153,7 +279,7 @@ export const SecurityGatesPage: React.FC<PageProps> = ({
           <div className="card-header">
             <div className="card-title">
               {check.allowed ? (
-                <ShieldCheck size={20} color="#1a7f37" />
+                <ShieldCheck size={20} color={check.decision === 'BYPASSED' ? '#8250df' : '#1a7f37'} />
               ) : (
                 <ShieldAlert size={20} color="#cf222e" />
               )}
@@ -187,6 +313,118 @@ export const SecurityGatesPage: React.FC<PageProps> = ({
         </div>
       )}
 
+      <div className="card" style={{ marginBottom: '1rem' }}>
+        <div className="card-header">
+          <div className="card-title">
+            <Unlock size={20} color="#8250df" />
+            <span>Bypass CISO (hub)</span>
+          </div>
+        </div>
+        <p style={{ color: '#656d76', fontSize: '0.85rem', marginBottom: '1rem', lineHeight: 1.45 }}>
+          Si el gate está BLOCKED, solicita una excepción temporal con motivo y vencimiento. Queda en
+          audit log. Pulse podrá firmar esto después; el hub ya opera el flujo.
+        </p>
+        <div style={{ display: 'grid', gap: '0.75rem', marginBottom: '1rem' }}>
+          <textarea
+            value={bypassReason}
+            onChange={(e) => setBypassReason(e.target.value)}
+            placeholder="Motivo (ej. hotfix producción, riesgo aceptado por CISO hasta mañana)…"
+            rows={3}
+            style={{
+              width: '100%',
+              padding: '0.65rem',
+              borderRadius: '6px',
+              border: '1px solid #d0d7de',
+              fontSize: '0.85rem',
+              resize: 'vertical',
+            }}
+          />
+          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <select
+              value={bypassRepoId}
+              onChange={(e) => setBypassRepoId(e.target.value)}
+              style={{ flex: 1, minWidth: '180px', padding: '0.55rem', borderRadius: '6px', border: '1px solid #d0d7de' }}
+            >
+              <option value="">Toda la organización</option>
+              {repos.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', color: '#656d76' }}>
+              Horas
+              <input
+                type="number"
+                min={1}
+                max={168}
+                value={bypassHours}
+                onChange={(e) => setBypassHours(parseInt(e.target.value, 10) || 24)}
+                style={{ width: '72px', padding: '0.45rem', borderRadius: '6px', border: '1px solid #d0d7de' }}
+              />
+            </label>
+            <button className="btn btn-primary" onClick={handleRequestBypass} disabled={bypassBusy}>
+              Solicitar bypass
+            </button>
+          </div>
+        </div>
+        {bypasses.length === 0 ? (
+          <p style={{ color: '#656d76', fontSize: '0.85rem', margin: 0 }}>Sin solicitudes aún.</p>
+        ) : (
+          <div className="table-container">
+            <table className="custom-table">
+              <thead>
+                <tr>
+                  <th>Estado</th>
+                  <th>Alcance</th>
+                  <th>Motivo</th>
+                  <th>Solicitó</th>
+                  <th>Expira</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {bypasses.slice(0, 12).map((b) => (
+                  <tr key={b.id}>
+                    <td>
+                      <span className="badge badge-engine">{b.status}</span>
+                    </td>
+                    <td style={{ fontSize: '0.85rem' }}>{b.repository_name || 'Org'}</td>
+                    <td style={{ fontSize: '0.8rem', maxWidth: '220px' }}>{b.reason}</td>
+                    <td style={{ fontSize: '0.75rem', color: '#656d76' }}>{b.requested_by}</td>
+                    <td style={{ fontSize: '0.75rem', color: '#656d76' }}>
+                      {b.expires_at ? new Date(b.expires_at).toLocaleString() : '—'}
+                    </td>
+                    <td>
+                      {b.status === 'PENDING' && (
+                        <div style={{ display: 'flex', gap: '0.35rem' }}>
+                          <button
+                            className="btn btn-primary"
+                            style={{ padding: '0.3rem 0.55rem', fontSize: '0.75rem' }}
+                            disabled={bypassBusy}
+                            onClick={() => handleApprove(b.id)}
+                          >
+                            Aprobar
+                          </button>
+                          <button
+                            className="btn btn-secondary"
+                            style={{ padding: '0.3rem 0.55rem', fontSize: '0.75rem' }}
+                            disabled={bypassBusy}
+                            onClick={() => handleReject(b.id)}
+                          >
+                            Rechazar
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       <div className="card">
         <div className="card-header">
           <div className="card-title">
@@ -194,7 +432,7 @@ export const SecurityGatesPage: React.FC<PageProps> = ({
             <span>Configuración de Política Activa: {policy.name}</span>
           </div>
 
-          <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+          <button className="btn btn-primary" onClick={handleSave} disabled={saving || apiOffline}>
             <Save size={16} />
             <span>{saving ? 'Guardando...' : 'Guardar Cambios'}</span>
           </button>
@@ -215,7 +453,7 @@ export const SecurityGatesPage: React.FC<PageProps> = ({
           <div>
             <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#1f2328' }}>Gate habilitado</div>
             <div style={{ color: '#656d76', fontSize: '0.8rem' }}>
-              Si está apagado: decisión DISABLED, CI puede continuar y no se avisa a Pulse.
+              Si está apagado: decisión DISABLED, CI puede continuar.
             </div>
           </div>
           <input
@@ -319,21 +557,11 @@ export const SecurityGatesPage: React.FC<PageProps> = ({
           <div style={{ background: '#ffffff', padding: '1.25rem', borderRadius: '8px', border: '1px solid var(--border-default)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <div
-                  style={{
-                    fontWeight: 600,
-                    fontSize: '0.9rem',
-                    color: '#8250df',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.4rem',
-                  }}
-                >
-                  <Smartphone size={16} />
-                  <span>Aprobación Móvil Requerida para Bypass (Pulse App)</span>
+                <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#8250df' }}>
+                  Exigir aprobación CISO para bypass
                 </div>
                 <div style={{ color: '#656d76', fontSize: '0.8rem', marginTop: '0.25rem' }}>
-                  Queda registrado en el resultado; el bypass biométrico lo conecta Pulse más adelante.
+                  Si está activo, el mensaje de BLOCKED recuerda solicitar bypass (hub o Pulse).
                 </div>
               </div>
               <input
@@ -347,8 +575,8 @@ export const SecurityGatesPage: React.FC<PageProps> = ({
         </div>
 
         <p style={{ marginTop: '1.25rem', fontSize: '0.8rem', color: '#656d76', lineHeight: 1.45 }}>
-          CI: <code>GET /api/v1/security-gates/check</code> (opcional{' '}
-          <code>?repository_id=...</code>). Si <code>allowed</code> es false, falle el pipeline.
+          CI: <code>GET /api/v1/security-gates/check</code>. Si hay bypass APPROVED vigente,{' '}
+          <code>allowed=true</code> con decisión <code>BYPASSED</code>.
         </p>
       </div>
     </div>

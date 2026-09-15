@@ -12,7 +12,6 @@ import { ScansPage } from './pages/ScansPage';
 import { NotificationsPage } from './pages/NotificationsPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { fetchNotifications, fetchAuthSession, setStoredSessionId } from './api/client';
-import { FALLBACK_NOTIFICATIONS } from './api/fallbacks';
 import { CookieBanner } from './components/CookieBanner';
 import { AppToaster } from './components/Toast';
 
@@ -134,7 +133,7 @@ const AppShell: React.FC = () => {
   const refreshUnread = () => {
     fetchNotifications()
       .then((data) => setUnreadCount((data || []).filter((n) => !n.read).length))
-      .catch(() => setUnreadCount(FALLBACK_NOTIFICATIONS.filter((n) => !n.read).length));
+      .catch(() => setUnreadCount(0));
   };
 
   useEffect(() => {

@@ -99,6 +99,24 @@ def init_db() -> bool:
             conn.execute(
                 text(
                     """
+                    CREATE TABLE IF NOT EXISTS gate_bypass_requests (
+                      id TEXT PRIMARY KEY,
+                      repository_id TEXT REFERENCES repositories (id) ON DELETE SET NULL,
+                      reason TEXT NOT NULL,
+                      status TEXT DEFAULT 'PENDING',
+                      requested_by TEXT NOT NULL,
+                      decided_by TEXT,
+                      decision_note TEXT,
+                      expires_at TIMESTAMPTZ,
+                      created_at TIMESTAMPTZ DEFAULT NOW(),
+                      decided_at TIMESTAMPTZ
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    """
                     CREATE TABLE IF NOT EXISTS pillow_daily_usage (
                       user_key TEXT NOT NULL,
                       usage_date DATE NOT NULL,

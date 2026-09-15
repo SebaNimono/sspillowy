@@ -131,6 +131,23 @@ class SecurityGate(Base):
     enabled = Column(Boolean, default=True)
 
 
+class GateBypassRequest(Base):
+    """Excepción temporal al Security Gate (aprobación CISO en el hub)."""
+
+    __tablename__ = "gate_bypass_requests"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    repository_id = Column(String, ForeignKey("repositories.id"), nullable=True, index=True)
+    reason = Column(Text, nullable=False)
+    status = Column(String, default="PENDING", index=True)  # PENDING|APPROVED|REJECTED|EXPIRED
+    requested_by = Column(String, nullable=False)
+    decided_by = Column(String, nullable=True)
+    decision_note = Column(Text, nullable=True)
+    expires_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    decided_at = Column(DateTime, nullable=True)
+
+
 class AuditEvent(Base):
     __tablename__ = "audit_events"
 

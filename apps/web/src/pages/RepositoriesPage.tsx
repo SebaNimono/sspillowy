@@ -37,6 +37,78 @@ const STAGE_LABELS: Record<string, string> = {
   failed: 'Falló',
 };
 
+/** Perfiles estilo DefectDojo (tool engagement), adaptados a SSPILLOWY. */
+const SCAN_PROFILES: { id: string; label: string; hint: string; engines: ScanEngine[] }[] = [
+  {
+    id: 'ci_fast',
+    label: 'CI rápido',
+    hint: 'SAST + secretos — típico en PR',
+    engines: ['semgrep', 'gitleaks'],
+  },
+  {
+    id: 'full_code',
+    label: 'Código completo',
+    hint: 'SAST + secretos + deps/misconfig',
+    engines: ['semgrep', 'gitleaks', 'trivy'],
+  },
+  {
+    id: 'sast',
+    label: 'Solo SAST',
+    hint: 'Semgrep · código fuente',
+    engines: ['semgrep'],
+  },
+  {
+    id: 'secrets',
+    label: 'Solo secretos',
+    hint: 'GitLeaks · credenciales en repo',
+    engines: ['gitleaks'],
+  },
+  {
+    id: 'sca',
+    label: 'Solo SCA / IaC',
+    hint: 'Trivy · dependencias y misconfig',
+    engines: ['trivy'],
+  },
+  {
+    id: 'dast',
+    label: 'Solo DAST',
+    hint: 'OWASP ZAP · URL en vivo',
+    engines: ['owasp_zap'],
+  },
+  {
+    id: 'full_stack',
+    label: 'Full stack',
+    hint: 'Todos los motores (más lento)',
+    engines: ['semgrep', 'gitleaks', 'trivy', 'owasp_zap'],
+  },
+];
+
+const ENGINES_STORAGE_KEY = 'sspillowy_scan_engines';
+
+function loadSavedEngines(): Record<ScanEngine, boolean> | null {
+  try {
+    const raw = localStorage.getItem(ENGINES_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<Record<ScanEngine, boolean>>;
+    return {
+      semgrep: Boolean(parsed.semgrep),
+      gitleaks: Boolean(parsed.gitleaks),
+      trivy: Boolean(parsed.trivy),
+      owasp_zap: Boolean(parsed.owasp_zap),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function saveEngines(engines: Record<ScanEngine, boolean>) {
+  try {
+    localStorage.setItem(ENGINES_STORAGE_KEY, JSON.stringify(engines));
+  } catch {
+    // ignore
+  }
+}
+
 const POLL_MS = 2000;
 const MAX_WAIT_MS = 12 * 60 * 1000; // repos grandes (maka, etc.)
 /** Solo retomar RUNNING recientes; los viejos son seed/jobs muertos. */
@@ -49,12 +121,16 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
   const [showModal, setShowModal] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [scanTarget, setScanTarget] = useState<{ id: string; name: string; dastUrl?: string | null } | null>(null);
-  const [scanEngines, setScanEngines] = useState<Record<ScanEngine, boolean>>({
-    semgrep: true,
-    gitleaks: true,
-    trivy: true,
-    owasp_zap: false,
-  });
+  const [scanEngines, setScanEngines] = useState<Record<ScanEngine, boolean>>(
+    () =>
+      loadSavedEngines() || {
+        semgrep: true,
+        gitleaks: true,
+        trivy: true,
+        owasp_zap: false,
+      },
+  );
+  const [activeProfile, setActiveProfile] = useState<string | null>('full_code');
   const [scanDastUrl, setScanDastUrl] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -287,8 +363,38 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
   const openScanModal = (repo: Repository) => {
     if (activeScans[repo.id]) return;
     setScanTarget({ id: repo.id, name: repo.name, dastUrl: repo.dast_url });
-    setScanEngines({ semgrep: true, gitleaks: true, trivy: true, owasp_zap: false });
+    const saved = loadSavedEngines();
+    if (saved) {
+      setScanEngines(saved);
+      setActiveProfile(null);
+    } else {
+      setScanEngines({ semgrep: true, gitleaks: true, trivy: true, owasp_zap: false });
+      setActiveProfile('full_code');
+    }
     setScanDastUrl(repo.dast_url || '');
+  };
+
+  const applyProfile = (profileId: string) => {
+    const profile = SCAN_PROFILES.find((p) => p.id === profileId);
+    if (!profile) return;
+    const next: Record<ScanEngine, boolean> = {
+      semgrep: profile.engines.includes('semgrep'),
+      gitleaks: profile.engines.includes('gitleaks'),
+      trivy: profile.engines.includes('trivy'),
+      owasp_zap: profile.engines.includes('owasp_zap'),
+    };
+    setScanEngines(next);
+    setActiveProfile(profileId);
+    saveEngines(next);
+  };
+
+  const toggleEngine = (id: ScanEngine, checked: boolean) => {
+    setScanEngines((prev) => {
+      const next = { ...prev, [id]: checked };
+      saveEngines(next);
+      return next;
+    });
+    setActiveProfile(null);
   };
 
   const handleTriggerScan = async () => {
@@ -591,19 +697,48 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
 
       {scanTarget && (
         <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '440px' }}>
+          <div className="modal-content" style={{ maxWidth: '520px' }}>
             <h2 style={{ fontSize: '1.15rem', marginBottom: '0.35rem', color: '#1f2328', fontWeight: 700 }}>
               {t('repos.scanConfigTitle')}
             </h2>
-            <p style={{ fontSize: '0.85rem', color: '#656d76', marginBottom: '1rem' }}>
+            <p style={{ fontSize: '0.85rem', color: '#656d76', marginBottom: '0.85rem' }}>
               {t('repos.scanConfigHint', { name: scanTarget.name })}
             </p>
+
+            <div style={{ marginBottom: '0.85rem' }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#656d76', marginBottom: '0.45rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Perfiles
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                {SCAN_PROFILES.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    title={p.hint}
+                    onClick={() => applyProfile(p.id)}
+                    className={activeProfile === p.id ? 'btn btn-primary' : 'btn btn-secondary'}
+                    style={{ padding: '0.35rem 0.65rem', fontSize: '0.75rem' }}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+              {activeProfile && (
+                <p style={{ fontSize: '0.75rem', color: '#656d76', marginTop: '0.45rem' }}>
+                  {SCAN_PROFILES.find((p) => p.id === activeProfile)?.hint}
+                </p>
+              )}
+            </div>
+
+            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#656d76', marginBottom: '0.45rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Motores
+            </div>
             {(
               [
-                { id: 'semgrep' as const, label: 'Semgrep (SAST / código)' },
-                { id: 'gitleaks' as const, label: 'GitLeaks (secretos)' },
-                { id: 'trivy' as const, label: 'Trivy (deps / misconfig)' },
-                { id: 'owasp_zap' as const, label: 'OWASP ZAP (DAST / URL)' },
+                { id: 'semgrep' as const, label: 'Semgrep', desc: 'SAST · código' },
+                { id: 'gitleaks' as const, label: 'GitLeaks', desc: 'Secretos' },
+                { id: 'trivy' as const, label: 'Trivy', desc: 'Deps / misconfig / secrets SCA' },
+                { id: 'owasp_zap' as const, label: 'OWASP ZAP', desc: 'DAST · URL en vivo' },
               ]
             ).map((opt) => (
               <label
@@ -623,9 +758,12 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
                 <input
                   type="checkbox"
                   checked={scanEngines[opt.id]}
-                  onChange={(e) => setScanEngines((prev) => ({ ...prev, [opt.id]: e.target.checked }))}
+                  onChange={(e) => toggleEngine(opt.id, e.target.checked)}
                 />
-                <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#1f2328' }}>{opt.label}</span>
+                <span style={{ flex: 1 }}>
+                  <span style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#1f2328' }}>{opt.label}</span>
+                  <span style={{ display: 'block', fontSize: '0.72rem', color: '#656d76' }}>{opt.desc}</span>
+                </span>
               </label>
             ))}
             {scanEngines.owasp_zap && (

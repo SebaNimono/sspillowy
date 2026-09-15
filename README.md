@@ -99,6 +99,12 @@ Con Resend/SMTP configurado, al cerrar un scan:
 
 se envía correo a `SECURITY_ALERT_EMAILS` (si vacío, a `PILLOW_ADMIN_EMAILS`).
 
+### 5b. Bypass CISO (hub)
+
+En **Security Gates** puedes solicitar / aprobar / rechazar una excepción temporal.
+Si hay bypass `APPROVED` vigente, el check CI responde `allowed=true` con decisión `BYPASSED`.
+Aprueban los correos en `PILLOW_ADMIN_EMAILS` / `SECURITY_ALERT_EMAILS` (si la lista está vacía, cualquier sesión autenticada puede aprobar en demo).
+
 ### 6. Auth del hub
 
 El front guarda `sspillowy_session` y envía `X-Session-Id` en las llamadas API.

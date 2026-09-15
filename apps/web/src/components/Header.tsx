@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { Activity, Bell, Smartphone, Menu, ChevronRight, LogOut, Globe, Languages } from 'lucide-react';
 import { SidebarState } from './Sidebar';
 import { fetchNotifications, NotificationItem } from '../api/client';
-import { FALLBACK_NOTIFICATIONS } from '../api/fallbacks';
 import { useI18n } from '../i18n/I18nProvider';
 import { Locale } from '../i18n';
 
@@ -41,7 +40,7 @@ export const Header: React.FC<HeaderProps> = ({
   useEffect(() => {
     fetchNotifications()
       .then((data) => setPreview((data || []).slice(0, 4)))
-      .catch(() => setPreview(FALLBACK_NOTIFICATIONS.slice(0, 4)));
+      .catch(() => setPreview([]));
   }, [unreadCount]);
 
   return (
