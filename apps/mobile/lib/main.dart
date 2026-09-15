@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:sspillowy_pulse/features/auth/presentation/login_view.dart';
-import 'package:sspillowy_pulse/features/incidents/presentation/incidents_feed_view.dart';
+import './features/auth/presentation/login_view.dart';
+import './features/incidents/presentation/incidents_feed_view.dart';
 
 void main() {
   runApp(const SSPillowyPulseApp());

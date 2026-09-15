@@ -1,4 +1,4 @@
-﻿name: mobile
+name: mobile
 description: SSPILLOWY Mobile Application - DevSecOps Governance
 publish_to: 'none'
 version: 1.0.0+1
@@ -11,6 +11,8 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.6
   http: ^1.2.0
+  dio: ^5.11.1
+  shared_preferences: ^2.5.5
 
 dev_dependencies:
   flutter_test:
