@@ -313,6 +313,7 @@ def finalize_scan(
     source_note: str,
     engines_note: str,
 ) -> None:
+    from email_service import send_security_alert
     from gate_eval import evaluate_gate
     from models import SecurityGate
 
@@ -340,6 +341,8 @@ def finalize_scan(
         gate = SecurityGate(id="default-policy")
         db.add(gate)
         db.flush()
+
+    _set_progress(db, scan, "gate", "Evaluando Security Gate…")
     ev = evaluate_gate(db, gate, repository_id=repo.id)
     scan.gate_status = ev.decision if ev.decision != "DISABLED" else "SKIPPED"
     scan.gate_detail = ev.summary()[:2000]
@@ -350,6 +353,45 @@ def finalize_scan(
         repo.name,
         scan.gate_detail,
     )
+
+    # Alerta email: gate bloqueado o secretos con política estricta
+    should_alert = (not ev.allowed) or (bool(gate.block_on_secrets) and ev.open_secrets > 0 and not ev.allowed)
+    if should_alert:
+        try:
+            sent = send_security_alert(
+                repo_name=repo.name,
+                decision=ev.decision,
+                summary=ev.summary(),
+                reasons=list(ev.reasons),
+                open_secrets=ev.open_secrets,
+            )
+            if sent:
+                _append_audit(
+                    db,
+                    "mailer",
+                    "SECURITY_ALERT_SENT",
+                    repo.name,
+                    f"{sent} correo(s) · {ev.decision}",
+                )
+        except Exception as exc:
+            print(f"[sspillowy] security alert email failed: {exc}")
+
+    scan.progress_stage = "done"
+    scan.progress_detail = scan.gate_detail
+
+
+def _set_progress(db, scan: Scan, stage: str, detail: str = "") -> None:
+    """Persiste etapa visible para polling de la consola."""
+    try:
+        scan.progress_stage = stage
+        scan.progress_detail = (detail or "")[:500] or None
+        db.commit()
+    except Exception as exc:
+        print(f"[sspillowy] progress update failed ({stage}): {exc}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
 
 
 def run_semgrep_scan_job(
@@ -397,6 +439,7 @@ def run_repo_scan_job(
             fallback_ok = _env_true("SEMGREP_FALLBACK_FIXTURE", "false") or _env_true(
                 "SCAN_FALLBACK_FIXTURE", "false"
             )
+            _set_progress(db, scan, "cloning", f"Clonando {repo.url}…")
             try:
                 _clone_repo(repo.url, scan.branch or repo.branch or "main", clone_dir)
                 target = clone_dir
@@ -416,6 +459,8 @@ def run_repo_scan_job(
                 else:
                     scan.status = "FAILED"
                     scan.completed_at = _now()
+                    scan.progress_stage = "failed"
+                    scan.progress_detail = f"Clone falló: {str(clone_exc)[:400]}"
                     _append_audit(
                         db,
                         "scan-worker",
@@ -434,6 +479,7 @@ def run_repo_scan_job(
         engines_ok: list[str] = []
 
         if "semgrep" in wanted and target is not None:
+            _set_progress(db, scan, "semgrep", "Ejecutando Semgrep…")
             if semgrep_available():
                 try:
                     sg_results = _run_semgrep(target)
@@ -456,6 +502,7 @@ def run_repo_scan_job(
                 errors.append("semgrep missing")
 
         if "gitleaks" in wanted and target is not None:
+            _set_progress(db, scan, "gitleaks", "Ejecutando GitLeaks…")
             if gitleaks_available():
                 try:
                     gl_results = run_gitleaks(target)
@@ -478,6 +525,7 @@ def run_repo_scan_job(
                 errors.append("gitleaks missing")
 
         if "trivy" in wanted and target is not None:
+            _set_progress(db, scan, "trivy", "Ejecutando Trivy…")
             if trivy_available():
                 try:
                     tv_results = run_trivy_fs(target)
@@ -505,6 +553,7 @@ def run_repo_scan_job(
                 or (getattr(repo, "dast_url", None) or "").strip()
                 or os.getenv("ZAP_DEFAULT_TARGET", "https://sspillowy.com").strip()
             )
+            _set_progress(db, scan, "owasp_zap", f"DAST ZAP → {dast}")
             try:
                 zap_results = run_zap_scan(dast)
                 zap_counts = persist_zap_findings(
@@ -528,6 +577,8 @@ def run_repo_scan_job(
         if not count_parts:
             scan.status = "FAILED"
             scan.completed_at = _now()
+            scan.progress_stage = "failed"
+            scan.progress_detail = f"Ningún motor produjo resultados. {'; '.join(errors)[:400]}"
             _append_audit(
                 db,
                 "scan-worker",
@@ -569,6 +620,8 @@ def run_repo_scan_job(
             if scan:
                 scan.status = "FAILED"
                 scan.completed_at = _now()
+                scan.progress_stage = "failed"
+                scan.progress_detail = str(exc)[:400]
                 _append_audit(db, "scan-worker", "SCAN_FAILED", scan_id, str(exc)[:400])
                 db.commit()
         except Exception:

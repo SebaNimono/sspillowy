@@ -5,7 +5,7 @@ import { AnimatedBackground } from '../components/AnimatedBackground';
 import { apiUrl, fetchAuthProviders, loginWithPassword, registerWithPassword, resendVerificationEmail, requestPasswordReset } from '../api/client';
 
 interface LoginPageProps {
-  onLoginSuccess: (email: string, name: string) => void;
+  onLoginSuccess: (email: string, name: string, sessionId?: string) => void;
   onBack?: () => void;
   oauthError?: string | null;
   oauthDetail?: string | null;
@@ -169,13 +169,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oa
           return;
         }
         if (result.session_id && result.name) {
-          onLoginSuccess(result.email, result.name);
+          onLoginSuccess(result.email, result.name, result.session_id);
         }
         return;
       }
 
       const result = await loginWithPassword(email.trim(), password);
-      onLoginSuccess(result.email, result.name);
+      onLoginSuccess(result.email, result.name, result.session_id);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'No se pudo completar la solicitud.';
       if (message.toLowerCase().includes('verificar')) {

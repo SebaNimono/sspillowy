@@ -48,32 +48,38 @@ export const ScansPage: React.FC<PageProps> = ({
 
   const handleRetrigger = async (scan: Scan) => {
     try {
-      await triggerScan(scan.repository_id);
-    } catch {
-      // demo fallback
+      const created = await triggerScan(scan.repository_id);
+      setScans([created, ...scans]);
+      setToast({
+        id: Date.now().toString(),
+        type: 'info',
+        title: 'Escaneo encolado',
+        message: `Scan ${created.id.slice(0, 8)}… en background.`,
+      });
+    } catch (err) {
+      setToast({
+        id: Date.now().toString(),
+        type: 'error',
+        title: 'No se pudo encolar',
+        message: err instanceof Error ? err.message : 'Error de API',
+      });
     }
-    const running: Scan = {
-      ...scan,
-      id: `scan-${Date.now()}`,
-      status: 'RUNNING',
-      triggered_by: 'web_hub',
-      total_findings: 0,
-      critical_count: 0,
-      high_count: 0,
-      created_at: new Date().toISOString(),
-      completed_at: null,
-    };
-    setScans([running, ...scans]);
-    setToast({
-      id: Date.now().toString(),
-      type: 'info',
-      title: 'Escaneo encolado',
-      message: `Workers ARQ iniciados para ${REPO_NAMES[scan.repository_id] || scan.repository_id}.`,
-    });
   };
 
-  const statusBadge = (status: string) => {
-    if (status === 'RUNNING') return <span className="badge" style={{ background: '#ddf4ff', color: '#0969da', border: '1px solid #54aeff' }}>RUNNING</span>;
+  const statusBadge = (scan: Scan) => {
+    const status = scan.status;
+    if (status === 'RUNNING') {
+      const stage = scan.progress_stage ? ` · ${scan.progress_stage}` : '';
+      return (
+        <span
+          className="badge"
+          title={scan.progress_detail || undefined}
+          style={{ background: '#ddf4ff', color: '#0969da', border: '1px solid #54aeff' }}
+        >
+          RUNNING{stage}
+        </span>
+      );
+    }
     if (status === 'FAILED') return <span className="badge badge-critical">FAILED</span>;
     return <span className="badge badge-low">COMPLETED</span>;
   };
@@ -126,7 +132,7 @@ export const ScansPage: React.FC<PageProps> = ({
               <tbody>
                 {scans.map((scan) => (
                   <tr key={scan.id}>
-                    <td>{statusBadge(scan.status)}</td>
+                    <td>{statusBadge(scan)}</td>
                     <td>
                       {scan.gate_status === 'BLOCKED' ? (
                         <span className="badge badge-critical" title={scan.gate_detail || ''}>

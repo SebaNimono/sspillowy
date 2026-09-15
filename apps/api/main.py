@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from dotenv import load_dotenv
-from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, status
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import joinedload
 
@@ -42,6 +42,7 @@ from packages.core_models import (  # noqa: E402
     IsoControl,
 )
 
+from auth_deps import hub_auth_mode, require_hub_read, require_hub_write  # noqa: E402
 from github_oauth import router as github_auth_router  # noqa: E402
 from github_webhook import router as github_webhook_router  # noqa: E402
 from gitlab_oauth import router as gitlab_auth_router  # noqa: E402
@@ -72,7 +73,6 @@ from semgrep_scan import run_repo_scan_job, semgrep_available  # noqa: E402
 from gitleaks_scan import gitleaks_available  # noqa: E402
 from trivy_scan import trivy_available  # noqa: E402
 from zap_scan import zap_available, zap_binary  # noqa: E402
-
 app = FastAPI(
     title="SSPILLOWY API Core",
     description="Software Security Platform for Intelligent, Low-latency Oversight & Warning Yield",
@@ -400,11 +400,12 @@ async def health_check():
         "owasp_zap": "full" if zap_binary() else ("baseline-lite" if zap_available() else "missing"),
         "redis_worker": "inline-background (semgrep+gitleaks+trivy+zap)",
         "email_mailer": mailer_status(),
+        "hub_auth_mode": hub_auth_mode(),
     }
 
 
 @app.get("/api/v1/stats", response_model=DashboardStats, tags=["Dashboard"])
-async def get_dashboard_stats():
+async def get_dashboard_stats(_auth=Depends(require_hub_read)):
     db = SessionLocal()
     try:
         if not db_ping():
@@ -418,7 +419,7 @@ async def get_dashboard_stats():
 
 
 @app.get("/api/v1/heatmap", response_model=HeatmapResponse, tags=["Dashboard"])
-async def get_heatmap(weeks: int = Query(default=12, ge=4, le=52)):
+async def get_heatmap(weeks: int = Query(default=12, ge=4, le=52), _auth=Depends(require_hub_read)):
     db = SessionLocal()
     try:
         if not db_ping():
@@ -432,7 +433,7 @@ async def get_heatmap(weeks: int = Query(default=12, ge=4, le=52)):
 
 
 @app.get("/api/v1/audit-log", response_model=List[AuditEventResponse], tags=["Audit"])
-async def list_audit_log(limit: int = Query(default=40, ge=1, le=200)):
+async def list_audit_log(limit: int = Query(default=40, ge=1, le=200), _auth=Depends(require_hub_read)):
     db = SessionLocal()
     try:
         if not db_ping():
@@ -446,7 +447,7 @@ async def list_audit_log(limit: int = Query(default=40, ge=1, le=200)):
 
 
 @app.get("/api/v1/repositories", response_model=List[RepositoryResponse], tags=["Repositories"])
-async def list_repositories():
+async def list_repositories(_auth=Depends(require_hub_read)):
     _require_db()
     db = SessionLocal()
     try:
@@ -462,7 +463,7 @@ async def list_repositories():
     status_code=status.HTTP_201_CREATED,
     tags=["Repositories"],
 )
-async def create_repository(repo: RepositoryCreate):
+async def create_repository(repo: RepositoryCreate, _auth=Depends(require_hub_write)):
     _require_db()
     db = SessionLocal()
     try:
@@ -504,6 +505,7 @@ async def list_findings(
     engine: Optional[EngineType] = None,
     severity: Optional[SeverityLevel] = None,
     finding_status: Optional[FindingStatus] = Query(default=None, alias="status"),
+    _auth=Depends(require_hub_read),
 ):
     _require_db()
     db = SessionLocal()
@@ -531,7 +533,7 @@ async def list_findings(
 
 
 @app.delete("/api/v1/findings", tags=["Findings"])
-async def clear_findings(repository_id: Optional[str] = None):
+async def clear_findings(repository_id: Optional[str] = None, _auth=Depends(require_hub_write)):
     """Vacía la matriz (todos o por repo). Útil para demos / re-escanear limpio."""
     _require_db()
     db = SessionLocal()
@@ -562,7 +564,7 @@ async def clear_findings(repository_id: Optional[str] = None):
 
 
 @app.delete("/api/v1/repositories/{repository_id}", tags=["Repositories"])
-async def delete_repository(repository_id: str):
+async def delete_repository(repository_id: str, _auth=Depends(require_hub_write)):
     _require_db()
     db = SessionLocal()
     try:
@@ -588,7 +590,7 @@ async def delete_repository(repository_id: str):
 
 
 @app.patch("/api/v1/findings/{finding_id}", response_model=FindingResponse, tags=["Findings"])
-async def update_finding_status(finding_id: str, payload: FindingStatusUpdate):
+async def update_finding_status(finding_id: str, payload: FindingStatusUpdate, _auth=Depends(require_hub_write)):
     _require_db()
     db = SessionLocal()
     try:
@@ -620,7 +622,7 @@ async def update_finding_status(finding_id: str, payload: FindingStatusUpdate):
     status_code=status.HTTP_201_CREATED,
     tags=["Scans"],
 )
-async def trigger_scan(scan_in: ScanCreate, background_tasks: BackgroundTasks):
+async def trigger_scan(scan_in: ScanCreate, background_tasks: BackgroundTasks, _auth=Depends(require_hub_write)):
     _require_db()
     db = SessionLocal()
     try:
@@ -647,6 +649,8 @@ async def trigger_scan(scan_in: ScanCreate, background_tasks: BackgroundTasks):
             high_count=0,
             medium_count=0,
             low_count=0,
+            progress_stage="queued",
+            progress_detail="En cola…",
             created_at=_now(),
             completed_at=None,
         )
@@ -672,7 +676,7 @@ async def trigger_scan(scan_in: ScanCreate, background_tasks: BackgroundTasks):
 
 
 @app.get("/api/v1/scans", response_model=List[ScanResponse], tags=["Scans"])
-async def list_scans():
+async def list_scans(_auth=Depends(require_hub_read)):
     _require_db()
     db = SessionLocal()
     try:
@@ -684,7 +688,7 @@ async def list_scans():
 
 
 @app.get("/api/v1/security-gates", response_model=SecurityGatePolicy, tags=["Security Gates"])
-async def get_security_gate():
+async def get_security_gate(_auth=Depends(require_hub_read)):
     _require_db()
     db = SessionLocal()
     try:
@@ -775,6 +779,7 @@ async def check_security_gate(
 async def evaluate_security_gate(
     repository_id: Optional[str] = None,
     repository_url: Optional[str] = None,
+    _auth=Depends(require_hub_write),
 ):
     """Igual que check; deja auditoría GATE_EVALUATED."""
     _require_db()
@@ -797,7 +802,7 @@ async def evaluate_security_gate(
 
 
 @app.post("/api/v1/security-gates", response_model=SecurityGatePolicy, tags=["Security Gates"])
-async def update_security_gate(policy: SecurityGatePolicy):
+async def update_security_gate(policy: SecurityGatePolicy, _auth=Depends(require_hub_write)):
     _require_db()
     db = SessionLocal()
     try:
@@ -824,7 +829,7 @@ async def update_security_gate(policy: SecurityGatePolicy):
 
 
 @app.get("/api/v1/notifications", response_model=List[NotificationResponse], tags=["Notifications"])
-async def list_notifications(unread_only: bool = False):
+async def list_notifications(unread_only: bool = False, _auth=Depends(require_hub_read)):
     _require_db()
     db = SessionLocal()
     try:
@@ -837,7 +842,7 @@ async def list_notifications(unread_only: bool = False):
 
 
 @app.post("/api/v1/notifications/{notification_id}/read", response_model=NotificationResponse, tags=["Notifications"])
-async def mark_notification_read(notification_id: str):
+async def mark_notification_read(notification_id: str, _auth=Depends(require_hub_write)):
     _require_db()
     db = SessionLocal()
     try:
@@ -853,7 +858,7 @@ async def mark_notification_read(notification_id: str):
 
 
 @app.post("/api/v1/notifications/read-all", tags=["Notifications"])
-async def mark_all_notifications_read():
+async def mark_all_notifications_read(_auth=Depends(require_hub_write)):
     _require_db()
     db = SessionLocal()
     try:
@@ -866,7 +871,7 @@ async def mark_all_notifications_read():
 
 
 @app.get("/api/v1/compliance/iso27001", response_model=ComplianceReport, tags=["Compliance"])
-async def get_iso_compliance():
+async def get_iso_compliance(_auth=Depends(require_hub_read)):
     _require_db()
     db = SessionLocal()
     try:
@@ -904,7 +909,7 @@ async def get_iso_compliance():
 
 
 @app.post("/api/v1/admin/seed", tags=["Admin"])
-async def run_seed(force: bool = False):
+async def run_seed(force: bool = False, _auth=Depends(require_hub_write)):
     """Carga/reaplica datos demo reales en Postgres (útil en Railway/Supabase)."""
     _require_db()
     try:

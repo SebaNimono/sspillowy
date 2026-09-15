@@ -91,6 +91,8 @@ export interface Scan {
   low_count: number;
   gate_status?: string | null;
   gate_detail?: string | null;
+  progress_stage?: string | null;
+  progress_detail?: string | null;
   created_at: string;
   completed_at?: string | null;
 }
@@ -150,13 +152,49 @@ export interface ComplianceReport {
 const API_ORIGIN = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
 const API_BASE = `${API_ORIGIN}/api/v1`;
 
+const SESSION_STORAGE_KEY = 'sspillowy_session';
+
 export function apiUrl(path: string): string {
   return `${API_BASE}${path}`;
 }
 
+export function getStoredSessionId(): string | null {
+  try {
+    return localStorage.getItem(SESSION_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setStoredSessionId(sessionId: string | null): void {
+  try {
+    if (sessionId) localStorage.setItem(SESSION_STORAGE_KEY, sessionId);
+    else localStorage.removeItem(SESSION_STORAGE_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+function authHeaders(extra?: HeadersInit): Headers {
+  const headers = new Headers(extra || {});
+  const sid = getStoredSessionId();
+  if (sid) headers.set('X-Session-Id', sid);
+  return headers;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, init);
-  if (!res.ok) throw new Error(`Error de API (${res.status})`);
+  const headers = authHeaders(init?.headers);
+  const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
+  if (!res.ok) {
+    let detail = `Error de API (${res.status})`;
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === 'string') detail = data.detail;
+    } catch {
+      // ignore
+    }
+    throw new Error(detail);
+  }
   return res.json();
 }
 
@@ -458,7 +496,7 @@ export async function sendPillowMessage(body: {
 }): Promise<PillowChatResult> {
   const res = await fetch(`${API_BASE}/pillow/chat`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(body),
   });
   const data = await res.json().catch(() => ({}));
@@ -506,7 +544,7 @@ export async function resetPillowCredits(
 ): Promise<{ ok: boolean; message: string; credits_remaining: number }> {
   const res = await fetch(`${API_BASE}/pillow/admin/reset-credits`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ admin_key: adminKey, target_user_key: targetUserKey }),
   });
   const data = await res.json().catch(() => ({}));

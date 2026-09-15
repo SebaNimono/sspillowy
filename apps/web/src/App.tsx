@@ -11,7 +11,7 @@ import { SecurityGatesPage } from './pages/SecurityGatesPage';
 import { ScansPage } from './pages/ScansPage';
 import { NotificationsPage } from './pages/NotificationsPage';
 import { ReportsPage } from './pages/ReportsPage';
-import { fetchNotifications, fetchAuthSession } from './api/client';
+import { fetchNotifications, fetchAuthSession, setStoredSessionId } from './api/client';
 import { FALLBACK_NOTIFICATIONS } from './api/fallbacks';
 import { CookieBanner } from './components/CookieBanner';
 import { AppToaster } from './components/Toast';
@@ -141,12 +141,13 @@ const AppShell: React.FC = () => {
     if (user && view === 'console') refreshUnread();
   }, [user, activeTab, view]);
 
-  const handleLoginSuccess = (email: string, name: string) => {
+  const handleLoginSuccess = (email: string, name: string, sessionId?: string) => {
     const newUser = { email, name };
     setUser(newUser);
     setView('console');
     try {
       localStorage.setItem('sspillowy_user', JSON.stringify(newUser));
+      if (sessionId) setStoredSessionId(sessionId);
     } catch {
       // ignore
     }
@@ -215,7 +216,7 @@ const AppShell: React.FC = () => {
     if (sessionId) {
       fetchAuthSession(sessionId)
         .then((session) => {
-          handleLoginSuccess(session.email, session.name);
+          handleLoginSuccess(session.email, session.name, session.id || sessionId);
         })
         .catch(() => {
           setOauthError('session_expired');
@@ -240,6 +241,7 @@ const AppShell: React.FC = () => {
     try {
       localStorage.removeItem('sspillowy_user');
       localStorage.removeItem(CONSOLE_TAB_KEY);
+      setStoredSessionId(null);
     } catch {
       // ignore
     }

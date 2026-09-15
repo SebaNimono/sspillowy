@@ -83,6 +83,9 @@ class Scan(Base):
     # PASSED | BLOCKED | SKIPPED | None (aún no evaluado)
     gate_status = Column(String, nullable=True)
     gate_detail = Column(Text, nullable=True)
+    # Progreso en vivo: queued | cloning | semgrep | gitleaks | trivy | owasp_zap | gate | done | failed
+    progress_stage = Column(String, nullable=True)
+    progress_detail = Column(Text, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     completed_at = Column(DateTime, nullable=True)
 

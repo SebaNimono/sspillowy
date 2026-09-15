@@ -269,6 +269,8 @@ async def github_webhook(
             high_count=0,
             medium_count=0,
             low_count=0,
+            progress_stage="queued",
+            progress_detail="Webhook encolado…",
             created_at=_now(),
             completed_at=None,
         )

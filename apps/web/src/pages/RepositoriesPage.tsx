@@ -21,9 +21,23 @@ type ActiveScan = {
   scanId: string;
   repoName: string;
   startedAt: number;
+  stage?: string | null;
+  detail?: string | null;
 };
 
-const POLL_MS = 3000;
+const STAGE_LABELS: Record<string, string> = {
+  queued: 'En cola',
+  cloning: 'Clonando',
+  semgrep: 'Semgrep',
+  gitleaks: 'GitLeaks',
+  trivy: 'Trivy',
+  owasp_zap: 'OWASP ZAP',
+  gate: 'Security Gate',
+  done: 'Listo',
+  failed: 'Falló',
+};
+
+const POLL_MS = 2000;
 const MAX_WAIT_MS = 12 * 60 * 1000; // repos grandes (maka, etc.)
 /** Solo retomar RUNNING recientes; los viejos son seed/jobs muertos. */
 const RESUME_MAX_AGE_MS = 20 * 60 * 1000;
@@ -147,6 +161,21 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
         for (const [repoId, info] of entries) {
           const scan = byId.get(info.scanId);
           const elapsed = Date.now() - info.startedAt;
+          if (scan && (scan.progress_stage || scan.progress_detail)) {
+            setActiveScans((prev) => {
+              const cur = prev[repoId];
+              if (!cur || cur.scanId !== info.scanId) return prev;
+              if (cur.stage === scan.progress_stage && cur.detail === scan.progress_detail) return prev;
+              return {
+                ...prev,
+                [repoId]: {
+                  ...cur,
+                  stage: scan.progress_stage,
+                  detail: scan.progress_detail,
+                },
+              };
+            });
+          }
           if (scan?.status === 'COMPLETED') {
             await finishScan(repoId, info.repoName, 'COMPLETED', scan);
           } else if (scan?.status === 'FAILED') {
@@ -189,6 +218,8 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
               scanId: s.id,
               repoName: nameById.get(s.repository_id) || s.repository_id,
               startedAt: Date.parse(s.created_at) || Date.now(),
+              stage: s.progress_stage,
+              detail: s.progress_detail,
             };
           }
         }
@@ -284,7 +315,13 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
       );
       setActiveScans((prev) => ({
         ...prev,
-        [repoId]: { scanId: scan.id, repoName, startedAt: Date.now() },
+        [repoId]: {
+          scanId: scan.id,
+          repoName,
+          startedAt: Date.now(),
+          stage: scan.progress_stage || 'queued',
+          detail: scan.progress_detail || 'En cola…',
+        },
       }));
       setToast({
         id: Date.now().toString(),
@@ -334,6 +371,14 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
   };
 
   const scanningNames = Object.values(activeScans).map((s) => s.repoName);
+  const progressHint =
+    Object.values(activeScans).length === 1
+      ? (() => {
+          const s = Object.values(activeScans)[0];
+          const label = STAGE_LABELS[s.stage || ''] || s.stage || t('repos.scanning');
+          return s.detail ? `${label} · ${s.detail}` : label;
+        })()
+      : null;
 
   return (
     <div>
@@ -370,7 +415,7 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
           <RefreshCw size={18} className="spin" />
           <span>
             {scanningNames.length === 1
-              ? t('repos.scanningBanner', { name: scanningNames[0] })
+              ? `${t('repos.scanningBanner', { name: scanningNames[0] })}${progressHint ? ` — ${progressHint}` : ''}`
               : `${t('repos.scanning')} ${scanningNames.join(', ')}`}
           </span>
         </div>
@@ -452,6 +497,8 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
               <tbody>
                 {repos.map((repo) => {
                   const scanning = Boolean(activeScans[repo.id]);
+                  const stage = activeScans[repo.id]?.stage;
+                  const stageLabel = stage ? STAGE_LABELS[stage] || stage : t('repos.scanning');
                   return (
                     <tr
                       key={repo.id}
@@ -460,11 +507,11 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
                       <td>
                         {scanning ? (
                           <span
-                            title={t('repos.scanning')}
+                            title={activeScans[repo.id]?.detail || stageLabel}
                             style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', color: '#0969da', fontSize: '0.75rem', fontWeight: 700 }}
                           >
                             <RefreshCw size={14} className="spin" />
-                            {t('repos.scanning')}
+                            {stageLabel}
                           </span>
                         ) : (
                           <span className="status-dot" title="Monitoreo activo"></span>

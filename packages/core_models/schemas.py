@@ -103,6 +103,8 @@ class ScanResponse(BaseModel):
     low_count: int = 0
     gate_status: Optional[str] = None  # PASSED | BLOCKED | SKIPPED
     gate_detail: Optional[str] = None
+    progress_stage: Optional[str] = None
+    progress_detail: Optional[str] = None
     created_at: datetime
     completed_at: Optional[datetime] = None
 

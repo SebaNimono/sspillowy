@@ -107,19 +107,16 @@ https://sspillowy.com
 """
 
 
-async def send_verification_email(*, to: str, name: str, verify_url: str) -> bool:
-    subject = "Confirma tu acceso — SSPILLOWY"
-    html_body = _verification_html(name, verify_url)
-    text = _verification_text(name, verify_url)
-
+def send_email_sync(*, to: str, subject: str, text: str, html_body: str) -> bool:
+    """Envío síncrono (Resend o SMTP). Usable desde jobs en background."""
     if _resend_key():
         try:
-            async with httpx.AsyncClient(timeout=20.0) as client:
-                res = await client.post(
-                    "https://api.resend.com/emails",
-                    headers={"Authorization": f"Bearer {_resend_key()}"},
-                    json={"from": email_from(), "to": [to], "subject": subject, "html": html_body, "text": text},
-                )
+            res = httpx.post(
+                "https://api.resend.com/emails",
+                headers={"Authorization": f"Bearer {_resend_key()}"},
+                json={"from": email_from(), "to": [to], "subject": subject, "html": html_body, "text": text},
+                timeout=20.0,
+            )
             if res.status_code in (200, 201):
                 return True
             print(f"[sspillowy] Resend error {res.status_code}: {res.text[:200]}")
@@ -152,8 +149,77 @@ async def send_verification_email(*, to: str, name: str, verify_url: str) -> boo
             print(f"[sspillowy] SMTP failed: {exc}")
         return False
 
-    print(f"[sspillowy] Email no configurado. Enlace de verificación para {to}: {verify_url}")
+    print(f"[sspillowy] Email no configurado. Asunto={subject!r} to={to}")
     return False
+
+
+def alert_recipients() -> list[str]:
+    raw = os.getenv("SECURITY_ALERT_EMAILS", "").strip()
+    if not raw:
+        raw = os.getenv("PILLOW_ADMIN_EMAILS", "").strip()
+    return [e.strip().lower() for e in raw.split(",") if e.strip()]
+
+
+def send_security_alert(
+    *,
+    repo_name: str,
+    decision: str,
+    summary: str,
+    reasons: list[str] | None = None,
+    open_secrets: int = 0,
+    frontend_url: str | None = None,
+) -> int:
+    """Alerta GATE_BLOCK / secretos. Devuelve cuántos correos se enviaron."""
+    recipients = alert_recipients()
+    if not recipients:
+        print("[sspillowy] SECURITY_ALERT_EMAILS vacío — no se envía alerta de gate.")
+        return 0
+
+    hub = (frontend_url or os.getenv("FRONTEND_URL", "https://sspillowy.com")).rstrip("/")
+    reason_lines = "\n".join(f"• {r}" for r in (reasons or [])) or "• (sin detalle)"
+    subject = f"[SSPILLOWY] Gate {decision} — {repo_name}"
+    text = f"""Alerta de Security Gate
+
+Repositorio: {repo_name}
+Decisión: {decision}
+Resumen: {summary}
+Secretos abiertos (GitLeaks): {open_secrets}
+
+Motivos:
+{reason_lines}
+
+Consola: {hub}
+
+— SSPILLOWY Hub
+"""
+    safe_repo = html.escape(repo_name)
+    safe_summary = html.escape(summary)
+    reasons_html = "".join(f"<li>{html.escape(r)}</li>" for r in (reasons or [])) or "<li>(sin detalle)</li>"
+    html_body = f"""<!DOCTYPE html>
+<html lang="es"><body style="font-family:system-ui,sans-serif;color:#1f2328;">
+  <h2 style="margin:0 0 12px;">Security Gate · {html.escape(decision)}</h2>
+  <p><strong>Repo:</strong> {safe_repo}</p>
+  <p><strong>Resumen:</strong> {safe_summary}</p>
+  <p><strong>Secretos abiertos:</strong> {open_secrets}</p>
+  <ul>{reasons_html}</ul>
+  <p><a href="{html.escape(hub)}">Abrir consola SSPILLOWY</a></p>
+</body></html>"""
+
+    sent = 0
+    for to in recipients:
+        if send_email_sync(to=to, subject=subject, text=text, html_body=html_body):
+            sent += 1
+    return sent
+
+
+async def send_verification_email(*, to: str, name: str, verify_url: str) -> bool:
+    subject = "Confirma tu acceso — SSPILLOWY"
+    html_body = _verification_html(name, verify_url)
+    text = _verification_text(name, verify_url)
+    ok = send_email_sync(to=to, subject=subject, text=text, html_body=html_body)
+    if not ok and not mailer_configured():
+        print(f"[sspillowy] Email no configurado. Enlace de verificación para {to}: {verify_url}")
+    return ok
 
 
 def _password_reset_html(name: str, reset_url: str) -> str:
@@ -225,46 +291,7 @@ async def send_password_reset_email(*, to: str, name: str, reset_url: str) -> bo
     subject = "Restablece tu contraseña — SSPILLOWY"
     html_body = _password_reset_html(name, reset_url)
     text = _password_reset_text(name, reset_url)
-
-    if _resend_key():
-        try:
-            async with httpx.AsyncClient(timeout=20.0) as client:
-                res = await client.post(
-                    "https://api.resend.com/emails",
-                    headers={"Authorization": f"Bearer {_resend_key()}"},
-                    json={"from": email_from(), "to": [to], "subject": subject, "html": html_body, "text": text},
-                )
-            if res.status_code in (200, 201):
-                return True
-            print(f"[sspillowy] Resend error {res.status_code}: {res.text[:200]}")
-        except Exception as exc:
-            print(f"[sspillowy] Resend failed: {exc}")
-        return False
-
-    smtp_host = os.getenv("SMTP_HOST", "").strip()
-    smtp_user = os.getenv("SMTP_USER", "").strip()
-    smtp_password = os.getenv("SMTP_PASSWORD", "").strip()
-    smtp_port = int(os.getenv("SMTP_PORT", "587"))
-    smtp_use_tls = os.getenv("SMTP_USE_TLS", "true").lower() in ("1", "true", "yes")
-
-    if smtp_host and smtp_user and smtp_password:
-        try:
-            msg = MIMEMultipart("alternative")
-            msg["Subject"] = subject
-            msg["From"] = email_from()
-            msg["To"] = to
-            msg.attach(MIMEText(text, "plain", "utf-8"))
-            msg.attach(MIMEText(html_body, "html", "utf-8"))
-
-            with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as server:
-                if smtp_use_tls:
-                    server.starttls()
-                server.login(smtp_user, smtp_password)
-                server.sendmail(smtp_user, [to], msg.as_string())
-            return True
-        except Exception as exc:
-            print(f"[sspillowy] SMTP failed: {exc}")
-        return False
-
-    print(f"[sspillowy] Email no configurado. Enlace de reset para {to}: {reset_url}")
-    return False
+    ok = send_email_sync(to=to, subject=subject, text=text, html_body=html_body)
+    if not ok and not mailer_configured():
+        print(f"[sspillowy] Email no configurado. Enlace de reset para {to}: {reset_url}")
+    return ok
