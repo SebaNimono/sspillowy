@@ -1,5 +1,4 @@
-﻿import 'package:flutter/material.dart';
-import '../../../core/constants/app_colors.dart';
+import 'package:flutter/material.dart';
 import '../domain/incident_model.dart';
 
 class IncidentDetailView extends StatelessWidget {
@@ -10,9 +9,11 @@ class IncidentDetailView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: const Color(0xFF0D1117),
       appBar: AppBar(
-        title: Text(incident.title),
+        title: Text(incident.id, style: const TextStyle(color: Colors.white)),
+        backgroundColor: const Color(0xFF1F2328),
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -21,29 +22,22 @@ class IncidentDetailView extends StatelessWidget {
           children: [
             Text(
               incident.title,
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary,
-              ),
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
             ),
             const SizedBox(height: 12),
             Text(
-              incident.description,
-              style: const TextStyle(
-                fontSize: 15,
-                color: AppColors.textSecondary,
-              ),
+              'Servicio: ${incident.service}',
+              style: const TextStyle(color: Colors.white70),
             ),
-            const Spacer(),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Aprobar Acción HITL', style: TextStyle(color: Colors.white)),
-              ),
+            const SizedBox(height: 16),
+            const Text(
+              'Resumen de Pillow:',
+              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              incident.pillowSummary ?? 'Sin resumen disponible',
+              style: const TextStyle(color: Colors.white60),
             ),
           ],
         ),

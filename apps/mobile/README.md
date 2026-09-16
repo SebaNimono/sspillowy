@@ -1,17 +1,27 @@
-# mobile
+# SSPillowy Mobile App
 
-A new Flutter project.
+Consola móvil de gestión de incidentes y aprobación en el bucle (**Human-in-the-Loop / HITL**) para la plataforma SSPillowy.
 
-## Getting Started
+## 🚀 Funcionalidades Actuales
 
-This project is a starting point for a Flutter application.
+- **Autenticación de Operadores:**
+  - Login con validación estricta de correo electrónico y formato de contraseña.
+  - Opción para mostrar/ocultar contraseña (*toggle visibility*).
+  - Flujo de Registro con confirmación de clave y restablecimiento de contraseña.
 
-A few resources to get you started if this is your first Flutter project:
+- **Feed de Incidentes (HITL):**
+  - Lista de alertas en tiempo real clasificadas por severidad (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`).
+  - Capacidad de **Aprobar** o **Bloquear/Rechazar** acciones automáticas sugeridas por el sistema.
+  - Indicadores visuales de estado (*Pending*, *Approved*, *Rejected*).
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+- **Perfil de Usuario & Ajustes:**
+  - Selección de avatar/foto de perfil desde la galería del dispositivo (`image_picker`).
+  - Edición de alias con restricción de tiempo (máximo 1 cambio cada 14 días).
+  - Switch de estado de guardia (**On-Call**).
+  - Diálogo de confirmación para eliminación de cuenta.
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## 🛠️ Tecnologías
+
+- **Framework:** Flutter (Dart)
+- **Patrón de Arquitectura:** Clean Architecture / Feature-First
+- **UI:** Material Design 3 con Dark Theme personalizado

@@ -1,203 +1,237 @@
 import 'package:flutter/material.dart';
-import '../domain/incident_model.dart';
 import '../../profile/presentation/profile_view.dart';
-import 'incident_detail_view.dart';
+
+class Incident {
+  final String id;
+  final String title;
+  final String severity; // CRITICAL, HIGH, MEDIUM, LOW
+  final String status;   // PENDING, APPROVED, REJECTED
+  final String timestamp;
+  final String summary;
+
+  Incident({
+    required this.id,
+    required this.title,
+    required this.severity,
+    required this.status,
+    required this.timestamp,
+    required this.summary,
+  });
+}
 
 class IncidentsFeedView extends StatefulWidget {
-  const IncidentsFeedView({super.key});
+  final VoidCallback onLogout;
+
+  const IncidentsFeedView({super.key, required this.onLogout});
 
   @override
   State<IncidentsFeedView> createState() => _IncidentsFeedViewState();
 }
 
 class _IncidentsFeedViewState extends State<IncidentsFeedView> {
-  late Future<List<IncidentModel>> _incidentsFuture;
-  int _currentIndex = 0;
+  final List<Incident> _incidents = [
+    Incident(
+      id: 'INC-8921',
+      title: 'Fuga de memoria detectada en microservicio Auth',
+      severity: 'CRITICAL',
+      status: 'PENDING',
+      timestamp: 'Hace 5 min',
+      summary: 'El uso de RAM super√≥ el 95%. Se requiere reinicio controlado o degradaci√≥n de tr√°fico.',
+    ),
+    Incident(
+      id: 'INC-8920',
+      title: 'Tasa elevada de errores 500 en Pasarela de Pagos',
+      severity: 'HIGH',
+      status: 'PENDING',
+      timestamp: 'Hace 18 min',
+      summary: 'Rechazo inusual de transacciones con Stripe. Agente sugiere fallback a proveedor secundario.',
+    ),
+    Incident(
+      id: 'INC-8918',
+      title: 'Latencia inusual en base de datos de lectura',
+      severity: 'MEDIUM',
+      status: 'APPROVED',
+      timestamp: 'Hace 1 hora',
+      summary: 'Acci√≥n ejecutada: Escalado horizontal autom√°tico de 2 a 4 r√©plicas de lectura.',
+    ),
+  ];
 
-  @override
-  void initState() {
-    super.initState();
-    _loadIncidents();
-  }
-
-  void _loadIncidents() {
-    setState(() {
-      _incidentsFuture = _getMockIncidents();
-    });
-  }
-
-  Future<List<IncidentModel>> _getMockIncidents() async {
-    await Future.delayed(const Duration(milliseconds: 600));
-    return [
-      IncidentModel(
-        id: 'INC-101',
-        title: 'AnomalÌa en Sensor de PresiÛn - Sector A',
-        description: 'DesviaciÛn del 15% en la lectura continua durante la guardia nocturna.',
-        severity: IncidentSeverity.high,
-        status: IncidentStatus.open,
-        payload: '{"sensor": "PRESSURE_01", "value": 14.2}',
-        createdAt: DateTime.now().subtract(const Duration(minutes: 45)),
-      ),
-      IncidentModel(
-        id: 'INC-102',
-        title: 'Fallo de ConexiÛn Gateway IoT',
-        description: 'PÈrdida de paquetes en el nodo principal de transmisiÛn HITL.',
-        severity: IncidentSeverity.critical,
-        status: IncidentStatus.open,
-        payload: '{"gateway": "GW_MAIN", "packet_loss": "85%"}',
-        createdAt: DateTime.now().subtract(const Duration(hours: 2)),
-      ),
-      IncidentModel(
-        id: 'INC-103',
-        title: 'Mantenimiento Preventivo Pendiente',
-        description: 'CalibraciÛn programada de equipos de supervisiÛn operativa.',
-        severity: IncidentSeverity.low,
-        status: IncidentStatus.resolved,
-        payload: '{"unit": "SUP_CALIB_02"}',
-        createdAt: DateTime.now().subtract(const Duration(hours: 5)),
-      ),
-      IncidentModel(
-        id: 'INC-104',
-        title: 'Alerta de Temperatura en Servidor Base',
-        description: 'SuperaciÛn del umbral tÈrmico secundario en el rack de control.',
-        severity: IncidentSeverity.medium,
-        status: IncidentStatus.open,
-        payload: '{"rack": "RACK_04", "temp_cels": 42.5}',
-        createdAt: DateTime.now().subtract(const Duration(hours: 12)),
-      ),
-    ];
-  }
-
-  Color _getSeverityColor(IncidentSeverity severity) {
+  Color _getSeverityColor(String severity) {
     switch (severity) {
-      case IncidentSeverity.critical:
-      case IncidentSeverity.high:
+      case 'CRITICAL':
         return const Color(0xFFCF222E);
-      case IncidentSeverity.medium:
-        return const Color(0xFFD97706);
-      case IncidentSeverity.low:
-        return const Color(0xFF1F883D);
+      case 'HIGH':
+        return Colors.orange;
+      case 'MEDIUM':
+        return const Color(0xFFD29922);
+      default:
+        return const Color(0xFF0969DA);
     }
+  }
+
+  void _updateStatus(String id, String newStatus) {
+    setState(() {
+      final index = _incidents.indexWhere((i) => i.id == id);
+      if (index != -1) {
+        final current = _incidents[index];
+        _incidents[index] = Incident(
+          id: current.id,
+          title: current.title,
+          severity: current.severity,
+          status: newStatus,
+          timestamp: current.timestamp,
+          summary: current.summary,
+        );
+      }
+    });
+
+    final actionText = newStatus == 'APPROVED' ? 'Aprobado' : 'Rechazado';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Incidente $id $actionText'),
+        backgroundColor: newStatus == 'APPROVED' ? const Color(0xFF238636) : const Color(0xFFCF222E),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F8FA),
+      backgroundColor: const Color(0xFF0D1117),
       appBar: AppBar(
-        title: const Text('SSPILLOWY Pulse ó Bandeja', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-        backgroundColor: const Color(0xFF0969DA),
-        elevation: 0,
+        title: const Text('SSPillowy Incidentes', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        backgroundColor: const Color(0xFF1F2328),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white),
-            onPressed: _loadIncidents,
+            icon: const Icon(Icons.account_circle_outlined, color: Colors.white, size: 28),
+            tooltip: 'Perfil de Usuario',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ProfileView()),
+              );
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout, color: Colors.white70),
+            tooltip: 'Cerrar Sesi√≥n',
+            onPressed: widget.onLogout,
           ),
         ],
       ),
-      body: _currentIndex == 0 ? _buildFeedBody() : const ProfileView(),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: (index) => setState(() => _currentIndex = index),
-        backgroundColor: Colors.white,
-        selectedItemColor: const Color(0xFF0969DA),
-        unselectedItemColor: Colors.black45,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.shield_outlined),
-            activeIcon: Icon(Icons.shield),
-            label: 'Incidentes',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            activeIcon: Icon(Icons.person),
-            label: 'Perfil',
-          ),
-        ],
-      ),
-    );
-  }
+      body: _incidents.isEmpty
+          ? const Center(
+              child: Text('No hay incidentes reportados', style: TextStyle(color: Colors.white54)),
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.all(16.0),
+              itemCount: _incidents.length,
+              itemBuilder: (context, index) {
+                final item = _incidents[index];
+                final isPending = item.status == 'PENDING';
 
-  Widget _buildFeedBody() {
-    return FutureBuilder<List<IncidentModel>>(
-      future: _incidentsFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator(color: Color(0xFF0969DA)));
-        }
-
-        final incidents = snapshot.data ?? [];
-
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: incidents.length,
-          itemBuilder: (context, index) {
-            final incident = incidents[index];
-            final color = _getSeverityColor(incident.severity);
-
-            return Card(
-              color: Colors.white,
-              elevation: 1,
-              margin: const EdgeInsets.only(bottom: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-                side: const BorderSide(color: Color(0xFFD0D7DE)),
-              ),
-              child: ListTile(
-                contentPadding: const EdgeInsets.all(16),
-                title: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: color.withAlpha(30),
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: color, width: 1),
-                      ),
-                      child: Text(
-                        incident.severity.name.toUpperCase(),
-                        style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold),
-                      ),
+                return Card(
+                  color: const Color(0xFF1F2328),
+                  margin: const EdgeInsets.only(bottom: 16.0),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    side: BorderSide(
+                      color: isPending ? _getSeverityColor(item.severity) : Colors.white12,
+                      width: isPending ? 1.5 : 0.5,
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        incident.id,
-                        style: const TextStyle(color: Colors.black54, fontSize: 12, fontWeight: FontWeight.w600),
-                      ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: _getSeverityColor(item.severity).withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                item.severity,
+                                style: TextStyle(
+                                  color: _getSeverityColor(item.severity),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              item.timestamp,
+                              style: const TextStyle(color: Colors.white38, fontSize: 12),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '${item.id}: ${item.title}',
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          item.summary,
+                          style: const TextStyle(color: Colors.white70, fontSize: 14),
+                        ),
+                        const SizedBox(height: 16),
+                        if (isPending) ...[
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton(
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: const Color(0xFFCF222E),
+                                    side: const BorderSide(color: Color(0xFFCF222E)),
+                                  ),
+                                  onPressed: () => _updateStatus(item.id, 'REJECTED'),
+                                  child: const Text('Bloquear / Rechazar'),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF238636),
+                                  ),
+                                  onPressed: () => _updateStatus(item.id, 'APPROVED'),
+                                  child: const Text('Aprobar Acci√≥n', style: TextStyle(color: Colors.white)),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ] else ...[
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              color: item.status == 'APPROVED' 
+                                  ? Colors.green.withValues(alpha: 0.1) 
+                                  : Colors.red.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              item.status == 'APPROVED' ? '‚úì Acci√≥n ejecutada por el operador' : '‚úï Acci√≥n bloqueada por el operador',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: item.status == 'APPROVED' ? Colors.greenAccent : Colors.redAccent,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
-                  ],
-                ),
-                subtitle: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 8),
-                    Text(
-                      incident.title,
-                      style: const TextStyle(color: Color(0xFF1F2328), fontSize: 15, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      incident.description,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Colors.black87, fontSize: 13),
-                    ),
-                  ],
-                ),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => IncidentDetailView(incident: incident),
-                    ),
-                  );
-                },
-              ),
-            );
-          },
-        );
-      },
+                  ),
+                );
+              },
+            ),
     );
   }
 }

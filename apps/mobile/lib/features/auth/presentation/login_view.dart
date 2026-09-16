@@ -1,30 +1,20 @@
 import 'package:flutter/material.dart';
-import '../../../core/constants/app_colors.dart';
-import '../../../core/network/dio_client.dart';
-import '../data/auth_service.dart';
-import 'forgot_password_view.dart';
-import 'register_view.dart';
 
 class LoginView extends StatefulWidget {
-  final VoidCallback? onLoginSuccess;
-  const LoginView({super.key, this.onLoginSuccess});
+  final VoidCallback onLoginSuccess;
+
+  const LoginView({super.key, required this.onLoginSuccess});
 
   @override
   State<LoginView> createState() => _LoginViewState();
 }
 
 class _LoginViewState extends State<LoginView> {
+  final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  late final AuthService _authService;
-  bool _isLoading = false;
+  
   bool _obscurePassword = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _authService = AuthService(DioClient());
-  }
 
   @override
   void dispose() {
@@ -33,80 +23,143 @@ class _LoginViewState extends State<LoginView> {
     super.dispose();
   }
 
-  void _showErrorSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message, style: const TextStyle(color: Colors.white)),
-        backgroundColor: AppColors.danger,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+  bool _isValidEmail(String email) {
+    return RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email);
   }
 
-  Future<void> _handleLogin() async {
-    if (_emailController.text.trim().isEmpty || _passwordController.text.trim().isEmpty) {
-      _showErrorSnackBar('Por favor ingresa tu correo y contrase�a');
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    try {
-      final success = await _authService.login(
-        _emailController.text.trim(),
-        _passwordController.text.trim(),
-      );
-
-      if (mounted && success) {
-        if (widget.onLoginSuccess != null) {
-          widget.onLoginSuccess!();
-        } else {
-          Navigator.pushReplacementNamed(context, '/incidents');
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        _showErrorSnackBar(e.toString().replaceAll('Exception: ', ''));
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+  void _handleLogin() {
+    if (_formKey.currentState!.validate()) {
+      widget.onLoginSuccess();
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 28.0),
+      backgroundColor: const Color(0xFF0D1117),
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24.0),
+          child: Form(
+            key: _formKey,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Icon(Icons.shield_rounded, size: 64, color: AppColors.primary),
-                const SizedBox(height: 24),
-                const Text(
-                  'SSPILLOWY PULSE',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
-                ),
-                const SizedBox(height: 36),
-                TextField(
-                  controller: _emailController,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(labelText: 'Correo electr�nico', labelStyle: TextStyle(color: Colors.white60)),
+                // Logo de la serpiente sobre la almohada
+                Image.asset(
+                  'assets/logo_2.png',
+                  height: 110,
+                  fit: BoxFit.contain,
                 ),
                 const SizedBox(height: 16),
-                TextField(
+                const Text(
+                  'SSPillowy Mobile',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Consola de Gestión HITL & Alertas',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white54, fontSize: 14),
+                ),
+                const SizedBox(height: 32),
+                TextFormField(
+                  controller: _emailController,
+                  style: const TextStyle(color: Colors.white),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Por favor ingresa tu correo';
+                    }
+                    if (!_isValidEmail(value.trim())) {
+                      return 'Ingresa un correo electrónico válido';
+                    }
+                    return null;
+                  },
+                  decoration: InputDecoration(
+                    labelText: 'Correo electrónico',
+                    labelStyle: const TextStyle(color: Colors.white70),
+                    prefixIcon: const Icon(Icons.email_outlined, color: Colors.white54),
+                    filled: true,
+                    fillColor: const Color(0xFF1F2328),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
                   controller: _passwordController,
                   obscureText: _obscurePassword,
                   style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(labelText: 'Contrase�a', labelStyle: TextStyle(color: Colors.white60)),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Por favor ingresa tu contraseña';
+                    }
+                    if (value.length < 6) {
+                      return 'La contraseña debe tener al menos 6 caracteres';
+                    }
+                    return null;
+                  },
+                  decoration: InputDecoration(
+                    labelText: 'Contraseña',
+                    labelStyle: const TextStyle(color: Colors.white70),
+                    prefixIcon: const Icon(Icons.lock_outline, color: Colors.white54),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                        color: Colors.white54,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _obscurePassword = !_obscurePassword;
+                        });
+                      },
+                    ),
+                    filled: true,
+                    fillColor: const Color(0xFF1F2328),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 24),
-                ElevatedButton(
-                  onPressed: _isLoading ? null : _handleLogin,
-                  child: _isLoading ? const CircularProgressIndicator() : const Text('Iniciar Sesi�n'),
+                SizedBox(
+                  height: 48,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF238636),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    onPressed: _handleLogin,
+                    child: const Text(
+                      'Iniciar Sesión',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pushNamed(context, '/forgot-password'),
+                      child: const Text('¿Olvidaste tu contraseña?', style: TextStyle(color: Color(0xFF58A6FF))),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pushNamed(context, '/register'),
+                      child: const Text('Crear cuenta', style: TextStyle(color: Color(0xFF58A6FF))),
+                    ),
+                  ],
                 ),
               ],
             ),
