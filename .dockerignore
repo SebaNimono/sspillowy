@@ -1,0 +1,11 @@
+# Lista blanca: la imagen de la API (apps/api/Dockerfile) solo necesita apps/api y packages.
+# Todo lo demás (mobile, web, api-python, docs, defectdojo, mockups) queda fuera.
+**
+
+!apps/api/**
+!packages/**
+
+**/__pycache__/
+**/*.py[cod]
+**/.env
+**/.env.*

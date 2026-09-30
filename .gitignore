@@ -239,9 +239,15 @@ build/
 .flutter-plugins-dependencies
 .packages
 build/
-ios/Pods/
-android/.gradle/
-android/local.properties
+**/ios/Pods/
+**/android/.gradle/
+**/android/local.properties
+**/flutter/ephemeral/
+**/Flutter/ephemeral/
+
+# Editor local / clones de referencia
+.vscode/
+defectdojo/
 
 # Docker & Temp
 tmp/
