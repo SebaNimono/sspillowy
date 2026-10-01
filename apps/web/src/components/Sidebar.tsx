@@ -24,15 +24,35 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const isCollapsed = sidebarState === 'collapsed';
 
-  const navItems = [
-    { id: 'dashboard', label: t('nav.dashboard'), icon: LayoutDashboard },
-    { id: 'repositories', label: t('nav.repositories'), icon: FolderGit2 },
-    { id: 'findings', label: t('nav.findings'), icon: ShieldAlert },
-    { id: 'scans', label: t('nav.scans'), icon: Radar },
-    { id: 'gates', label: t('nav.gates'), icon: Sliders },
-    { id: 'notifications', label: t('nav.notifications'), icon: Bell },
-    { id: 'reports', label: t('nav.reports'), icon: FileArchive },
-    { id: 'concepts', label: t('nav.concepts'), icon: BookOpen },
+  const navGroups = [
+    {
+      id: 'overview',
+      label: null,
+      items: [{ id: 'dashboard', label: t('nav.dashboard'), icon: LayoutDashboard }],
+    },
+    {
+      id: 'security',
+      label: t('nav.groupSecurity'),
+      items: [
+        { id: 'repositories', label: t('nav.repositories'), icon: FolderGit2 },
+        { id: 'findings', label: t('nav.findings'), icon: ShieldAlert },
+        { id: 'scans', label: t('nav.scans'), icon: Radar },
+      ],
+    },
+    {
+      id: 'governance',
+      label: t('nav.groupGovernance'),
+      items: [
+        { id: 'gates', label: t('nav.gates'), icon: Sliders },
+        { id: 'reports', label: t('nav.reports'), icon: FileArchive },
+        { id: 'notifications', label: t('nav.notifications'), icon: Bell },
+      ],
+    },
+    {
+      id: 'resources',
+      label: t('nav.groupResources'),
+      items: [{ id: 'docs', label: t('nav.docs'), icon: BookOpen }],
+    },
   ];
 
   return (
@@ -154,8 +174,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       )}
 
-      <ul className="nav-list" style={{ marginTop: isCollapsed ? '0.25rem' : '1.25rem' }}>
-        {navItems.map((item) => {
+      {navGroups.map((group, gi) => (
+      <ul
+        key={group.id}
+        className="nav-list"
+        style={{
+          marginTop: gi === 0 ? (isCollapsed ? '0.25rem' : '1.25rem') : '0.5rem',
+          paddingTop: gi === 0 ? 0 : '0.5rem',
+          borderTop: gi === 0 ? 'none' : '1px solid #2d334a',
+        }}
+      >
+        {group.label && !isCollapsed && (
+          <li
+            aria-hidden
+            style={{
+              fontSize: '0.66rem',
+              fontWeight: 700,
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              color: '#6e7391',
+              padding: '0.15rem 0.85rem 0.3rem',
+            }}
+          >
+            {group.label}
+          </li>
+        )}
+        {group.items.map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;
           const isHovered = activeHoverItem === item.id;
@@ -207,6 +251,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           );
         })}
       </ul>
+      ))}
     </aside>
   );
 };

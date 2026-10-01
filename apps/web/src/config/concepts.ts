@@ -390,7 +390,7 @@ export const CONCEPTS: Concept[] = [
     term: 'Health Score',
     category: 'metricas',
     definition: 'Puntaje de 0 a 100 que resume la salud de seguridad de un repositorio o de toda la organización.',
-    inSystem: 'Baja con los hallazgos abiertos, ponderados por severidad. Se muestra por repo y en el dashboard.',
+    inSystem: '100 − (18 × crítico + 8 × alto + 3 × medio + bajo) sobre los hallazgos activos, con mínimo 0. Se muestra por repo y en el dashboard.',
     tab: 'dashboard',
     related: ['risk-score'],
   },
