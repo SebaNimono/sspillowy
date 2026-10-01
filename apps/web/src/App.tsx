@@ -11,6 +11,7 @@ import { SecurityGatesPage } from './pages/SecurityGatesPage';
 import { ScansPage } from './pages/ScansPage';
 import { NotificationsPage } from './pages/NotificationsPage';
 import { ReportsPage } from './pages/ReportsPage';
+import { ConceptsPage } from './pages/ConceptsPage';
 import { fetchNotifications, fetchAuthSession, setStoredSessionId } from './api/client';
 import { CookieBanner } from './components/CookieBanner';
 import { AppToaster } from './components/Toast';
@@ -72,6 +73,7 @@ const VALID_TABS = new Set([
   'gates',
   'notifications',
   'reports',
+  'concepts',
 ]);
 
 function initialConsoleTab(): string {
@@ -364,6 +366,8 @@ const AppShell: React.FC = () => {
         return <NotificationsPage {...pageProps} onNotificationsChange={refreshUnread} />;
       case 'reports':
         return <ReportsPage {...pageProps} />;
+      case 'concepts':
+        return <ConceptsPage {...pageProps} />;
       default:
         return <DashboardPage {...pageProps} />;
     }

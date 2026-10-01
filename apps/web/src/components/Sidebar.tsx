@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, FolderGit2, ShieldAlert, Sliders, Minus, Plus, X, Radar, Bell, FileArchive } from 'lucide-react';
+import { LayoutDashboard, FolderGit2, ShieldAlert, Sliders, Minus, Plus, X, Radar, Bell, FileArchive, BookOpen } from 'lucide-react';
 import { useI18n } from '../i18n/I18nProvider';
 
 export type SidebarState = 'expanded' | 'collapsed' | 'hidden';
@@ -32,6 +32,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'gates', label: t('nav.gates'), icon: Sliders },
     { id: 'notifications', label: t('nav.notifications'), icon: Bell },
     { id: 'reports', label: t('nav.reports'), icon: FileArchive },
+    { id: 'concepts', label: t('nav.concepts'), icon: BookOpen },
   ];
 
   return (
