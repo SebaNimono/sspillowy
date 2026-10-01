@@ -149,6 +149,19 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
     engines: string[];
     instructions: string;
   } | null>(null);
+  const [showWebhook, setShowWebhook] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const copyEndpoint = async () => {
+    if (!webhookInfo) return;
+    try {
+      await navigator.clipboard.writeText(webhookInfo.endpoint);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      setCopied(false);
+    }
+  };
 
   useEffect(() => {
     fetchGithubWebhookInfo()
@@ -513,47 +526,6 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
         </div>
       )}
 
-      {webhookInfo && (
-        <div
-          className="card"
-          style={{
-            marginBottom: '1rem',
-            borderTop: `3px solid ${webhookInfo.secret_configured ? '#1a7f37' : '#9a6700'}`,
-          }}
-        >
-          <div className="card-header" style={{ marginBottom: '0.5rem' }}>
-            <div className="card-title">
-              <Webhook size={18} color={webhookInfo.secret_configured ? '#1a7f37' : '#9a6700'} />
-              <span>Webhook GitHub (escaneo al push / PR)</span>
-            </div>
-            <span
-              className={`badge ${webhookInfo.secret_configured ? 'badge-low' : 'badge-critical'}`}
-            >
-              {webhookInfo.secret_configured ? 'Secret OK' : 'Falta secret'}
-            </span>
-          </div>
-          <p style={{ fontSize: '0.8rem', color: '#656d76', marginBottom: '0.5rem', lineHeight: 1.45 }}>
-            {webhookInfo.instructions}
-          </p>
-          <code
-            style={{
-              display: 'block',
-              fontSize: '0.78rem',
-              background: '#f6f8fa',
-              padding: '0.55rem 0.7rem',
-              borderRadius: '6px',
-              border: '1px solid #d0d7de',
-              wordBreak: 'break-all',
-            }}
-          >
-            {webhookInfo.endpoint}
-          </code>
-          <p style={{ fontSize: '0.75rem', color: '#656d76', marginTop: '0.45rem' }}>
-            Motores: {webhookInfo.engines.join(' + ')}
-          </p>
-        </div>
-      )}
-
       <div className="card">
         <div className="card-header">
           <div className="card-title">
@@ -561,10 +533,30 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
             <span>{t('repos.monitored', { count: repos.length })}</span>
           </div>
 
-          <button className="btn btn-primary" onClick={() => setShowModal(true)}>
-            <Plus size={16} />
-            <span>{t('repos.newRepo')}</span>
-          </button>
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            {webhookInfo && (
+              <button
+                className="btn btn-secondary"
+                onClick={() => setShowWebhook(true)}
+                title="Escaneo automático en cada push / pull request"
+              >
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    background: webhookInfo.secret_configured ? '#1a7f37' : '#bf8700',
+                  }}
+                />
+                <Webhook size={15} />
+                <span>{webhookInfo.secret_configured ? 'Webhook activo' : 'Configurar webhook'}</span>
+              </button>
+            )}
+            <button className="btn btn-primary" onClick={() => setShowModal(true)}>
+              <Plus size={16} />
+              <span>{t('repos.newRepo')}</span>
+            </button>
+          </div>
         </div>
 
         {loading ? (
@@ -802,6 +794,61 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
         onCancel={() => !deleting && setDeleteTarget(null)}
         onConfirm={handleDeleteRepo}
       />
+
+      {showWebhook && webhookInfo && (
+        <div className="modal-overlay" onClick={() => setShowWebhook(false)}>
+          <div className="modal-content" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+              <h2 style={{ fontSize: '1.2rem', color: '#1f2328', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Webhook size={20} color={webhookInfo.secret_configured ? '#1a7f37' : '#bf8700'} />
+                Webhook de GitHub
+              </h2>
+              <span className={`badge ${webhookInfo.secret_configured ? 'badge-low' : 'badge-medium'}`}>
+                {webhookInfo.secret_configured ? 'Secreto configurado' : 'Falta GITHUB_WEBHOOK_SECRET'}
+              </span>
+            </div>
+            <p style={{ fontSize: '0.85rem', color: '#656d76', marginBottom: '1rem', lineHeight: 1.5 }}>
+              Escanea automáticamente un repo en cada push o pull request. El repo debe estar registrado aquí con la misma URL.
+            </p>
+
+            <ol style={{ fontSize: '0.85rem', color: '#1f2328', lineHeight: 1.6, paddingLeft: '1.2rem', marginBottom: '1rem' }}>
+              <li>En GitHub: <strong>Settings → Webhooks → Add webhook</strong>.</li>
+              <li>
+                <strong>Payload URL</strong>:
+                <div style={{ display: 'flex', gap: '0.4rem', margin: '0.35rem 0 0.5rem' }}>
+                  <code
+                    style={{
+                      flex: 1,
+                      fontSize: '0.78rem',
+                      background: '#f6f8fa',
+                      padding: '0.5rem 0.65rem',
+                      borderRadius: '6px',
+                      border: '1px solid #d0d7de',
+                      wordBreak: 'break-all',
+                    }}
+                  >
+                    {webhookInfo.endpoint}
+                  </code>
+                  <button type="button" className="btn btn-secondary" onClick={copyEndpoint}>
+                    {copied ? 'Copiado' : 'Copiar'}
+                  </button>
+                </div>
+              </li>
+              <li><strong>Content type</strong>: application/json</li>
+              <li><strong>Secret</strong>: el valor de GITHUB_WEBHOOK_SECRET en Railway.</li>
+              <li><strong>Eventos</strong>: Pushes y Pull requests.</li>
+            </ol>
+
+            <p style={{ fontSize: '0.75rem', color: '#656d76' }}>Motores al recibir el evento: {webhookInfo.engines.join(' + ')}</p>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.25rem' }}>
+              <button className="btn btn-secondary" onClick={() => setShowWebhook(false)}>
+                {t('findings.close')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showModal && (
         <div className="modal-overlay">
