@@ -68,27 +68,20 @@ def run_gitleaks(target: Path, timeout: int = 180) -> list[dict]:
             "--no-git",
             "--no-banner",
         ]
-        # Excluir demos/fixtures (secretos intencionales para laboratorio)
-        ignore = Path(tempfile.gettempdir()) / f"gitleaks-ignore-{uuid.uuid4().hex}"
-        ignore.write_text(
-            "\n".join(
-                [
-                    "**/fixtures/**",
-                    "**/vuln_sample/**",
-                    "**/node_modules/**",
-                    "**/defectdojo/**",
-                    "**/mockup_movil/**",
-                    "**/ppt/**",
-                ]
-            )
-            + "\n",
+        # gitleaks 8.x no tiene --ignore-path: las exclusiones van como allowlist en un config
+        # que extiende las reglas por defecto.
+        config = Path(tempfile.gettempdir()) / f"gitleaks-config-{uuid.uuid4().hex}.toml"
+        excluded = ["fixtures", "vuln_sample", "node_modules", "defectdojo", "mockup_movil", "ppt"]
+        paths = ",\n  ".join(f"'''(^|/){d}/'''" for d in excluded)
+        config.write_text(
+            f"[extend]\nuseDefault = true\n\n[allowlist]\ndescription = \"sspillowy excludes\"\npaths = [\n  {paths}\n]\n",
             encoding="utf-8",
         )
-        cmd.extend(["--ignore-path", str(ignore)])
+        cmd.extend(["--config", str(config)])
         try:
             proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
         finally:
-            ignore.unlink(missing_ok=True)
+            config.unlink(missing_ok=True)
 
         if proc.returncode not in (0, 1):
             err = (proc.stderr or proc.stdout or "gitleaks error").strip()[:500]
@@ -132,7 +125,7 @@ def persist_gitleaks_findings(
     scan_root: Path | None = None,
 ) -> dict[str, int]:
     counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFO": 0}
-    max_findings = int(os.getenv("GITLEAKS_MAX_FINDINGS", "40"))
+    max_findings = int(os.getenv("GITLEAKS_MAX_FINDINGS", "100"))
 
     for item in results[:max_findings]:
         rule_id = item.get("RuleID") or item.get("Rule") or "gitleaks.secret"

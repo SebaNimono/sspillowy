@@ -119,7 +119,8 @@ def _run_semgrep(target: Path, timeout: int = 300) -> list[dict]:
             "semgrep no está instalado en el contenedor. Revisa el Dockerfile (pip install semgrep)."
         )
 
-    config = os.getenv("SEMGREP_CONFIG", "p/ci").strip() or "p/ci"
+    raw_config = os.getenv("SEMGREP_CONFIG", "p/ci,p/owasp-top-ten").strip() or "p/ci"
+    configs = [c.strip() for c in raw_config.split(",") if c.strip()]
     out_file = target / "semgrep-out.json"
     excludes = [
         "fixtures",
@@ -131,11 +132,10 @@ def _run_semgrep(target: Path, timeout: int = 300) -> list[dict]:
         "build",
         ".git",
     ]
-    cmd = [
-        "semgrep",
-        "scan",
-        "--config",
-        config,
+    cmd = ["semgrep", "scan"]
+    for cfg in configs:
+        cmd.extend(["--config", cfg])
+    cmd += [
         "--json",
         "--quiet",
         "--metrics",
@@ -262,7 +262,7 @@ def persist_semgrep_results(
 ) -> dict[str, int]:
     """Persiste findings Semgrep. No cierra el Scan (el job multi-motor lo hace)."""
     counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFO": 0}
-    max_findings = int(os.getenv("SEMGREP_MAX_FINDINGS", "40"))
+    max_findings = int(os.getenv("SEMGREP_MAX_FINDINGS", "200"))
     for result in results[:max_findings]:
         extra = result.get("extra") or {}
         severity = _map_severity(extra.get("severity") or result.get("severity"))

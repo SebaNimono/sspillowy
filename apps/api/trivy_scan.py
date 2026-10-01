@@ -163,9 +163,11 @@ def persist_trivy_findings(
     scan_root: Path | None = None,
 ) -> dict[str, int]:
     counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFO": 0}
-    max_findings = int(os.getenv("TRIVY_MAX_FINDINGS", "40"))
+    max_findings = int(os.getenv("TRIVY_MAX_FINDINGS", "300"))
+    rank = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "INFO": 4}
+    ordered = sorted(results, key=lambda r: rank.get(_map_severity(r.get("severity")), 5))
 
-    for item in results[:max_findings]:
+    for item in ordered[:max_findings]:
         severity = _map_severity(item.get("severity"))
         counts[severity] = counts.get(severity, 0) + 1
         path = relative_file_path(item.get("file_path") or "", scan_root) or item.get("file_path")
