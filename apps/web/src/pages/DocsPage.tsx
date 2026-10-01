@@ -269,7 +269,7 @@ export const DocsPage: React.FC<PageProps> = ({
     <div>
       <Header
         title={t('nav.docs')}
-        subtitle="Cómo funciona SSPILLOWY: guías, motores, gobernanza, integraciones y glosario"
+        subtitle="Guía de uso: qué hace cada sección, cómo usarla y en qué casos te sirve"
         sidebarState={sidebarState}
         setSidebarState={setSidebarState}
         user={user}
