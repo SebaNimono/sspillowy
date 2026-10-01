@@ -7,7 +7,7 @@
     "fr": "Français"
   },
   "nav": {
-    "dashboard": "Dashboard General",
+    "dashboard": "Dashboards",
     "repositories": "Repositorios",
     "findings": "Matriz de Hallazgos",
     "scans": "Escaneos",
@@ -31,7 +31,7 @@
   },
   "pages": {
     "dashboard": {
-      "title": "Dashboard General DevSecOps",
+      "title": "Dashboards",
       "subtitle": "Métricas reales de tus repos y hallazgos — personaliza umbrales y bloques"
     },
     "repositories": {

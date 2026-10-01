@@ -7,7 +7,7 @@
     "fr": "Français"
   },
   "nav": {
-    "dashboard": "Overview Dashboard",
+    "dashboard": "Dashboards",
     "repositories": "Repositories",
     "findings": "Findings Matrix",
     "scans": "Scans",
@@ -31,7 +31,7 @@
   },
   "pages": {
     "dashboard": {
-      "title": "DevSecOps Overview Dashboard",
+      "title": "Dashboards",
       "subtitle": "Live metrics from your repos and findings — customize thresholds and widgets"
     },
     "repositories": {

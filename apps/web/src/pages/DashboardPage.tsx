@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   ResponsiveContainer,
@@ -14,6 +14,8 @@ import {
   RadialBar,
   Cell,
   PolarAngleAxis,
+  PieChart,
+  Pie,
 } from 'recharts';
 import { Header } from '../components/Header';
 import { SidebarState } from '../components/Sidebar';
@@ -23,26 +25,69 @@ import { DashboardSettings } from '../components/DashboardSettings';
 import { PillowAgent } from '../components/PillowAgent';
 import { PillowWidgetBoard } from '../components/PillowWidgetBoard';
 import { useI18n } from '../i18n/I18nProvider';
-import { DashboardStats, HeatmapData, AuditEvent, fetchStats, fetchHeatmap, fetchAuditLog } from '../api/client';
 import {
-  ALERT_COLORS,
-  DashboardConfig,
-  healthAlert,
-  loadDashboardConfig,
-  metricAlert,
-} from '../config/dashboardConfig';
+  DashboardStats,
+  HeatmapData,
+  AuditEvent,
+  Finding,
+  Scan,
+  fetchStats,
+  fetchHeatmap,
+  fetchAuditLog,
+  fetchFindings,
+  fetchScans,
+} from '../api/client';
+import { ALERT_COLORS, DashboardConfig, healthAlert, loadDashboardConfig, metricAlert } from '../config/dashboardConfig';
 import { PlacedPillowWidget, loadPlacedWidgets, savePlacedWidgets } from '../config/pillowWidgets';
 import {
-  KeyRound,
-  Cpu,
-  ShieldCheck,
+  SEVERITIES,
+  SEVERITY_COLOR,
+  SEVERITY_LABEL,
+  SLA_DAYS,
+  Severity,
+  ageDays,
+  groupFindings,
+  isActive,
+  riskScore,
+  slaState,
+} from '../utils/findingGroups';
+import {
   AlertOctagon,
-  Terminal,
-  Layers,
   Activity,
-  Flame,
+  ArrowDownRight,
+  ArrowUpRight,
+  Clock,
   Database,
+  Flame,
+  GitPullRequest,
+  Hourglass,
+  Layers,
+  Package,
+  RefreshCw,
+  ShieldCheck,
+  Terminal,
+  Trophy,
+  Filter as FunnelIcon,
+  Timer,
+  ScanLine,
 } from 'lucide-react';
+import '../styles/dashboards.css';
+
+interface PageProps {
+  sidebarState: SidebarState;
+  setSidebarState: (state: SidebarState) => void;
+  user?: { email: string; name: string } | null;
+  onLogout?: () => void;
+  onNavigate?: (tab: string) => void;
+  unreadCount?: number;
+  onGoToSite?: () => void;
+}
+
+type RangeDays = 7 | 30 | 90;
+const RANGES: RangeDays[] = [7, 30, 90];
+const RANGE_KEY = 'sspillowy_dashboard_range';
+const REFRESH_MS = 60_000;
+const DAY_MS = 86_400_000;
 
 const EMPTY_STATS: DashboardStats = {
   overall_health_score: 0,
@@ -55,51 +100,81 @@ const EMPTY_STATS: DashboardStats = {
   low_findings: 0,
   secrets_leaked_prevented: 0,
   findings_by_engine: {},
-  trend_7d: [0, 0, 0, 0, 0, 0, 0],
+  trend_7d: [],
 };
 
-const EMPTY_HEATMAP: HeatmapData = {
-  cells: [],
-  max_count: 0,
-  total_findings_period: 0,
-  weeks: 12,
+const EMPTY_HEATMAP: HeatmapData = { cells: [], max_count: 0, total_findings_period: 0, weeks: 12 };
+
+const ENGINES: { key: Finding['engine']; label: string }[] = [
+  { key: 'semgrep', label: 'Semgrep · SAST' },
+  { key: 'trivy', label: 'Trivy · SCA/IaC' },
+  { key: 'gitleaks', label: 'GitLeaks · Secretos' },
+  { key: 'owasp_zap', label: 'ZAP · DAST' },
+];
+
+type GateKey = 'PASSED' | 'BLOCKED' | 'BYPASSED' | 'OTHER';
+
+const GATE_META: Record<GateKey, { label: string; color: string }> = {
+  PASSED: { label: 'Aprobado', color: '#1a7f37' },
+  BLOCKED: { label: 'Bloqueado', color: '#cf222e' },
+  BYPASSED: { label: 'Bypass CISO', color: '#8250df' },
+  OTHER: { label: 'Sin gate', color: '#8c959f' },
 };
 
-interface PageProps {
-  sidebarState: SidebarState;
-  setSidebarState: (state: SidebarState) => void;
-  user?: { email: string; name: string } | null;
-  onLogout?: () => void;
-  onNavigate?: (tab: string) => void;
-  unreadCount?: number;
-  onGoToSite?: () => void;
-}
+const STATUS_FUNNEL: { key: Finding['status']; label: string; color: string }[] = [
+  { key: 'OPEN', label: 'Abiertos', color: '#cf222e' },
+  { key: 'IN_REVIEW', label: 'En revisión', color: '#0969da' },
+  { key: 'FIXED', label: 'Corregidos', color: '#1a7f37' },
+  { key: 'FALSE_POSITIVE', label: 'Falsos positivos', color: '#6e7781' },
+  { key: 'ACCEPTED_RISK', label: 'Riesgo aceptado', color: '#9a6700' },
+];
 
-const ENGINE_META = [
-  { key: 'semgrep', short: 'Semgrep', label: 'Semgrep · SAST', color: '#0969da' },
-  { key: 'trivy', short: 'Trivy', label: 'Trivy · SCA/IaC', color: '#9a6700' },
-  { key: 'gitleaks', short: 'GitLeaks', label: 'GitLeaks · Secretos', color: '#cf222e' },
-  { key: 'owasp_zap', short: 'ZAP', label: 'OWASP ZAP · DAST', color: '#8250df' },
-] as const;
+const AGE_BUCKETS = [
+  { label: '0–7 d', min: 0, max: 7, color: '#1a7f37' },
+  { label: '8–30 d', min: 8, max: 30, color: '#bf8700' },
+  { label: '31–90 d', min: 31, max: 90, color: '#bc4c00' },
+  { label: '+90 d', min: 91, max: Infinity, color: '#cf222e' },
+];
 
-const DAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+const TREND_SEVERITIES: Severity[] = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
 
 const actionColor = (action: string) => {
-  if (action.includes('SECRET') || action.includes('GATE_BLOCK')) return '#cf222e';
-  if (action.includes('AI')) return '#8250df';
+  if (action.includes('SECRET') || action.includes('GATE_BLOCK') || action.includes('FAILED')) return '#cf222e';
+  if (action.includes('BYPASS') || action.includes('AI')) return '#8250df';
   if (action.includes('SCAN')) return '#0969da';
   return '#656d76';
 };
 
-const fadeUp = {
-  hidden: { opacity: 0, y: 12 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.4 } },
-};
+const dayKey = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-const stagger = {
-  hidden: {},
-  show: { transition: { staggerChildren: 0.07 } },
-};
+function buildDays(range: number, offset = 0): { key: string; label: string }[] {
+  const out = [];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  for (let i = range - 1 + offset; i >= offset; i -= 1) {
+    const d = new Date(today.getTime() - i * DAY_MS);
+    out.push({ key: dayKey(d), label: `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}` });
+  }
+  return out;
+}
+
+function inWindow(iso: string, range: number, offset = 0): boolean {
+  const t = new Date(iso).getTime();
+  const end = Date.now() - offset * DAY_MS;
+  return t <= end && t > end - range * DAY_MS;
+}
+
+function gateBucket(scan: Scan): GateKey {
+  const g = (scan.gate_status || '').toUpperCase();
+  if (g === 'PASSED' || g === 'BLOCKED' || g === 'BYPASSED') return g;
+  return 'OTHER';
+}
+
+function loadRange(): RangeDays {
+  const n = Number(localStorage.getItem(RANGE_KEY));
+  return (RANGES as number[]).includes(n) ? (n as RangeDays) : 30;
+}
 
 const ChartTooltip = ({
   active,
@@ -107,16 +182,16 @@ const ChartTooltip = ({
   label,
 }: {
   active?: boolean;
-  payload?: Array<{ value: number; name?: string; color?: string }>;
+  payload?: Array<{ value: number; name?: string; color?: string; payload?: { fill?: string } }>;
   label?: string;
 }) => {
   if (!active || !payload?.length) return null;
   return (
     <div className="dash-tooltip">
-      <strong>{label}</strong>
+      {label ? <strong>{label}</strong> : null}
       {payload.map((p) => (
-        <div key={p.name ?? String(p.value)}>
-          <i style={{ background: p.color }} />
+        <div key={`${p.name}-${p.value}`}>
+          <i style={{ background: p.color ?? p.payload?.fill }} />
           <span>{p.name ?? 'valor'}</span>
           <b>{p.value}</b>
         </div>
@@ -125,15 +200,73 @@ const ChartTooltip = ({
   );
 };
 
-function hasDashboardData(stats: DashboardStats, heatmap: HeatmapData, events: AuditEvent[]): boolean {
+const Sparkline: React.FC<{ data: number[]; color: string; id: string }> = ({ data, color, id }) => {
+  if (!data.some((v) => v > 0)) return <div className="dw-spark dw-spark--flat" />;
   return (
-    stats.monitored_repos > 0 ||
-    stats.total_scans_run > 0 ||
-    stats.total_open_findings > 0 ||
-    (heatmap.total_findings_period ?? 0) > 0 ||
-    events.length > 0
+    <div className="dw-spark">
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={data.map((v, i) => ({ i, v }))} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
+          <defs>
+            <linearGradient id={`spark-${id}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={color} stopOpacity={0.35} />
+              <stop offset="100%" stopColor={color} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <Area type="monotone" dataKey="v" stroke={color} strokeWidth={1.75} fill={`url(#spark-${id})`} isAnimationActive={false} />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
   );
-}
+};
+
+const Delta: React.FC<{ value: number | null; suffix?: string; goodWhenUp?: boolean }> = ({ value, suffix = '%', goodWhenUp = false }) => {
+  if (value === null || !Number.isFinite(value)) return <span className="dw-delta dw-delta--flat">sin periodo previo</span>;
+  if (Math.round(value) === 0) return <span className="dw-delta dw-delta--flat">= periodo previo</span>;
+  const up = value > 0;
+  const good = up === goodWhenUp;
+  return (
+    <span className={`dw-delta ${good ? 'dw-delta--good' : 'dw-delta--bad'}`}>
+      {up ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
+      {Math.abs(Math.round(value))}
+      {suffix} vs periodo previo
+    </span>
+  );
+};
+
+const Widget: React.FC<{
+  title: string;
+  icon: React.ReactNode;
+  span: 3 | 4 | 5 | 6 | 7 | 8 | 12;
+  chip?: React.ReactNode;
+  onOpen?: () => void;
+  children: React.ReactNode;
+}> = ({ title, icon, span, chip, onOpen, children }) => (
+  <motion.section
+    className={`card dw-widget dw-span-${span}`}
+    initial={{ opacity: 0, y: 10 }}
+    whileInView={{ opacity: 1, y: 0 }}
+    viewport={{ once: true }}
+    transition={{ duration: 0.35 }}
+  >
+    <header className="dw-head">
+      <div className="card-title">
+        {icon}
+        <span>{title}</span>
+      </div>
+      <div className="dw-head-right">
+        {chip}
+        {onOpen && (
+          <button type="button" className="dw-link" onClick={onOpen}>
+            Ver hallazgos →
+          </button>
+        )}
+      </div>
+    </header>
+    <div className="dw-body">{children}</div>
+  </motion.section>
+);
+
+const Empty: React.FC<{ text: string }> = ({ text }) => <p className="dash-panel-empty">{text}</p>;
 
 export const DashboardPage: React.FC<PageProps> = ({
   sidebarState,
@@ -146,115 +279,243 @@ export const DashboardPage: React.FC<PageProps> = ({
 }) => {
   const { t } = useI18n();
   const [config, setConfig] = useState<DashboardConfig>(() => loadDashboardConfig());
+  const [range, setRange] = useState<RangeDays>(() => loadRange());
+  const [autoRefresh, setAutoRefresh] = useState(false);
   const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [heatmap, setHeatmap] = useState<HeatmapData | null>(null);
-  const [events, setEvents] = useState<AuditEvent[] | null>(null);
+  const [heatmap, setHeatmap] = useState<HeatmapData>(EMPTY_HEATMAP);
+  const [events, setEvents] = useState<AuditEvent[]>([]);
+  const [findings, setFindings] = useState<Finding[]>([]);
+  const [scans, setScans] = useState<Scan[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
   const [pillowWidgets, setPillowWidgets] = useState<PlacedPillowWidget[]>(() => loadPlacedWidgets());
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoadError(null);
-
-    Promise.all([fetchStats(), fetchHeatmap(), fetchAuditLog()])
-      .then(([statsData, heatmapData, auditData]) => {
-        if (cancelled) return;
-        setStats(statsData ?? EMPTY_STATS);
-        setHeatmap(heatmapData?.cells?.length ? heatmapData : EMPTY_HEATMAP);
-        setEvents(auditData ?? []);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setStats(EMPTY_STATS);
-        setHeatmap(EMPTY_HEATMAP);
-        setEvents([]);
-        setLoadError(err instanceof Error ? err.message : 'No se pudo cargar el dashboard.');
-      });
-
-    return () => {
-      cancelled = true;
-    };
+  const load = useCallback(async () => {
+    setRefreshing(true);
+    const [s, h, a, f, sc] = await Promise.allSettled([
+      fetchStats(),
+      fetchHeatmap(),
+      fetchAuditLog(),
+      fetchFindings(),
+      fetchScans(),
+    ]);
+    setStats(s.status === 'fulfilled' && s.value ? s.value : EMPTY_STATS);
+    setHeatmap(h.status === 'fulfilled' && h.value?.cells?.length ? h.value : EMPTY_HEATMAP);
+    setEvents(a.status === 'fulfilled' ? a.value ?? [] : []);
+    setFindings(f.status === 'fulfilled' ? f.value ?? [] : []);
+    setScans(sc.status === 'fulfilled' ? sc.value ?? [] : []);
+    const failed = [s, h, a, f, sc].find((r) => r.status === 'rejected') as PromiseRejectedResult | undefined;
+    setLoadError(failed ? (failed.reason instanceof Error ? failed.reason.message : 'No se pudo cargar parte del dashboard.') : null);
+    setUpdatedAt(new Date());
+    setRefreshing(false);
   }, []);
 
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  useEffect(() => {
+    if (!autoRefresh) return undefined;
+    const id = window.setInterval(load, REFRESH_MS);
+    return () => window.clearInterval(id);
+  }, [autoRefresh, load]);
+
+  const changeRange = (r: RangeDays) => {
+    setRange(r);
+    localStorage.setItem(RANGE_KEY, String(r));
+  };
+
   const resolvedStats = stats ?? EMPTY_STATS;
-  const resolvedHeatmap = heatmap ?? EMPTY_HEATMAP;
-  const resolvedEvents = events ?? [];
   const loading = stats === null;
-  const dataReady = hasDashboardData(resolvedStats, resolvedHeatmap, resolvedEvents);
+  const { thresholds, widgets } = config;
+  const now = updatedAt?.getTime() ?? Date.now();
+  const goFindings = () => onNavigate?.('findings');
 
-  const { thresholds } = config;
+  const active = useMemo(() => findings.filter(isActive), [findings]);
 
-  const kpi = useMemo(
-    () => [
-      {
-        id: 'repos',
-        label: 'Repositorios monitoreados',
-        value: resolvedStats.monitored_repos,
-        icon: Cpu,
-        hint: 'activos',
-        alert: metricAlert(resolvedStats.monitored_repos, 0),
-        invert: true,
-      },
-      {
-        id: 'critical',
-        label: 'Vulnerabilidades críticas',
-        value: resolvedStats.critical_findings,
-        icon: AlertOctagon,
-        hint: `umbral ≤ ${thresholds.critical_max}`,
-        alert: metricAlert(resolvedStats.critical_findings, thresholds.critical_max),
-      },
-      {
-        id: 'secrets',
-        label: 'Secretos mitigados',
-        value: resolvedStats.secrets_leaked_prevented,
-        icon: KeyRound,
-        hint: 'resueltos',
-        alert: 'ok' as const,
-      },
-      {
-        id: 'scans',
-        label: 'Escaneos ejecutados',
-        value: resolvedStats.total_scans_run,
-        icon: ShieldCheck,
-        hint: 'histórico',
-        alert: 'ok' as const,
-      },
-    ],
-    [resolvedStats, thresholds.critical_max],
+  const dataReady =
+    resolvedStats.monitored_repos > 0 || scans.length > 0 || findings.length > 0 || events.length > 0;
+
+  const derived = useMemo(() => {
+    const days = buildDays(range);
+    const scansIn = scans.filter((s) => inWindow(s.created_at, range));
+    const scansPrev = scans.filter((s) => inWindow(s.created_at, range, range));
+
+    const perDay = new Map(days.map((d) => [d.key, { scans: 0, total: 0, CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 }]));
+    for (const s of scansIn) {
+      const row = perDay.get(dayKey(new Date(s.created_at)));
+      if (!row) continue;
+      row.scans += 1;
+      row.total += s.total_findings || 0;
+      row.CRITICAL += s.critical_count || 0;
+      row.HIGH += s.high_count || 0;
+      row.MEDIUM += s.medium_count || 0;
+      row.LOW += s.low_count || 0;
+    }
+    const series = days.map((d) => ({ label: d.label, ...perDay.get(d.key)! }));
+
+    const gateCounts: Record<GateKey, number> = { PASSED: 0, BLOCKED: 0, BYPASSED: 0, OTHER: 0 };
+    for (const s of scansIn) gateCounts[gateBucket(s)] += 1;
+    const gated = gateCounts.PASSED + gateCounts.BLOCKED + gateCounts.BYPASSED;
+    const passRate = gated ? ((gateCounts.PASSED + gateCounts.BYPASSED) / gated) * 100 : null;
+    const prevGated = scansPrev.filter((s) => gateBucket(s) !== 'OTHER');
+    const prevPass = prevGated.length
+      ? (prevGated.filter((s) => gateBucket(s) !== 'BLOCKED').length / prevGated.length) * 100
+      : null;
+
+    const detected = scansIn.reduce((n, s) => n + (s.total_findings || 0), 0);
+    const detectedPrev = scansPrev.reduce((n, s) => n + (s.total_findings || 0), 0);
+    const pct = (cur: number, prev: number) => (prev ? ((cur - prev) / prev) * 100 : null);
+
+    const breached = active.filter((f) => slaState(f, now) === 'breached').length;
+    const sevActive = Object.fromEntries(SEVERITIES.map((s) => [s, 0])) as Record<Severity, number>;
+    for (const f of active) sevActive[f.severity] += 1;
+
+    return {
+      series,
+      gateCounts,
+      passRate,
+      passDelta: passRate !== null && prevPass !== null ? passRate - prevPass : null,
+      scansCount: scansIn.length,
+      scansDelta: pct(scansIn.length, scansPrev.length),
+      detected,
+      detectedDelta: pct(detected, detectedPrev),
+      breached,
+      sevActive,
+    };
+  }, [scans, range, active, now]);
+
+  const slaData = useMemo(
+    () =>
+      TREND_SEVERITIES.map((sev) => {
+        const row = { name: SEVERITY_LABEL[sev], 'En plazo': 0, 'Por vencer': 0, Vencido: 0 };
+        for (const f of active) {
+          if (f.severity !== sev) continue;
+          const st = slaState(f, now);
+          if (st === 'ok') row['En plazo'] += 1;
+          else if (st === 'due') row['Por vencer'] += 1;
+          else if (st === 'breached') row.Vencido += 1;
+        }
+        return row;
+      }),
+    [active, now],
+  );
+  const slaCompliance = active.length
+    ? Math.round(((active.length - derived.breached) / active.length) * 100)
+    : 100;
+
+  const agingData = useMemo(
+    () =>
+      AGE_BUCKETS.map((b) => ({
+        name: b.label,
+        hallazgos: active.filter((f) => {
+          const a = ageDays(f, now);
+          return a >= b.min && a <= b.max;
+        }).length,
+        fill: b.color,
+      })),
+    [active, now],
   );
 
-  const trend = resolvedStats.trend_7d?.length ? resolvedStats.trend_7d : EMPTY_STATS.trend_7d!;
-  const trendData = trend.map((value, i) => ({ day: DAYS[i] ?? `D${i + 1}`, hallazgos: value }));
-  const trendHasData = trend.some((v) => v > 0);
+  const topRepos = useMemo(() => {
+    const map = new Map<string, Record<Severity, number>>();
+    for (const f of active) {
+      const key = f.repository_name || f.repository_id;
+      const row = map.get(key) ?? { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0, INFO: 0 };
+      row[f.severity] += 1;
+      map.set(key, row);
+    }
+    return [...map.entries()]
+      .map(([name, counts]) => ({ name, counts, score: riskScore(counts), total: SEVERITIES.reduce((n, s) => n + counts[s], 0) }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 6);
+  }, [active]);
 
-  const engineData = ENGINE_META.map((engine) => ({
-    name: engine.short,
-    full: engine.label,
-    hallazgos: resolvedStats.findings_by_engine?.[engine.key] || 0,
-    fill: engine.color,
-  }));
-  const enginesHasData = engineData.some((e) => e.hallazgos > 0);
+  const topComponents = useMemo(
+    () =>
+      groupFindings(active, now)
+        .map((g) => ({ ...g, score: riskScore(g.counts) }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 7),
+    [active, now],
+  );
 
-  const severityData = [
+  const funnel = useMemo(() => {
+    const total = findings.length || 1;
+    return STATUS_FUNNEL.map((s) => {
+      const value = findings.filter((f) => f.status === s.key).length;
+      return { ...s, value, pct: Math.round((value / total) * 100) };
+    });
+  }, [findings]);
+  const triaged = findings.length ? Math.round((findings.filter((f) => f.status !== 'OPEN').length / findings.length) * 100) : 0;
+
+  const engineMatrix = useMemo(() => {
+    const rows = ENGINES.map((e) => {
+      const counts = Object.fromEntries(SEVERITIES.map((s) => [s, 0])) as Record<Severity, number>;
+      for (const f of active) if (f.engine === e.key) counts[f.severity] += 1;
+      return { ...e, counts, total: SEVERITIES.reduce((n, s) => n + counts[s], 0) };
+    });
+    const max = Math.max(1, ...rows.flatMap((r) => SEVERITIES.map((s) => r.counts[s])));
+    return { rows, max };
+  }, [active]);
+
+  const healthLevel = healthAlert(resolvedStats.overall_health_score, thresholds.health_min);
+  const healthColor = ALERT_COLORS[healthLevel];
+  const openAlert = metricAlert(active.length, thresholds.open_max);
+
+  const kpis = [
     {
-      name: 'Críticas',
-      value: resolvedStats.critical_findings,
-      fill: ALERT_COLORS[metricAlert(resolvedStats.critical_findings, thresholds.critical_max)],
+      id: 'active',
+      label: 'Hallazgos activos',
+      value: active.length,
+      color: ALERT_COLORS[openAlert],
+      spark: derived.series.map((d) => d.total),
+      foot: <Delta value={derived.detectedDelta} />,
+      hint: `${derived.detected} detectados en ${range} días`,
     },
     {
-      name: 'Altas',
-      value: resolvedStats.high_findings,
-      fill: ALERT_COLORS[metricAlert(resolvedStats.high_findings, thresholds.high_max)],
+      id: 'critical',
+      label: 'Críticos activos',
+      value: derived.sevActive.CRITICAL,
+      color: ALERT_COLORS[metricAlert(derived.sevActive.CRITICAL, thresholds.critical_max)],
+      spark: derived.series.map((d) => d.CRITICAL),
+      foot: <span className="dw-delta dw-delta--flat">umbral ≤ {thresholds.critical_max}</span>,
+      hint: `${derived.sevActive.HIGH} altos · ${derived.sevActive.MEDIUM} medios`,
     },
-    { name: 'Medias', value: resolvedStats.medium_findings, fill: '#0969da' },
-    { name: 'Bajas', value: resolvedStats.low_findings, fill: '#6e7781' },
+    {
+      id: 'sla',
+      label: 'Fuera de plazo',
+      value: derived.breached,
+      color: derived.breached ? ALERT_COLORS.danger : ALERT_COLORS.ok,
+      spark: [],
+      foot: <span className="dw-delta dw-delta--flat">{slaCompliance}% cumple SLA</span>,
+      hint: `plazo crítico ${SLA_DAYS.CRITICAL} d · alto ${SLA_DAYS.HIGH} d`,
+    },
+    {
+      id: 'gate',
+      label: 'Gate aprobado',
+      value: derived.passRate === null ? null : Math.round(derived.passRate),
+      suffix: '%',
+      color: derived.passRate === null ? '#8c959f' : derived.passRate >= 70 ? ALERT_COLORS.ok : ALERT_COLORS.danger,
+      spark: [],
+      foot: <Delta value={derived.passDelta} suffix=" pp" goodWhenUp />,
+      hint: `${derived.gateCounts.BLOCKED} bloqueos en ${range} días`,
+    },
+    {
+      id: 'scans',
+      label: 'Escaneos',
+      value: derived.scansCount,
+      color: '#0969da',
+      spark: derived.series.map((d) => d.scans),
+      foot: <Delta value={derived.scansDelta} goodWhenUp />,
+      hint: `${resolvedStats.monitored_repos} repos monitoreados`,
+    },
   ];
 
-  const healthAlertLevel = healthAlert(resolvedStats.overall_health_score, thresholds.health_min);
-  const healthColor = ALERT_COLORS[healthAlertLevel];
-  const healthData = [{ name: 'health', value: resolvedStats.overall_health_score, fill: healthColor }];
-
-  const openAlert = metricAlert(resolvedStats.total_open_findings, thresholds.open_max);
+  const gatePie = (Object.keys(GATE_META) as GateKey[])
+    .map((k) => ({ name: GATE_META[k].label, value: derived.gateCounts[k], fill: GATE_META[k].color }))
+    .filter((d) => d.value > 0);
 
   const handleAddPillowWidget = (widget: PlacedPillowWidget) => {
     setPillowWidgets((prev) => {
@@ -287,13 +548,34 @@ export const DashboardPage: React.FC<PageProps> = ({
         onGoToSite={onGoToSite}
       />
 
-      <div className="dash-toolbar">
-        <DashboardSettings config={config} onChange={setConfig} />
-        {!loading && dataReady && (
-          <span className={`dash-status-pill dash-status-pill--${openAlert}`}>
-            {resolvedStats.total_open_findings} hallazgos abiertos
+      <div className="dw-toolbar">
+        <div className="dw-range" role="group" aria-label="Rango de tiempo">
+          {RANGES.map((r) => (
+            <button key={r} type="button" className={range === r ? 'is-active' : ''} onClick={() => changeRange(r)}>
+              {r} días
+            </button>
+          ))}
+        </div>
+        <button type="button" className="dw-tool-btn" onClick={load} disabled={refreshing}>
+          <RefreshCw size={14} className={refreshing ? 'dw-spin' : ''} />
+          <span>Actualizar</span>
+        </button>
+        <label className={`dw-live ${autoRefresh ? 'is-on' : ''}`}>
+          <input type="checkbox" checked={autoRefresh} onChange={(e) => setAutoRefresh(e.target.checked)} />
+          <span className="dw-live-dot" />
+          <span>En vivo (60 s)</span>
+        </label>
+        {updatedAt && (
+          <span className="dw-updated">
+            <Clock size={12} /> {updatedAt.toLocaleTimeString()}
           </span>
         )}
+        <div className="dw-toolbar-right">
+          {!loading && dataReady && (
+            <span className={`dash-status-pill dash-status-pill--${openAlert}`}>{active.length} hallazgos activos</span>
+          )}
+          <DashboardSettings config={config} onChange={setConfig} />
+        </div>
       </div>
 
       {loading && (
@@ -313,8 +595,8 @@ export const DashboardPage: React.FC<PageProps> = ({
           <Database size={40} color="#656d76" />
           <h2>Sin datos todavía</h2>
           <p>
-            El dashboard solo muestra información cuando hay repositorios, escaneos o hallazgos en la base de datos.
-            Registra un repo o ejecuta un escaneo para ver métricas aquí.
+            Los dashboards se llenan con repositorios, escaneos y hallazgos reales. Registra un repo o ejecuta un escaneo
+            para ver métricas aquí.
           </p>
           <button type="button" className="btn btn-primary" onClick={() => onNavigate?.('repositories')}>
             Ir a repositorios
@@ -322,130 +604,179 @@ export const DashboardPage: React.FC<PageProps> = ({
         </div>
       )}
 
-      {!loading && dataReady && config.widgets.kpis && (
-        <motion.div className="stats-grid" variants={stagger} initial="hidden" animate="show">
-          {kpi.map((item) => {
-            const Icon = item.icon;
-            const color =
-              item.id === 'repos' && item.value === 0
-                ? '#656d76'
-                : item.alert === 'danger'
-                  ? ALERT_COLORS.danger
-                  : item.alert === 'warn'
-                    ? ALERT_COLORS.warn
-                    : item.id === 'critical'
-                      ? ALERT_COLORS[metricAlert(item.value, thresholds.critical_max)]
-                      : '#0969da';
-            return (
-              <motion.div
-                key={item.id}
-                className={`stat-card dash-stat ${item.alert === 'danger' ? 'dash-stat--danger' : ''}`}
-                variants={fadeUp}
-                whileHover={{ y: -3 }}
+      {!loading && dataReady && (
+        <div className="dw-grid">
+          {widgets.kpis &&
+            kpis.map((k) => (
+              <motion.section
+                key={k.id}
+                className="card dw-kpi"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
               >
-                <div>
-                  <div className="stat-label">{item.label}</div>
-                  <div className="stat-value" style={{ color }}>
-                    <AnimatedNumber value={item.value} />
-                  </div>
-                  <div className="dash-stat-hint">{item.hint}</div>
+                <span className="dw-kpi-label">{k.label}</span>
+                <div className="dw-kpi-row">
+                  <span className="dw-kpi-value" style={{ color: k.color }}>
+                    {k.value === null ? '—' : <AnimatedNumber value={k.value} />}
+                    {k.value !== null && k.suffix ? <small>{k.suffix}</small> : null}
+                  </span>
+                  <Sparkline data={k.spark} color={k.color} id={k.id} />
                 </div>
-                <div className="stat-icon" style={{ color, borderColor: `${color}33` }}>
-                  <Icon size={20} />
-                </div>
-              </motion.div>
-            );
-          })}
-        </motion.div>
-      )}
+                {k.foot}
+                <span className="dw-kpi-hint">{k.hint}</span>
+              </motion.section>
+            ))}
 
-      {!loading && dataReady && (config.widgets.engines || config.widgets.trend || config.widgets.health) && (
-        <div className="split-grid dash-split-3">
-          {config.widgets.engines && (
-            <motion.div className="card dash-card" variants={fadeUp} initial="hidden" whileInView="show" viewport={{ once: true }}>
-              <div className="card-header">
-                <div className="card-title">
-                  <Layers size={18} color="#0969da" />
-                  <span>Hallazgos por motor</span>
-                </div>
-              </div>
-              {enginesHasData ? (
-                <div className="dash-chart" style={{ height: 220 }}>
+          {widgets.trend && (
+            <Widget
+              title={`Detección por severidad · ${range} días`}
+              icon={<Activity size={18} color="#8250df" />}
+              span={8}
+              chip={<span className="dash-chip">{derived.detected} detectados</span>}
+            >
+              {derived.series.some((d) => d.total > 0) ? (
+                <div className="dash-chart" style={{ height: 240 }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={engineData} barSize={28}>
+                    <AreaChart data={derived.series}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#eaeef2" vertical={false} />
-                      <XAxis dataKey="name" tick={{ fill: '#656d76', fontSize: 12 }} axisLine={false} tickLine={false} />
+                      <XAxis dataKey="label" tick={{ fill: '#656d76', fontSize: 11 }} axisLine={false} tickLine={false} minTickGap={18} />
+                      <YAxis allowDecimals={false} tick={{ fill: '#656d76', fontSize: 11 }} axisLine={false} tickLine={false} width={32} />
+                      <Tooltip content={<ChartTooltip />} />
+                      {TREND_SEVERITIES.map((sev) => (
+                        <Area
+                          key={sev}
+                          type="monotone"
+                          dataKey={sev}
+                          name={SEVERITY_LABEL[sev]}
+                          stackId="sev"
+                          stroke={SEVERITY_COLOR[sev]}
+                          fill={SEVERITY_COLOR[sev]}
+                          fillOpacity={0.25}
+                          strokeWidth={1.75}
+                        />
+                      ))}
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <Empty text={`Sin escaneos con hallazgos en los últimos ${range} días.`} />
+              )}
+            </Widget>
+          )}
+
+          {widgets.gates && (
+            <Widget title="Security Gate" icon={<GitPullRequest size={18} color="#1a7f37" />} span={4} chip={<span className="dash-chip">{range} días</span>}>
+              {gatePie.length ? (
+                <div className="dw-donut">
+                  <div className="dash-chart" style={{ height: 180 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie data={gatePie} dataKey="value" nameKey="name" innerRadius="62%" outerRadius="92%" paddingAngle={2} stroke="none">
+                          {gatePie.map((d) => (
+                            <Cell key={d.name} fill={d.fill} />
+                          ))}
+                        </Pie>
+                        <Tooltip content={<ChartTooltip />} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="dw-donut-center">
+                      <b>{derived.passRate === null ? '—' : `${Math.round(derived.passRate)}%`}</b>
+                      <span>aprobado</span>
+                    </div>
+                  </div>
+                  <ul className="dw-legend">
+                    {gatePie.map((d) => (
+                      <li key={d.name}>
+                        <i style={{ background: d.fill }} />
+                        <span>{d.name}</span>
+                        <b>{d.value}</b>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <Empty text="Sin escaneos evaluados por el gate en este rango." />
+              )}
+            </Widget>
+          )}
+
+          {widgets.sla && (
+            <Widget
+              title="Cumplimiento de plazos (SLA)"
+              icon={<Timer size={18} color="#bf8700" />}
+              span={5}
+              chip={<span className={`dash-chip dash-chip--${slaCompliance >= 90 ? 'ok' : slaCompliance >= 70 ? 'warn' : 'danger'}`}>{slaCompliance}% en plazo</span>}
+              onOpen={goFindings}
+            >
+              {active.length ? (
+                <>
+                  <div className="dash-chart" style={{ height: 190 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={slaData} layout="vertical" barSize={16} margin={{ left: 4, right: 12 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#eaeef2" horizontal={false} />
+                        <XAxis type="number" allowDecimals={false} tick={{ fill: '#656d76', fontSize: 11 }} axisLine={false} tickLine={false} />
+                        <YAxis type="category" dataKey="name" tick={{ fill: '#656d76', fontSize: 12 }} axisLine={false} tickLine={false} width={60} />
+                        <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(9,105,218,0.05)' }} />
+                        <Bar dataKey="En plazo" stackId="s" fill="#1a7f37" />
+                        <Bar dataKey="Por vencer" stackId="s" fill="#bf8700" />
+                        <Bar dataKey="Vencido" stackId="s" fill="#cf222e" radius={[0, 4, 4, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <p className="dw-foot">
+                    Plazos: crítico {SLA_DAYS.CRITICAL} d · alto {SLA_DAYS.HIGH} d · medio {SLA_DAYS.MEDIUM} d · bajo {SLA_DAYS.LOW} d
+                  </p>
+                </>
+              ) : (
+                <Empty text="No hay hallazgos activos. Todo en plazo." />
+              )}
+            </Widget>
+          )}
+
+          {widgets.aging && (
+            <Widget title="Antigüedad de hallazgos activos" icon={<Hourglass size={18} color="#bc4c00" />} span={3}>
+              {active.length ? (
+                <div className="dash-chart" style={{ height: 210 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={agingData} barSize={26}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#eaeef2" vertical={false} />
+                      <XAxis dataKey="name" tick={{ fill: '#656d76', fontSize: 11 }} axisLine={false} tickLine={false} />
                       <YAxis allowDecimals={false} tick={{ fill: '#656d76', fontSize: 11 }} axisLine={false} tickLine={false} width={28} />
-                      <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(9,105,218,0.06)' }} />
-                      <Bar dataKey="hallazgos" radius={[6, 6, 0, 0]} animationDuration={900}>
-                        {engineData.map((entry) => (
-                          <Cell key={entry.name} fill={entry.fill} />
+                      <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(9,105,218,0.05)' }} />
+                      <Bar dataKey="hallazgos" radius={[5, 5, 0, 0]}>
+                        {agingData.map((d) => (
+                          <Cell key={d.name} fill={d.fill} />
                         ))}
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
               ) : (
-                <p className="dash-panel-empty">No hay hallazgos abiertos por motor.</p>
+                <Empty text="Sin hallazgos activos." />
               )}
-            </motion.div>
+            </Widget>
           )}
 
-          {config.widgets.trend && (
-            <motion.div className="card dash-card" variants={fadeUp} initial="hidden" whileInView="show" viewport={{ once: true }}>
-              <div className="card-header">
-                <div className="card-title">
-                  <Activity size={18} color="#8250df" />
-                  <span>Tendencia 7 días</span>
-                </div>
-              </div>
-              {trendHasData ? (
-                <div className="dash-chart" style={{ height: 220 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={trendData}>
-                      <defs>
-                        <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#0969da" stopOpacity={0.35} />
-                          <stop offset="100%" stopColor="#0969da" stopOpacity={0.02} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#eaeef2" vertical={false} />
-                      <XAxis dataKey="day" tick={{ fill: '#656d76', fontSize: 12 }} axisLine={false} tickLine={false} />
-                      <YAxis allowDecimals={false} tick={{ fill: '#656d76', fontSize: 11 }} axisLine={false} tickLine={false} width={28} />
-                      <Tooltip content={<ChartTooltip />} />
-                      <Area
-                        type="monotone"
-                        dataKey="hallazgos"
-                        stroke="#0969da"
-                        strokeWidth={2.5}
-                        fill="url(#trendFill)"
-                        animationDuration={1100}
-                        activeDot={{ r: 5, stroke: '#fff', strokeWidth: 2 }}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              ) : (
-                <p className="dash-panel-empty">Sin actividad de hallazgos en los últimos 7 días.</p>
-              )}
-            </motion.div>
-          )}
-
-          {config.widgets.health && (
-            <motion.div className="card dash-card" variants={fadeUp} initial="hidden" whileInView="show" viewport={{ once: true }}>
-              <div className="card-header">
-                <div className="card-title">
-                  <ShieldCheck size={18} color={healthColor} />
-                  <span>Health Score</span>
-                </div>
-                <span className={`dash-chip dash-chip--${healthAlertLevel}`}>mín. {thresholds.health_min}</span>
-              </div>
+          {widgets.health && (
+            <Widget
+              title="Health Score"
+              icon={<ShieldCheck size={18} color={healthColor} />}
+              span={4}
+              chip={<span className={`dash-chip dash-chip--${healthLevel}`}>mín. {thresholds.health_min}</span>}
+            >
               <div className="dash-health">
-                <div className="dash-chart" style={{ height: 160, width: 160 }}>
+                <div className="dash-chart" style={{ height: 150, width: 150 }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <RadialBarChart innerRadius="72%" outerRadius="100%" data={healthData} startAngle={90} endAngle={-270}>
+                    <RadialBarChart
+                      innerRadius="72%"
+                      outerRadius="100%"
+                      data={[{ name: 'health', value: resolvedStats.overall_health_score }]}
+                      startAngle={90}
+                      endAngle={-270}
+                    >
                       <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
-                      <RadialBar dataKey="value" background={{ fill: '#eaeef2' }} cornerRadius={8} animationDuration={1000}>
+                      <RadialBar dataKey="value" background={{ fill: '#eaeef2' }} cornerRadius={8}>
                         <Cell fill={healthColor} />
                       </RadialBar>
                     </RadialBarChart>
@@ -456,89 +787,205 @@ export const DashboardPage: React.FC<PageProps> = ({
                   </div>
                 </div>
                 <div className="dash-severity">
-                  {severityData.map((s) => (
-                    <div key={s.name} className="dash-severity-row">
-                      <span style={{ background: s.fill }} />
-                      <em>{s.name}</em>
-                      <b>{s.value}</b>
+                  {TREND_SEVERITIES.map((s) => (
+                    <div key={s} className="dash-severity-row">
+                      <span style={{ background: SEVERITY_COLOR[s] }} />
+                      <em>{SEVERITY_LABEL[s]}</em>
+                      <b>{derived.sevActive[s]}</b>
                     </div>
                   ))}
                 </div>
               </div>
-            </motion.div>
+            </Widget>
           )}
-        </div>
-      )}
 
-      {!loading && dataReady && config.widgets.heatmap && (
-        <div className="split-grid">
-          <motion.div className="card dash-card" variants={fadeUp} initial="hidden" whileInView="show" viewport={{ once: true }}>
-            <div className="card-header">
-              <div className="card-title">
-                <Flame size={18} color="#cf222e" />
-                <span>Mapa de calor (12 semanas)</span>
-              </div>
-              <span style={{ fontSize: '0.75rem', color: '#656d76', fontWeight: 600 }}>
-                {resolvedHeatmap.total_findings_period} hallazgos en el periodo
-              </span>
-            </div>
-            {resolvedHeatmap.cells.length > 0 && resolvedHeatmap.total_findings_period > 0 ? (
-              <HeatmapCalendar data={resolvedHeatmap} />
-            ) : (
-              <p className="dash-panel-empty">Sin actividad registrada en las últimas 12 semanas.</p>
-            )}
-          </motion.div>
-        </div>
-      )}
-
-      {!loading && dataReady && config.widgets.audit && (
-        <motion.div className="card dash-card" variants={fadeUp} initial="hidden" whileInView="show" viewport={{ once: true }}>
-          <div className="card-header">
-            <div className="card-title">
-              <Terminal size={18} color="#0969da" />
-              <span>Bitácora de eventos</span>
-            </div>
-            <span className="dash-chip">últimos {Math.min(resolvedEvents.length, 6)}</span>
-          </div>
-          {resolvedEvents.length > 0 ? (
-            <div className="dash-events">
-              {resolvedEvents.slice(0, 6).map((event, i) => {
-                const color = actionColor(event.action);
-                return (
-                  <motion.div
-                    key={event.id}
-                    className="dash-event"
-                    initial={{ opacity: 0, y: 8 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: i * 0.05 }}
-                    whileHover={{ y: -2, borderColor: color }}
-                  >
-                    <span className="dash-event-dot" style={{ background: color }} />
-                    <div className="dash-event-body">
-                      <div className="dash-event-top">
-                        <strong style={{ color }}>{event.action}</strong>
-                        <span>{event.target}</span>
+          {widgets.topRepos && (
+            <Widget title="Repos con más riesgo" icon={<Trophy size={18} color="#cf222e" />} span={4} onOpen={goFindings}>
+              {topRepos.length ? (
+                <ol className="dw-toplist">
+                  {topRepos.map((r) => (
+                    <li key={r.name}>
+                      <div className="dw-toplist-top">
+                        <span className="dw-toplist-name">{r.name}</span>
+                        <span className="dw-toplist-meta">
+                          {r.counts.CRITICAL ? <em style={{ color: SEVERITY_COLOR.CRITICAL }}>{r.counts.CRITICAL} C</em> : null}
+                          {r.counts.HIGH ? <em style={{ color: SEVERITY_COLOR.HIGH }}>{r.counts.HIGH} A</em> : null}
+                          <b>{r.score}</b>
+                        </span>
                       </div>
-                      <p>{event.detail}</p>
-                    </div>
-                  </motion.div>
-                );
-              })}
-            </div>
-          ) : (
-            <p className="dash-panel-empty">La bitácora se llenará cuando registres repos, escaneos o cambios HITL.</p>
+                      <div className="dw-toplist-bar">
+                        <span style={{ width: `${(r.score / topRepos[0].score) * 100}%` }} />
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <Empty text="Ningún repo con hallazgos activos." />
+              )}
+              <p className="dw-foot">Riesgo = 10×crítico + 5×alto + 2×medio + bajo</p>
+            </Widget>
           )}
-        </motion.div>
+
+          {widgets.topComponents && (
+            <Widget title="Componentes más vulnerables" icon={<Package size={18} color="#9a6700" />} span={4} onOpen={goFindings}>
+              {topComponents.length ? (
+                <ol className="dw-toplist">
+                  {topComponents.map((c) => (
+                    <li key={c.key}>
+                      <div className="dw-toplist-top">
+                        <span className="dw-toplist-name" title={c.sublabel}>
+                          {c.label}
+                        </span>
+                        <span className="dw-toplist-meta">
+                          <em className="dw-engine">{c.engine}</em>
+                          <b>{c.findings.length}</b>
+                        </span>
+                      </div>
+                      <div className="dw-toplist-sub">
+                        {c.fixVersion ? `→ actualizar a ${c.fixVersion}` : c.repositoryName}
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <Empty text="Sin componentes vulnerables activos." />
+              )}
+            </Widget>
+          )}
+
+          {widgets.triage && (
+            <Widget
+              title="Embudo de triage HITL"
+              icon={<FunnelIcon size={18} color="#0969da" />}
+              span={4}
+              chip={<span className="dash-chip">{triaged}% triado</span>}
+            >
+              {findings.length ? (
+                <div className="dw-funnel">
+                  {funnel.map((s) => (
+                    <div key={s.key} className="dw-funnel-row">
+                      <span className="dw-funnel-label">{s.label}</span>
+                      <div className="dw-funnel-bar">
+                        <span style={{ width: `${Math.max(s.pct, s.value ? 3 : 0)}%`, background: s.color }} />
+                      </div>
+                      <b>{s.value}</b>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <Empty text="Sin hallazgos para triar." />
+              )}
+            </Widget>
+          )}
+
+          {widgets.engines && (
+            <Widget title="Motor × severidad (activos)" icon={<Layers size={18} color="#0969da" />} span={12} onOpen={goFindings}>
+              <div className="dw-matrix-wrap">
+                <table className="dw-matrix">
+                  <thead>
+                    <tr>
+                      <th>Motor</th>
+                      {TREND_SEVERITIES.map((s) => (
+                        <th key={s}>{SEVERITY_LABEL[s]}</th>
+                      ))}
+                      <th>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {engineMatrix.rows.map((r) => (
+                      <tr key={r.key}>
+                        <td>
+                          <ScanLine size={13} /> {r.label}
+                        </td>
+                        {TREND_SEVERITIES.map((s) => {
+                          const v = r.counts[s];
+                          const alpha = v ? 0.12 + (v / engineMatrix.max) * 0.6 : 0;
+                          return (
+                            <td
+                              key={s}
+                              className="dw-matrix-cell"
+                              style={{
+                                background: v ? `color-mix(in srgb, ${SEVERITY_COLOR[s]} ${Math.round(alpha * 100)}%, #ffffff)` : undefined,
+                                color: alpha > 0.45 ? '#ffffff' : v ? SEVERITY_COLOR[s] : '#afb8c1',
+                              }}
+                            >
+                              {v || '·'}
+                            </td>
+                          );
+                        })}
+                        <td className="dw-matrix-total">{r.total}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Widget>
+          )}
+
+          {widgets.heatmap && (
+            <Widget
+              title="Mapa de calor (12 semanas)"
+              icon={<Flame size={18} color="#cf222e" />}
+              span={12}
+              chip={<span className="dash-chip">{heatmap.total_findings_period} hallazgos</span>}
+            >
+              {heatmap.cells.length > 0 && heatmap.total_findings_period > 0 ? (
+                <HeatmapCalendar data={heatmap} />
+              ) : (
+                <Empty text="Sin actividad registrada en las últimas 12 semanas." />
+              )}
+            </Widget>
+          )}
+
+          {widgets.audit && (
+            <Widget
+              title="Bitácora de eventos"
+              icon={<Terminal size={18} color="#0969da" />}
+              span={12}
+              chip={<span className="dash-chip">últimos {Math.min(events.length, 8)}</span>}
+            >
+              {events.length ? (
+                <div className="dash-events">
+                  {events.slice(0, 8).map((event) => {
+                    const color = actionColor(event.action);
+                    return (
+                      <div key={event.id} className="dash-event">
+                        <span className="dash-event-dot" style={{ background: color }} />
+                        <div className="dash-event-body">
+                          <div className="dash-event-top">
+                            <strong style={{ color }}>{event.action}</strong>
+                            <span>{event.target}</span>
+                          </div>
+                          <p>{event.detail}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <Empty text="La bitácora se llenará cuando registres repos, escaneos o cambios HITL." />
+              )}
+            </Widget>
+          )}
+        </div>
+      )}
+
+      {!loading && dataReady && derived.sevActive.CRITICAL > thresholds.critical_max && (
+        <div className="dw-alert">
+          <AlertOctagon size={16} />
+          <span>
+            {derived.sevActive.CRITICAL} críticos activos superan el umbral ({thresholds.critical_max}). Revisa la matriz de
+            hallazgos.
+          </span>
+          <button type="button" className="btn btn-secondary fm-btn-sm" onClick={goFindings}>
+            Ir a la matriz
+          </button>
+        </div>
       )}
 
       <PillowWidgetBoard widgets={pillowWidgets} stats={stats} onRemove={handleRemovePillowWidget} />
 
-      <PillowAgent
-        userEmail={user?.email}
-        dashboardContext={stats}
-        onAddWidget={handleAddPillowWidget}
-      />
+      <PillowAgent userEmail={user?.email} dashboardContext={stats} onAddWidget={handleAddPillowWidget} />
     </div>
   );
 };

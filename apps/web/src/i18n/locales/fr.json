@@ -7,7 +7,7 @@
     "fr": "Français"
   },
   "nav": {
-    "dashboard": "Tableau de bord",
+    "dashboard": "Tableaux de bord",
     "repositories": "Dépôts",
     "findings": "Matrice des findings",
     "scans": "Scans",
@@ -31,7 +31,7 @@
   },
   "pages": {
     "dashboard": {
-      "title": "Tableau de bord DevSecOps",
+      "title": "Tableaux de bord",
       "subtitle": "Métriques réelles de vos dépôts et findings — personnalisez seuils et blocs"
     },
     "repositories": {

@@ -1,8 +1,14 @@
 export type DashboardWidgetId =
   | 'kpis'
-  | 'engines'
   | 'trend'
+  | 'gates'
   | 'health'
+  | 'sla'
+  | 'aging'
+  | 'topRepos'
+  | 'topComponents'
+  | 'triage'
+  | 'engines'
   | 'heatmap'
   | 'audit';
 
@@ -25,9 +31,15 @@ export interface DashboardConfig {
 export const DEFAULT_DASHBOARD_CONFIG: DashboardConfig = {
   widgets: {
     kpis: true,
-    engines: true,
     trend: true,
+    gates: true,
     health: true,
+    sla: true,
+    aging: true,
+    topRepos: true,
+    topComponents: true,
+    triage: true,
+    engines: true,
     heatmap: true,
     audit: true,
   },
@@ -41,7 +53,20 @@ export const DEFAULT_DASHBOARD_CONFIG: DashboardConfig = {
 
 const STORAGE_KEY = 'sspillowy_dashboard_config';
 
-const WIDGET_IDS: DashboardWidgetId[] = ['kpis', 'engines', 'trend', 'health', 'heatmap', 'audit'];
+export const WIDGET_IDS: DashboardWidgetId[] = [
+  'kpis',
+  'trend',
+  'gates',
+  'health',
+  'sla',
+  'aging',
+  'topRepos',
+  'topComponents',
+  'triage',
+  'engines',
+  'heatmap',
+  'audit',
+];
 
 function parseNumber(value: string | null, fallback: number): number {
   if (value === null || value === '') return fallback;
@@ -146,10 +171,16 @@ export const ALERT_COLORS: Record<MetricAlert, string> = {
 };
 
 export const WIDGET_LABELS: Record<DashboardWidgetId, string> = {
-  kpis: 'Tarjetas KPI',
-  engines: 'Hallazgos por motor',
-  trend: 'Tendencia 7 días',
+  kpis: 'KPIs con tendencia',
+  trend: 'Detección por severidad',
+  gates: 'Resultados del Security Gate',
   health: 'Health score',
+  sla: 'Cumplimiento de plazos (SLA)',
+  aging: 'Antigüedad de hallazgos',
+  topRepos: 'Repos con más riesgo',
+  topComponents: 'Componentes más vulnerables',
+  triage: 'Embudo de triage HITL',
+  engines: 'Motor × severidad',
   heatmap: 'Mapa de calor',
   audit: 'Bitácora',
 };

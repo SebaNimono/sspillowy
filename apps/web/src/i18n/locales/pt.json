@@ -7,7 +7,7 @@
     "fr": "Français"
   },
   "nav": {
-    "dashboard": "Dashboard Geral",
+    "dashboard": "Dashboards",
     "repositories": "Repositórios",
     "findings": "Matriz de Achados",
     "scans": "Varreduras",
@@ -31,7 +31,7 @@
   },
   "pages": {
     "dashboard": {
-      "title": "Dashboard Geral DevSecOps",
+      "title": "Dashboards",
       "subtitle": "Métricas reais dos seus repos e achados — personalize limiares e blocos"
     },
     "repositories": {

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Settings2, X } from 'lucide-react';
 import {
   DashboardConfig,
-  DashboardWidgetId,
+  WIDGET_IDS,
   WIDGET_LABELS,
   saveDashboardConfig,
   syncDashboardConfigToUrl,
@@ -12,8 +12,6 @@ interface DashboardSettingsProps {
   config: DashboardConfig;
   onChange: (config: DashboardConfig) => void;
 }
-
-const WIDGET_ORDER: DashboardWidgetId[] = ['kpis', 'engines', 'trend', 'health', 'heatmap', 'audit'];
 
 export const DashboardSettings: React.FC<DashboardSettingsProps> = ({ config, onChange }) => {
   const [open, setOpen] = useState(false);
@@ -63,7 +61,7 @@ export const DashboardSettings: React.FC<DashboardSettingsProps> = ({ config, on
         <section className="dash-settings-section">
           <h3>Bloques visibles</h3>
           <div className="dash-settings-checks">
-            {WIDGET_ORDER.map((id) => (
+            {WIDGET_IDS.map((id) => (
               <label key={id}>
                 <input
                   type="checkbox"
