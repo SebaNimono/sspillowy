@@ -22,9 +22,11 @@ if not _raw_url:
         f"@{POSTGRES_SERVER}:{POSTGRES_PORT}/{POSTGRES_DB}"
     )
 
-# SQLAlchemy + psycopg2
+# SQLAlchemy 2.1 usa psycopg (v3) por defecto para "postgresql://"; solo instalamos psycopg2.
 if _raw_url.startswith("postgres://"):
-    _raw_url = _raw_url.replace("postgres://", "postgresql://", 1)
+    _raw_url = _raw_url.replace("postgres://", "postgresql+psycopg2://", 1)
+elif _raw_url.startswith("postgresql://"):
+    _raw_url = _raw_url.replace("postgresql://", "postgresql+psycopg2://", 1)
 
 DATABASE_URL = _raw_url
 USING_SQLITE = False
@@ -47,7 +49,8 @@ try:
         max_overflow=5,
         connect_args=connect_args,
     )
-except Exception:
+except Exception as exc:
+    print(f"[sspillowy] create_engine falló para Postgres, usando SQLite local: {exc!r}", flush=True)
     USING_SQLITE = True
     engine = create_engine(
         "sqlite:///./sspillowy.db",

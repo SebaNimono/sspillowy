@@ -55,6 +55,7 @@ from password_reset import router as password_reset_router  # noqa: E402
 from pillow_agent import router as pillow_router  # noqa: E402
 from gate_bypass import router as gate_bypass_router  # noqa: E402
 from database import init_db, db_ping, SessionLocal  # noqa: E402
+import database as _database  # noqa: E402
 from email_service import mailer_status  # noqa: E402
 from dashboard_metrics import (  # noqa: E402
     compute_dashboard_stats,
@@ -390,12 +391,13 @@ def _empty_heatmap(weeks: int = 12) -> HeatmapResponse:
 @app.get("/health", tags=["Health"])
 async def health_check():
     db_ok = db_ping()
+    backend = "sqlite" if _database.USING_SQLITE else "postgresql"
     return {
-        "status": "healthy" if db_ok else "degraded",
+        "status": "healthy" if db_ok and backend == "postgresql" else "degraded",
         "service": "SSPILLOWY Core API",
         "version": "0.3.0",
-        "database": "postgresql (ok)" if db_ok else "unavailable",
-        "data_source": "postgresql" if db_ok else "none",
+        "database": f"{backend} (ok)" if db_ok else "unavailable",
+        "data_source": backend if db_ok else "none",
         "semgrep": "available" if semgrep_available() else "missing",
         "gitleaks": "available" if gitleaks_available() else "missing",
         "trivy": "available" if trivy_available() else "missing",
