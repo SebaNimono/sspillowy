@@ -331,30 +331,16 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
       setUrl('');
       setDastUrl('');
     } catch (err) {
-      const manualNewRepo: Repository = {
-        id: `repo-${Date.now()}`,
-        name,
-        url,
-        branch,
-        dast_url: dastUrl || null,
-        is_active: true,
-        health_score: 100,
-        open_criticals: 0,
-        open_highs: 0,
-        total_findings: 0,
-        created_at: new Date().toISOString(),
-      };
-      setRepos([manualNewRepo, ...repos]);
+      const detail = err instanceof Error ? err.message : 'No se pudo conectar con la API.';
+      const sessionIssue = /401|403|sesi[oó]n|session/i.test(detail);
       setToast({
         id: Date.now().toString(),
-        type: 'success',
-        title: 'Repositorio Registrado (Modo Demo)',
-        message: `El repositorio ${name} ha sido añadido a la lista local.`,
+        type: 'error',
+        title: 'No se registró el repositorio',
+        message: sessionIssue
+          ? 'Tu sesión expiró o no es válida. Cierra sesión y vuelve a entrar.'
+          : detail,
       });
-      setShowModal(false);
-      setName('');
-      setUrl('');
-      setDastUrl('');
     } finally {
       setSubmitting(false);
     }
