@@ -40,7 +40,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   setSidebarState,
 }) => {
   const { t } = useI18n();
-  const [activeHoverItem, setActiveHoverItem] = useState<string | null>(null);
+  const [hover, setHover] = useState<{ id: string; top: number } | null>(null);
 
   if (sidebarState === 'hidden') return null;
 
@@ -94,9 +94,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
         width: isCollapsed ? '56px' : '268px',
         transition: 'width 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
         padding: isCollapsed ? '0.75rem 0' : '1.25rem 0.85rem',
-        overflowY: isCollapsed ? 'visible' : 'auto',
-        overflowX: isCollapsed ? 'visible' : 'hidden',
+        overflowY: 'auto',
+        overflowX: 'hidden',
+        scrollbarWidth: 'none',
       }}
+      onScroll={() => hover && setHover(null)}
     >
       {!isCollapsed ? (
         <>
@@ -213,8 +215,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
         key={group.id}
         className="nav-list"
         style={{
-          marginTop: gi === 0 ? (isCollapsed ? '0.25rem' : '1.25rem') : '0.5rem',
-          paddingTop: gi === 0 ? 0 : '0.5rem',
+          marginTop: gi === 0 ? (isCollapsed ? '0.25rem' : '1.25rem') : isCollapsed ? '0.3rem' : '0.5rem',
+          paddingTop: gi === 0 ? 0 : isCollapsed ? '0.3rem' : '0.5rem',
+          gap: isCollapsed ? '0.1rem' : undefined,
           borderTop: gi === 0 ? 'none' : '1px solid #2d334a',
         }}
       >
@@ -236,22 +239,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {group.items.map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;
-          const isHovered = activeHoverItem === item.id;
+          const isHovered = hover?.id === item.id;
 
           return (
             <li
               key={item.id}
               className="nav-item"
               style={{ position: 'relative' }}
-              onMouseEnter={() => isCollapsed && setActiveHoverItem(item.id)}
-              onMouseLeave={() => isCollapsed && setActiveHoverItem(null)}
+              onMouseEnter={(e) => {
+                if (!isCollapsed) return;
+                const r = e.currentTarget.getBoundingClientRect();
+                setHover({ id: item.id, top: r.top + r.height / 2 });
+              }}
+              onMouseLeave={() => isCollapsed && setHover(null)}
             >
               <button
                 className={isActive ? 'active' : ''}
                 onClick={() => setActiveTab(item.id)}
                 style={{
                   justifyContent: isCollapsed ? 'center' : 'flex-start',
-                  padding: isCollapsed ? '0.55rem 0' : '0.5rem 0.7rem',
+                  padding: isCollapsed ? '0.45rem 0' : '0.5rem 0.7rem',
                   gap: '0.6rem',
                   position: 'relative',
                   opacity: item.soon && !isActive ? 0.72 : 1,
@@ -305,12 +312,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 )}
               </button>
 
-              {isCollapsed && isHovered && (
+              {isCollapsed && isHovered && hover && (
                 <div
                   style={{
-                    position: 'absolute',
-                    left: '60px',
-                    top: '50%',
+                    position: 'fixed',
+                    left: '62px',
+                    top: hover.top,
                     transform: 'translateY(-50%)',
                     zIndex: 1000,
                     background: '#1b1e2e',
