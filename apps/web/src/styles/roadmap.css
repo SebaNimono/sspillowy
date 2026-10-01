@@ -1,0 +1,151 @@
+/* Módulos próximos */
+
+.rm-hero {
+  display: flex;
+  gap: 1.25rem;
+  align-items: flex-start;
+  padding: 1.5rem 1.75rem;
+  background: linear-gradient(135deg, #f6f8ff 0%, #ffffff 60%);
+}
+
+.rm-hero-icon {
+  flex: 0 0 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #8250df, #0969da);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rm-hero h2 {
+  font-size: 1.45rem;
+  font-weight: 700;
+  color: var(--fg-default);
+  margin: 0.35rem 0 0.4rem;
+}
+
+.rm-hero p {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: var(--fg-muted);
+  max-width: 760px;
+}
+
+.rm-stage {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+}
+
+.rm-stage.is-mvp {
+  background: #ddf4ff;
+  color: #0969da;
+}
+
+.rm-stage.is-next {
+  background: #fbefff;
+  color: #8250df;
+}
+
+.rm-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.25rem;
+}
+
+.rm-card {
+  margin-bottom: 0;
+}
+
+.rm-card h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--fg-default);
+  margin-bottom: 0.85rem;
+}
+
+.rm-features {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.rm-features li {
+  display: flex;
+  gap: 0.55rem;
+  align-items: flex-start;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--fg-default);
+}
+
+.rm-features svg {
+  flex: 0 0 auto;
+  color: #1a7f37;
+  margin-top: 0.15rem;
+}
+
+.rm-how {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.rm-how li {
+  display: flex;
+  gap: 0.65rem;
+  align-items: flex-start;
+}
+
+.rm-how span {
+  flex: 0 0 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #f6f8fa;
+  border: 1px solid var(--border-default);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--fg-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rm-how p {
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--fg-default);
+  padding-top: 0.15rem;
+}
+
+.rm-meanwhile {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.rm-meanwhile p {
+  font-size: 0.9rem;
+  color: var(--fg-muted);
+}
+
+.rm-meanwhile strong {
+  color: var(--fg-default);
+}
+
+@media (max-width: 900px) {
+  .rm-grid {
+    grid-template-columns: 1fr;
+  }
+}

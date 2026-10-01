@@ -64,12 +64,12 @@ export const DOC_SECTIONS: DocSection[] = [
         type: 'table',
         head: ['Sección', 'Para qué sirve'],
         rows: [
-          ['Dashboards', 'Ver de un vistazo cómo está la seguridad de tus proyectos.'],
+          ['Risk Posture', 'Ver de un vistazo cómo está la seguridad de tus proyectos.'],
           ['Repositorios', 'Agregar proyectos y lanzar análisis.'],
-          ['Matriz de hallazgos', 'Revisar y gestionar cada vulnerabilidad encontrada.'],
+          ['Priorización contextual', 'Revisar y gestionar cada vulnerabilidad encontrada.'],
           ['Escaneos', 'Consultar el historial de análisis y su resultado.'],
           ['Security Gates', 'Definir cuándo se bloquea un despliegue y pedir excepciones.'],
-          ['Informes ISO 27001', 'Ver el cumplimiento por control y descargar la evidencia.'],
+          ['Compliance continuo', 'Ver el cumplimiento por control y descargar la evidencia.'],
           ['Notificaciones', 'Enterarte de lo crítico apenas aparece.'],
         ],
       },
@@ -98,7 +98,7 @@ export const DOC_SECTIONS: DocSection[] = [
           },
           {
             title: 'Revisa los resultados',
-            text: 'Abre la Matriz de hallazgos. Empieza por los críticos y por los que tienen el plazo vencido.',
+            text: 'Abre la Priorización contextual. Empieza por los críticos y por los que tienen el plazo vencido.',
           },
           {
             title: 'Toma decisiones',
@@ -123,7 +123,7 @@ export const DOC_SECTIONS: DocSection[] = [
       { type: 'h', text: '“Quiero saber qué tan seguro es mi proyecto”' },
       {
         type: 'p',
-        text: 'Agrega el repositorio y lanza un análisis con el perfil "Código completo". Luego revisa en Dashboards el health score y los críticos activos, y en la Matriz qué paquetes o reglas concentran más problemas.',
+        text: 'Agrega el repositorio y lanza un análisis con el perfil "Código completo". Luego revisa en Risk Posture el health score y los críticos activos, y en Priorización contextual qué paquetes o reglas concentran más problemas.',
       },
       { type: 'h', text: '“Subí una contraseña o una API key por error”' },
       {
@@ -148,7 +148,7 @@ export const DOC_SECTIONS: DocSection[] = [
       { type: 'h', text: '“Tengo una auditoría ISO 27001”' },
       {
         type: 'p',
-        text: 'En Informes ISO 27001 verás el estado de cada control y podrás descargar el paquete de evidencia. La bitácora demuestra quién tomó cada decisión y cuándo.',
+        text: 'En Compliance continuo verás el estado de cada control y podrás descargar el paquete de evidencia. La bitácora demuestra quién tomó cada decisión y cuándo.',
       },
       { type: 'h', text: '“Quiero revisar mi aplicación ya publicada”' },
       {
@@ -227,7 +227,7 @@ export const DOC_SECTIONS: DocSection[] = [
   {
     id: 'matriz',
     group: 'Cómo funciona',
-    title: 'Matriz de hallazgos',
+    title: 'Priorización contextual',
     summary: 'Cómo leer, filtrar y gestionar las vulnerabilidades.',
     blocks: [
       { type: 'h', text: 'Resumen superior' },
@@ -276,13 +276,13 @@ export const DOC_SECTIONS: DocSection[] = [
         tone: 'tip',
         text: 'Dentro de un grupo puedes cambiar el estado de todos sus hallazgos a la vez.',
       },
-      { type: 'goto', tab: 'findings', label: 'Abrir la Matriz' },
+      { type: 'goto', tab: 'findings', label: 'Abrir Priorización contextual' },
     ],
   },
   {
     id: 'dashboards',
     group: 'Cómo funciona',
-    title: 'Dashboards',
+    title: 'Risk Posture (dashboards)',
     summary: 'Qué muestra cada indicador y cada gráfico.',
     blocks: [
       { type: 'h', text: 'Controles' },
@@ -317,7 +317,7 @@ export const DOC_SECTIONS: DocSection[] = [
           ['Bitácora', '¿Qué acciones se hicieron recientemente?'],
         ],
       },
-      { type: 'goto', tab: 'dashboard', label: 'Abrir Dashboards' },
+      { type: 'goto', tab: 'dashboard', label: 'Abrir Risk Posture' },
     ],
   },
 
@@ -386,7 +386,7 @@ export const DOC_SECTIONS: DocSection[] = [
   {
     id: 'informes',
     group: 'Gobernanza',
-    title: 'Informes ISO 27001',
+    title: 'Compliance continuo',
     summary: 'Cómo tus hallazgos se relacionan con los controles de ISO/IEC 27001:2022.',
     blocks: [
       {

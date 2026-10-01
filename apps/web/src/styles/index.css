@@ -93,7 +93,7 @@ body {
 
 /* Datadog Dark Sidebar with Light Canvas */
 .sidebar {
-  width: 250px;
+  width: 268px;
   background: var(--bg-sidebar);
   border-right: 1px solid #2d334a;
   display: flex;
@@ -181,7 +181,7 @@ body {
 }
 
 .main-content {
-  margin-left: 250px;
+  margin-left: 268px;
   flex: 1;
   padding: 1.75rem 2.25rem;
   min-width: 0;

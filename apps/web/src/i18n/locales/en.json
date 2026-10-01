@@ -7,21 +7,34 @@
     "fr": "Français"
   },
   "nav": {
-    "dashboard": "Dashboards",
+    "dashboard": "Risk Posture",
     "repositories": "Repositories",
-    "findings": "Findings Matrix",
+    "findings": "Contextual Prioritization",
     "scans": "Scans",
-    "gates": "Security Gates (CI/CD)",
+    "gates": "Security Gates",
     "notifications": "Notifications",
-    "reports": "ISO 27001 Reports",
+    "reports": "Continuous Compliance",
     "docs": "Documentation",
-    "groupSecurity": "Security",
-    "groupGovernance": "Governance",
+    "groupGovernance": "Governance & compliance",
     "groupResources": "Resources",
     "brandSub": "Web Hub • DevSecOps",
     "hideMenu": "Hide menu",
     "collapseMenu": "Collapse menu",
-    "expandMenu": "Expand menu"
+    "expandMenu": "Expand menu",
+    "velocity": "Security Velocity",
+    "executive": "Executive Summary",
+    "sbom": "Supply Chain",
+    "fixIntel": "Fix Intelligence",
+    "secrets": "Secret Management",
+    "runbooks": "Runbooks & RPA",
+    "observability": "Observability",
+    "traceability": "Traceability",
+    "integrations": "Integrations",
+    "groupOverview": "Unified dashboard",
+    "groupRisk": "Risk intelligence",
+    "groupOrchestration": "Orchestration",
+    "groupObservability": "Observability",
+    "soon": "Soon"
   },
   "header": {
     "healthScore": "Health Score",
@@ -35,7 +48,7 @@
   },
   "pages": {
     "dashboard": {
-      "title": "Dashboards",
+      "title": "Global Risk Posture",
       "subtitle": "Live metrics from your repos and findings — customize thresholds and widgets"
     },
     "repositories": {
@@ -43,7 +56,7 @@
       "subtitle": "Monitored Git repositories, health status and on-demand scanning"
     },
     "findings": {
-      "title": "Unified Findings Matrix",
+      "title": "Contextual Prioritization",
       "subtitle": "Deterministic scanner consolidation with AI-assisted triage (Human-in-the-loop)"
     },
     "scans": {
@@ -59,7 +72,7 @@
       "subtitle": "Secret alerts, Security Gate blocks and Pulse App events"
     },
     "reports": {
-      "title": "Reports & compliance",
+      "title": "Continuous Compliance",
       "subtitle": "ISO/IEC 27001:2022 evidence packs, OWASP/CWE mapping and executive reports"
     }
   },

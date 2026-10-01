@@ -12,6 +12,8 @@ import { ScansPage } from './pages/ScansPage';
 import { NotificationsPage } from './pages/NotificationsPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { DocsPage } from './pages/DocsPage';
+import { ComingSoonPage } from './pages/ComingSoonPage';
+import { ROADMAP } from './config/roadmap';
 import { fetchNotifications, fetchAuthSession, setStoredSessionId } from './api/client';
 import { CookieBanner } from './components/CookieBanner';
 import { AppToaster } from './components/Toast';
@@ -74,6 +76,7 @@ const VALID_TABS = new Set([
   'notifications',
   'reports',
   'docs',
+  ...Object.keys(ROADMAP),
 ]);
 
 function initialConsoleTab(): string {
@@ -272,7 +275,7 @@ const AppShell: React.FC = () => {
   const getMarginLeft = () => {
     switch (sidebarState) {
       case 'expanded':
-        return '250px';
+        return '268px';
       case 'collapsed':
         return '56px';
       case 'hidden':
@@ -369,6 +372,7 @@ const AppShell: React.FC = () => {
       case 'docs':
         return <DocsPage {...pageProps} />;
       default:
+        if (ROADMAP[activeTab]) return <ComingSoonPage key={activeTab} module={ROADMAP[activeTab]} {...pageProps} />;
         return <DashboardPage {...pageProps} />;
     }
   };

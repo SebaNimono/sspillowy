@@ -1,5 +1,27 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, FolderGit2, ShieldAlert, Sliders, Minus, Plus, X, Radar, Bell, FileArchive, BookOpen } from 'lucide-react';
+import {
+  Activity,
+  Bell,
+  BookOpen,
+  Boxes,
+  ClipboardCheck,
+  FileText,
+  FolderGit2,
+  Gauge,
+  History,
+  KeyRound,
+  LayoutDashboard,
+  LucideIcon,
+  Minus,
+  Plus,
+  Puzzle,
+  Radar,
+  Sliders,
+  Sparkles,
+  Target,
+  Workflow,
+  X,
+} from 'lucide-react';
 import { useI18n } from '../i18n/I18nProvider';
 
 export type SidebarState = 'expanded' | 'collapsed' | 'hidden';
@@ -24,34 +46,44 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const isCollapsed = sidebarState === 'collapsed';
 
+  const navItem = (id: string, icon: LucideIcon, soon = false) => ({ id, label: t(`nav.${id}`), icon, soon });
+
   const navGroups = [
     {
       id: 'overview',
-      label: null,
-      items: [{ id: 'dashboard', label: t('nav.dashboard'), icon: LayoutDashboard }],
+      label: t('nav.groupOverview'),
+      items: [navItem('dashboard', LayoutDashboard), navItem('velocity', Gauge, true), navItem('executive', FileText, true)],
     },
     {
-      id: 'security',
-      label: t('nav.groupSecurity'),
+      id: 'risk',
+      label: t('nav.groupRisk'),
+      items: [navItem('findings', Target), navItem('sbom', Boxes, true), navItem('fixIntel', Sparkles, true)],
+    },
+    {
+      id: 'orchestration',
+      label: t('nav.groupOrchestration'),
       items: [
-        { id: 'repositories', label: t('nav.repositories'), icon: FolderGit2 },
-        { id: 'findings', label: t('nav.findings'), icon: ShieldAlert },
-        { id: 'scans', label: t('nav.scans'), icon: Radar },
+        navItem('repositories', FolderGit2),
+        navItem('scans', Radar),
+        navItem('gates', Sliders),
+        navItem('secrets', KeyRound, true),
+        navItem('runbooks', Workflow, true),
       ],
+    },
+    {
+      id: 'observability',
+      label: t('nav.groupObservability'),
+      items: [navItem('observability', Activity, true)],
     },
     {
       id: 'governance',
       label: t('nav.groupGovernance'),
-      items: [
-        { id: 'gates', label: t('nav.gates'), icon: Sliders },
-        { id: 'reports', label: t('nav.reports'), icon: FileArchive },
-        { id: 'notifications', label: t('nav.notifications'), icon: Bell },
-      ],
+      items: [navItem('reports', ClipboardCheck), navItem('traceability', History, true), navItem('notifications', Bell)],
     },
     {
       id: 'resources',
       label: t('nav.groupResources'),
-      items: [{ id: 'docs', label: t('nav.docs'), icon: BookOpen }],
+      items: [navItem('docs', BookOpen), navItem('integrations', Puzzle, true)],
     },
   ];
 
@@ -59,9 +91,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <aside
       className={`sidebar ${isCollapsed ? 'collapsed' : ''}`}
       style={{
-        width: isCollapsed ? '56px' : '250px',
+        width: isCollapsed ? '56px' : '268px',
         transition: 'width 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
         padding: isCollapsed ? '0.75rem 0' : '1.25rem 0.85rem',
+        overflowY: isCollapsed ? 'visible' : 'auto',
+        overflowX: isCollapsed ? 'visible' : 'hidden',
       }}
     >
       {!isCollapsed ? (
@@ -217,11 +251,58 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 onClick={() => setActiveTab(item.id)}
                 style={{
                   justifyContent: isCollapsed ? 'center' : 'flex-start',
-                  padding: isCollapsed ? '0.75rem 0' : '0.65rem 0.85rem',
+                  padding: isCollapsed ? '0.55rem 0' : '0.5rem 0.7rem',
+                  gap: '0.6rem',
+                  position: 'relative',
+                  opacity: item.soon && !isActive ? 0.72 : 1,
                 }}
               >
                 <Icon size={18} />
-                {!isCollapsed && <span>{item.label}</span>}
+                {!isCollapsed && (
+                  <span
+                    title={item.label}
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      textAlign: 'left',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                  >
+                    {item.label}
+                  </span>
+                )}
+                {item.soon && !isCollapsed && (
+                  <span
+                    style={{
+                      flex: '0 0 auto',
+                      fontSize: '0.56rem',
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.03em',
+                      padding: '0.08rem 0.35rem',
+                      borderRadius: '999px',
+                      background: 'rgba(130, 80, 223, 0.22)',
+                      color: '#c297ff',
+                    }}
+                  >
+                    {t('nav.soon')}
+                  </span>
+                )}
+                {item.soon && isCollapsed && (
+                  <span
+                    style={{
+                      position: 'absolute',
+                      top: '6px',
+                      right: '12px',
+                      width: '6px',
+                      height: '6px',
+                      borderRadius: '50%',
+                      background: '#a371f7',
+                    }}
+                  />
+                )}
               </button>
 
               {isCollapsed && isHovered && (
@@ -245,6 +326,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   }}
                 >
                   {item.label}
+                  {item.soon && ` · ${t('nav.soon')}`}
                 </div>
               )}
             </li>
