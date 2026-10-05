@@ -115,6 +115,127 @@ export const DOC_SECTIONS: DocSection[] = [
     ],
   },
   {
+    id: 'recorrido',
+    group: 'Empezar',
+    title: 'Recorrido por la plataforma',
+    summary: 'Un paseo guiado por cada sección, en el orden en que se usan en el día a día.',
+    blocks: [
+      {
+        type: 'p',
+        text: 'El menú está ordenado por áreas, pero el trabajo sigue otro orden: conectar un repositorio, analizarlo, revisar lo encontrado, controlar el despliegue y, por último, medir y auditar. Este recorrido sigue ese orden. Te llevará unos 30 minutos.',
+      },
+      {
+        type: 'callout',
+        tone: 'tip',
+        text: 'Para seguirlo con datos reales, agrega un repositorio y lanza un análisis "Código completo" antes de empezar.',
+      },
+
+      { type: 'h', text: '1. Repositorios · el punto de partida' },
+      {
+        type: 'list',
+        items: [
+          'Pulsa "Nuevo Repositorio" e indica nombre, URL de Git y rama. Si la aplicación está publicada, añade su URL para analizarla en vivo.',
+          'Pulsa "Escanear" y elige un perfil: "CI rápido" para pull requests, "Código completo" para una revisión general, "Full stack" para una auditoría.',
+          'Con "Configurar webhook" cada push o pull request se analiza solo. El punto de color indica si está activo.',
+        ],
+      },
+      { type: 'goto', tab: 'repositories', label: 'Ir a Repositorios' },
+
+      { type: 'h', text: '2. Escaneos · el historial' },
+      {
+        type: 'list',
+        items: [
+          'Cada análisis muestra sus etapas: en cola, descarga del código, análisis, unificación y Security Gate.',
+          'Al terminar verás los hallazgos por severidad y la decisión del gate: Aprobado, Bloqueado o Bypass.',
+          'Si un análisis queda detenido más de 20 minutos se marca como fallido; vuelve a lanzarlo.',
+        ],
+      },
+      { type: 'goto', tab: 'scans', label: 'Ir a Escaneos' },
+
+      { type: 'h', text: '3. Priorización contextual · el trabajo diario' },
+      {
+        type: 'steps',
+        items: [
+          { title: 'Mira el resumen', text: 'Las tarjetas muestran los pendientes por severidad, los de plazo vencido y los que tienen parche. Haz clic en una para filtrar.' },
+          { title: 'Empieza por lo urgente', text: 'Primero los críticos y los de plazo vencido. Usa el buscador para encontrar un CVE, una librería o un archivo.' },
+          { title: 'Usa la vista agrupada', text: 'Los hallazgos de una misma librería se juntan: suelen resolverse todos actualizando a la versión indicada.' },
+          { title: 'Abre el detalle', text: 'Verás archivo, línea, severidad, plazo, tipo de debilidad (CWE), control ISO y cómo corregirlo.' },
+          { title: 'Decide', text: 'Marca En revisión, Corregido, Falso positivo o Riesgo aceptado, de uno en uno o el grupo completo.' },
+        ],
+      },
+      {
+        type: 'callout',
+        tone: 'warn',
+        text: 'Ante un secreto filtrado, borrarlo del código no basta: queda en el historial de Git. Rota la credencial primero y luego márcalo como Corregido.',
+      },
+      { type: 'goto', tab: 'findings', label: 'Ir a Priorización contextual' },
+
+      { type: 'h', text: '4. Security Gates · el control del despliegue' },
+      {
+        type: 'list',
+        items: [
+          'Define cuántos críticos y altos toleras, si cualquier secreto bloquea y si saltar un bloqueo requiere aprobación.',
+          'Cuando bloquea, siempre indica el motivo, por ejemplo "Críticas abiertas 3 > máximo 0".',
+          'Para una urgencia, solicita un bypass con motivo y duración (1 hora a 7 días). Vence solo y queda registrado.',
+          'Tus decisiones en Priorización contextual afectan al gate: un falso positivo bien marcado deja de bloquear.',
+        ],
+      },
+      { type: 'goto', tab: 'gates', label: 'Ir a Security Gates' },
+
+      { type: 'h', text: '5. Risk Posture · la vista general' },
+      {
+        type: 'list',
+        items: [
+          'Elige el periodo (7, 30 o 90 días) y activa "En vivo" para actualizar cada minuto.',
+          'Los indicadores comparan con el periodo anterior: activos, críticos, fuera de plazo, gate aprobado y escaneos.',
+          'Los widgets responden: ¿vamos mejorando?, ¿corregimos a tiempo?, ¿dónde está el riesgo?, ¿cuánto revisó el equipo?',
+          'Con "Configurar" eliges qué widgets ver y tus umbrales de alerta. El asistente Pillow responde preguntas sobre tus hallazgos.',
+        ],
+      },
+      { type: 'goto', tab: 'dashboard', label: 'Ir a Risk Posture' },
+
+      { type: 'h', text: '6. Compliance continuo · la evidencia' },
+      {
+        type: 'list',
+        items: [
+          'Cada control ISO 27001 muestra su estado (Cumple, Parcial o Brecha) y cuántos hallazgos lo afectan.',
+          'Descarga el paquete de evidencia para entregarlo al auditor.',
+          'Cada decisión que tomas en la plataforma forma parte de esa evidencia.',
+        ],
+      },
+      { type: 'goto', tab: 'reports', label: 'Ir a Compliance continuo' },
+
+      { type: 'h', text: '7. Notificaciones · los avisos' },
+      {
+        type: 'list',
+        items: [
+          'La campana muestra los críticos, las fugas de secretos y los altos recientes.',
+          'Puedes marcarlas como leídas una a una o todas juntas.',
+          'Si un análisis queda bloqueado por el gate, los responsables de seguridad reciben un correo.',
+        ],
+      },
+      { type: 'goto', tab: 'notifications', label: 'Ir a Notificaciones' },
+
+      { type: 'h', text: '8. Módulos en camino' },
+      {
+        type: 'p',
+        text: 'Las secciones con la etiqueta "Pronto" están en desarrollo: Security Velocity, Resumen ejecutivo, Supply Chain, Fix Intelligence, Secret Management, Runbooks & RPA, Observabilidad, Trazabilidad e Integraciones. Al abrirlas verás qué harán y qué puedes usar mientras tanto.',
+      },
+
+      { type: 'h', text: 'Pon a prueba lo aprendido' },
+      {
+        type: 'steps',
+        items: [
+          { title: 'Encuentra un secreto', text: 'En Priorización contextual, filtra por la herramienta GitLeaks y decide qué harías con él.' },
+          { title: 'Encuentra una actualización', text: 'En la vista agrupada, ubica una librería vulnerable y la versión a la que hay que actualizar.' },
+          { title: 'Toma una decisión', text: 'Marca un hallazgo como En revisión.' },
+          { title: 'Explica el gate', text: 'En Security Gates, identifica por qué tu proyecto está aprobado o bloqueado.' },
+          { title: 'Busca un término', text: 'En el Glosario, encuentra qué significa "SCA".' },
+        ],
+      },
+    ],
+  },
+  {
     id: 'casos-uso',
     group: 'Empezar',
     title: 'Casos de uso',
