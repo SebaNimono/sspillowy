@@ -52,7 +52,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       id: 'overview',
       label: t('nav.groupOverview'),
-      items: [navItem('dashboard', LayoutDashboard), navItem('velocity', Gauge), navItem('executive', FileText, true)],
+      items: [navItem('dashboard', LayoutDashboard), navItem('velocity', Gauge), navItem('executive', FileText)],
     },
     {
       id: 'risk',

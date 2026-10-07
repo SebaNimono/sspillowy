@@ -10,6 +10,7 @@ export interface PillowChatLine {
 export const PILLOW_PAGE_LABEL: Record<string, string> = {
   dashboard: 'Risk Posture',
   velocity: 'Security Velocity',
+  executive: 'Resumen ejecutivo',
   runbooks: 'Automatizaciones',
   repositories: 'Repositorios',
   findings: 'Priorización contextual',
@@ -33,6 +34,11 @@ export const PILLOW_PAGE_SUGGESTIONS: Record<string, string[]> = {
     '¿Estamos corrigiendo más rápido que antes?',
     '¿Qué repositorio se está quedando atrás?',
     '¿Cómo bajo el tiempo medio de corrección?',
+  ],
+  executive: [
+    'Explícame este resumen como para gerencia',
+    '¿Qué decisión debería tomar primero?',
+    '¿Qué le digo a un cliente sobre nuestra seguridad?',
   ],
   runbooks: [
     '¿Qué runbooks me recomiendas para empezar?',

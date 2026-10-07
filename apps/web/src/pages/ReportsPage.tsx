@@ -171,7 +171,12 @@ export const ReportsPage: React.FC<PageProps> = ({
               {report.controls.map((control) => (
                 <tr key={control.code}>
                   <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#0969da' }}>{control.code}</td>
-                  <td>{control.title}</td>
+                  <td>
+                    {control.title}
+                    {control.reason && (
+                      <div style={{ fontSize: '0.75rem', color: '#656d76', marginTop: '0.15rem' }}>{control.reason}</div>
+                    )}
+                  </td>
                   <td>{statusBadge(control.status)}</td>
                   <td>
                     {control.related_engine ? (

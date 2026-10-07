@@ -17,26 +17,6 @@ export const STAGE_LABEL: Record<RoadmapStage, string> = {
 };
 
 export const ROADMAP: Record<string, RoadmapModule> = {
-  executive: {
-    id: 'executive',
-    title: 'Resumen ejecutivo',
-    tagline: 'La postura de seguridad en una página, para dirección.',
-    description:
-      'Un informe breve y sin tecnicismos que resume el estado de seguridad de la organización, su evolución y los riesgos principales, listo para compartir.',
-    features: [
-      'Puntaje de salud global y su variación en el periodo.',
-      'Los 5 riesgos principales explicados en lenguaje de negocio.',
-      'Cumplimiento de plazos y de la política del gate.',
-      'Exportación a PDF y envío periódico por correo.',
-    ],
-    howItWorks: [
-      'Toma los datos de Risk Posture y de Compliance continuo.',
-      'Selecciona automáticamente lo más relevante del periodo.',
-      'Genera el documento en un formato fijo y comparable mes a mes.',
-    ],
-    stage: 'mvp',
-    meanwhile: { tab: 'dashboard', label: 'Ver Risk Posture' },
-  },
   observability: {
     id: 'observability',
     title: 'Observabilidad',

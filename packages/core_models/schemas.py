@@ -208,6 +208,7 @@ class IsoControl(BaseModel):
     status: str
     related_engine: Optional[str] = None
     open_findings: int = 0
+    reason: Optional[str] = None
 
 
 class ComplianceReport(BaseModel):

@@ -152,6 +152,7 @@ export interface IsoControl {
   status: string;
   related_engine?: string | null;
   open_findings: number;
+  reason?: string | null;
 }
 
 export interface ComplianceReport {
@@ -731,6 +732,80 @@ export async function fetchVelocity(rangeDays: number, repositoryIds?: string[])
   const params = new URLSearchParams({ range_days: String(rangeDays) });
   if (repositoryIds?.length) params.set('repository_ids', repositoryIds.join(','));
   return request(`/velocity?${params.toString()}`);
+}
+
+export type ExecTone = 'good' | 'warn' | 'bad' | 'neutral' | 'info';
+
+export interface ExecGrade {
+  letter: string;
+  label: string;
+  tone: ExecTone;
+}
+
+export interface ExecCompare {
+  now: number | null;
+  before: number | null;
+}
+
+export interface ExecutiveData {
+  range_days: number;
+  generated_at: string;
+  period_start: string;
+  period_end: string;
+  scope: { repositories: number; filtered: boolean };
+  status: ExecTone;
+  posture: { score: number | null; score_start: number | null; grade: ExecGrade };
+  highlights: { tone: ExecTone; text: string }[];
+  kpis: {
+    exposure: ExecCompare & { critical: number; high: number };
+    overdue: ExecCompare;
+    mttr_days: ExecCompare;
+    sla_met_pct: ExecCompare;
+    gate_pass_rate: ExecCompare;
+  };
+  series: { date: string; label: string; score: number | null }[];
+  top_risks: {
+    category: string;
+    title: string;
+    repository: string;
+    severity: Finding['severity'];
+    count: number;
+    critical: number;
+    high: number;
+    overdue: number;
+    oldest_days: number;
+    impact: string;
+    action: string;
+    tab: string;
+  }[];
+  decisions: { kind: string; tone: ExecTone; title: string; detail: string; tab: string }[];
+  wins: { value: number; label: string; detail: string | null }[];
+  repositories: {
+    id: string;
+    name: string;
+    score: number;
+    score_start: number | null;
+    grade: ExecGrade;
+    critical: number;
+    high: number;
+    overdue: number;
+    last_scan_at: string | null;
+  }[];
+  compliance: {
+    standard: string;
+    period: string;
+    compliant: number;
+    partial: number;
+    gap: number;
+    total: number;
+    gaps: { code: string; title: string; reason: string }[];
+  };
+}
+
+export async function fetchExecutive(rangeDays: number, repositoryIds?: string[]): Promise<ExecutiveData> {
+  const params = new URLSearchParams({ range_days: String(rangeDays) });
+  if (repositoryIds?.length) params.set('repository_ids', repositoryIds.join(','));
+  return request(`/executive?${params.toString()}`);
 }
 
 export async function fetchFixIntel(repositoryId?: string): Promise<FixIntelQueue> {

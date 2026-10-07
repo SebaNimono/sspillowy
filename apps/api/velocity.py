@@ -200,7 +200,14 @@ def _gate_stats(scans: list[Scan]) -> dict:
     }
 
 
-def compute_velocity(db, *, range_days: int = 30, repo_ids: list[str] | None = None, now: datetime | None = None) -> dict:
+def compute_velocity(
+    db,
+    *,
+    range_days: int = 30,
+    repo_ids: list[str] | None = None,
+    now: datetime | None = None,
+    prebuilt: tuple[list[Run], int] | None = None,
+) -> dict:
     now = now or datetime.now(timezone.utc)
     start = now - timedelta(days=range_days)
     prev_start = start - timedelta(days=range_days)
@@ -210,7 +217,10 @@ def compute_velocity(db, *, range_days: int = 30, repo_ids: list[str] | None = N
         repo_q = repo_q.filter(Repository.id.in_(repo_ids))
     repos = repo_q.all()
     ids = [r.id for r in repos]
-    runs, decided = build_runs(db, ids) if ids else ([], 0)
+    if prebuilt is not None:
+        runs, decided = prebuilt
+    else:
+        runs, decided = build_runs(db, ids) if ids else ([], 0)
 
     scan_q = db.query(Scan).filter(Scan.repository_id.in_(ids), Scan.created_at >= prev_start) if ids else None
     all_scans = scan_q.all() if scan_q is not None else []

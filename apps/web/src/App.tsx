@@ -18,6 +18,7 @@ import { FixIntelPage } from './pages/FixIntelPage';
 import { RiskPosturePage } from './pages/RiskPosturePage';
 import { VelocityPage } from './pages/VelocityPage';
 import { RunbooksPage } from './pages/RunbooksPage';
+import { ExecutivePage } from './pages/ExecutivePage';
 import { PillowAgent } from './components/PillowAgent';
 import { ComingSoonPage } from './pages/ComingSoonPage';
 import { ROADMAP } from './config/roadmap';
@@ -88,6 +89,7 @@ const VALID_TABS = new Set([
   'sbom',
   'fixIntel',
   'velocity',
+  'executive',
   'runbooks',
   'scans',
   'gates',
@@ -449,6 +451,8 @@ const AppShell: React.FC = () => {
         return <VelocityPage {...pageProps} />;
       case 'runbooks':
         return <RunbooksPage {...pageProps} />;
+      case 'executive':
+        return <ExecutivePage {...pageProps} />;
       default:
         if (ROADMAP[activeTab]) return <ComingSoonPage key={activeTab} module={ROADMAP[activeTab]} {...pageProps} />;
         return <DashboardPage {...pageProps} />;

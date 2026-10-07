@@ -60,6 +60,8 @@ from fix_intel import router as fix_intel_router  # noqa: E402
 from dashboard_views import router as dashboard_views_router  # noqa: E402
 from velocity import first_seen_map, fingerprint, router as velocity_router  # noqa: E402
 from runbooks import router as runbooks_router  # noqa: E402
+from compliance import current_period, iso_controls  # noqa: E402
+from executive import router as executive_router  # noqa: E402
 from database import init_db, db_ping, SessionLocal  # noqa: E402
 import database as _database  # noqa: E402
 from email_service import mailer_status  # noqa: E402
@@ -140,6 +142,7 @@ app.include_router(fix_intel_router)
 app.include_router(dashboard_views_router)
 app.include_router(velocity_router)
 app.include_router(runbooks_router)
+app.include_router(executive_router)
 
 # Estado de lectura de notificaciones (efímero por instancia; hallazgos sí son persistentes)
 _READ_NOTIFICATION_IDS: set[str] = set()
@@ -916,30 +919,11 @@ async def get_iso_compliance(_auth=Depends(require_hub_read)):
     _require_db()
     db = SessionLocal()
     try:
-        open_items = (
-            db.query(Finding)
-            .filter(Finding.status.in_(["OPEN", "IN_REVIEW"]))
-            .all()
-        )
-
-        def count_for(*needles: str) -> int:
-            return sum(1 for f in open_items if any(n in (f.iso_control or "") for n in needles))
-
-        controls = [
-            IsoControl(code="A.8.8", title="Gestión de vulnerabilidades técnicas", status="PARTIAL", related_engine="trivy", open_findings=count_for("A.8.8")),
-            IsoControl(code="A.8.9", title="Gestión de configuración", status="PARTIAL", related_engine="owasp_zap", open_findings=count_for("A.8.9")),
-            IsoControl(code="A.8.28", title="Codificación segura", status="PARTIAL", related_engine="semgrep", open_findings=count_for("A.8.28")),
-            IsoControl(code="A.8.5", title="Autenticación segura", status="GAP", related_engine="gitleaks", open_findings=count_for("A.8.5")),
-            IsoControl(code="A.8.3", title="Protección de la información", status="GAP", related_engine="gitleaks", open_findings=count_for("A.8.3")),
-            IsoControl(code="A.8.25", title="Seguridad en el ciclo de desarrollo", status="COMPLIANT", related_engine=None, open_findings=0),
-            IsoControl(code="A.8.26", title="Requisitos de seguridad de las aplicaciones", status="COMPLIANT", related_engine=None, open_findings=0),
-            IsoControl(code="A.8.32", title="Gestión del cambio", status="COMPLIANT", related_engine=None, open_findings=0),
-            IsoControl(code="A.5.33", title="Protección de registros / evidencia", status="COMPLIANT", related_engine=None, open_findings=0),
-        ]
+        controls = [IsoControl(**c) for c in iso_controls(db)]
         stats = compute_dashboard_stats(db)
         return ComplianceReport(
             standard="ISO/IEC 27001:2022",
-            period="2026-Q3",
+            period=current_period(),
             health_score=stats["overall_health_score"],
             controls=controls,
             generated_at=_now(),

@@ -69,6 +69,7 @@ export const DOC_SECTIONS: DocSection[] = [
           ['Priorización contextual', 'Revisar y gestionar cada vulnerabilidad encontrada.'],
           ['Escaneos', 'Consultar el historial de análisis y su resultado.'],
           ['Security Gates', 'Definir cuándo se bloquea un despliegue y pedir excepciones.'],
+          ['Resumen ejecutivo', 'Explicar el estado de la seguridad a dirección o a un cliente, en una página.'],
           ['Compliance continuo', 'Ver el cumplimiento por control y descargar la evidencia.'],
           ['Notificaciones', 'Enterarte de lo crítico apenas aparece.'],
         ],
@@ -252,18 +253,29 @@ export const DOC_SECTIONS: DocSection[] = [
       },
       { type: 'goto', tab: 'runbooks', label: 'Ir a Automatizaciones' },
 
-      { type: 'h', text: '11. Compliance continuo · la evidencia' },
+      { type: 'h', text: '11. Resumen ejecutivo · para dirección' },
       {
         type: 'list',
         items: [
-          'Cada control ISO 27001 muestra su estado (Cumple, Parcial o Brecha) y cuántos hallazgos lo afectan.',
+          'Una página sin tecnicismos: nota de la A a la F, si mejoramos, los riesgos principales y las decisiones pendientes.',
+          'Elige el periodo (mes, trimestre, semestre o año) y si es de toda la organización o de un proyecto.',
+          'Descárgalo en PDF o copia el texto para enviarlo por correo.',
+        ],
+      },
+      { type: 'goto', tab: 'executive', label: 'Ir a Resumen ejecutivo' },
+
+      { type: 'h', text: '12. Compliance continuo · la evidencia' },
+      {
+        type: 'list',
+        items: [
+          'Cada control ISO 27001 muestra su estado (Cumple, Parcial o Brecha), el motivo y cuántos hallazgos lo afectan.',
           'Descarga el paquete de evidencia para entregarlo al auditor.',
           'Cada decisión que tomas en la plataforma forma parte de esa evidencia.',
         ],
       },
       { type: 'goto', tab: 'reports', label: 'Ir a Compliance continuo' },
 
-      { type: 'h', text: '12. Notificaciones · los avisos' },
+      { type: 'h', text: '13. Notificaciones · los avisos' },
       {
         type: 'list',
         items: [
@@ -274,7 +286,7 @@ export const DOC_SECTIONS: DocSection[] = [
       },
       { type: 'goto', tab: 'notifications', label: 'Ir a Notificaciones' },
 
-      { type: 'h', text: '13. Pillow · tu asistente en todas las secciones' },
+      { type: 'h', text: '14. Pillow · tu asistente en todas las secciones' },
       {
         type: 'list',
         items: [
@@ -284,10 +296,10 @@ export const DOC_SECTIONS: DocSection[] = [
         ],
       },
 
-      { type: 'h', text: '14. Módulos en camino' },
+      { type: 'h', text: '15. Módulos en camino' },
       {
         type: 'p',
-        text: 'Las secciones con la etiqueta "Pronto" están en desarrollo: Resumen ejecutivo, Observabilidad, Trazabilidad e Integraciones. Al abrirlas verás qué harán y qué puedes usar mientras tanto.',
+        text: 'Las secciones con la etiqueta "Pronto" están en desarrollo: Observabilidad, Trazabilidad e Integraciones. Al abrirlas verás qué harán y qué puedes usar mientras tanto.',
       },
 
       { type: 'h', text: 'Pon a prueba lo aprendido' },
@@ -365,6 +377,11 @@ export const DOC_SECTIONS: DocSection[] = [
       {
         type: 'p',
         text: 'Solicita un bypass en Security Gates con un motivo y una duración. Cuando un aprobador lo acepte podrás desplegar; la excepción vence sola.',
+      },
+      { type: 'h', text: '“Gerencia me pide un informe de seguridad”' },
+      {
+        type: 'p',
+        text: 'Abre Resumen ejecutivo, elige "Trimestre" y descarga el PDF. Incluye la nota general, si mejoramos respecto al inicio del trimestre, los cinco riesgos principales explicados sin tecnicismos y las decisiones que necesitan su aprobación. Si es para un cliente, elige solo su proyecto.',
       },
       { type: 'h', text: '“Tengo una auditoría ISO 27001”' },
       {
@@ -901,9 +918,92 @@ export const DOC_SECTIONS: DocSection[] = [
       },
       {
         type: 'p',
-        text: 'Cada control muestra cuántos hallazgos pendientes lo afectan y su estado: Cumple, Parcial o Brecha. Puedes descargar el paquete de evidencia para entregarlo al auditor.',
+        text: 'Cada control muestra cuántos hallazgos pendientes lo afectan, su estado y el motivo. El estado se recalcula con cada análisis:',
       },
-      { type: 'goto', tab: 'reports', label: 'Ver Informes' },
+      {
+        type: 'table',
+        head: ['Estado', 'Cuándo'],
+        rows: [
+          ['Cumple', 'No hay hallazgos pendientes del control y hay análisis recientes que lo demuestran.'],
+          ['Parcial', 'Quedan hallazgos de severidad media o baja, o falta evidencia reciente (por ejemplo, la herramienta no se ejecutó en los últimos 90 días).'],
+          ['Brecha', 'Hay hallazgos críticos o altos pendientes, o el control no se aplica (por ejemplo, el Security Gate está desactivado).'],
+        ],
+      },
+      {
+        type: 'p',
+        text: 'Puedes descargar el paquete de evidencia para entregarlo al auditor.',
+      },
+      {
+        type: 'callout',
+        tone: 'tip',
+        text: 'Compliance continuo está pensado para el auditor: control por control y con evidencia. Para explicar la situación a dirección o a un cliente, usa el Resumen ejecutivo.',
+      },
+      { type: 'goto', tab: 'reports', label: 'Ver Compliance continuo' },
+    ],
+  },
+  {
+    id: 'resumen-ejecutivo',
+    group: 'Gobernanza',
+    title: 'Resumen ejecutivo',
+    summary: 'El estado de la seguridad en una página y sin tecnicismos, para dirección, clientes o directorio.',
+    blocks: [
+      {
+        type: 'p',
+        text: 'El Resumen ejecutivo responde tres preguntas: cómo estamos, si vamos mejorando y qué decisiones hacen falta. Está escrito en lenguaje de negocio, así que puedes compartirlo con personas que no son técnicas.',
+      },
+      { type: 'h', text: 'En qué se diferencia de Compliance continuo' },
+      {
+        type: 'table',
+        head: ['', 'Resumen ejecutivo', 'Compliance continuo'],
+        rows: [
+          ['Para quién', 'Dirección, clientes, directorio', 'Auditores y responsables de cumplimiento'],
+          ['Pregunta', '¿Cómo estamos y qué decidimos?', '¿Cumplimos la norma ISO 27001?'],
+          ['Contenido', 'Nota general, tendencia, riesgos principales y decisiones', 'Estado de cada control y paquete de evidencia'],
+          ['Formato', 'Una página en PDF o texto para copiar', 'Tabla de controles y archivo de evidencia'],
+        ],
+      },
+      { type: 'h', text: 'Qué contiene' },
+      {
+        type: 'table',
+        head: ['Parte', 'Qué muestra'],
+        rows: [
+          ['Nota y postura', 'Una letra de la A a la F y un puntaje de 0 a 100, con su variación en el periodo. Es el mismo puntaje de Risk Posture.'],
+          ['Mensajes clave', 'Tres o cuatro frases que resumen el periodo: si mejoró o empeoró, cuánto se corrigió y qué queda grave.'],
+          ['Indicadores', 'Problemas graves abiertos, fuera de plazo, tiempo medio de corrección, porcentaje corregido a tiempo y entregas aprobadas, comparados con el inicio del periodo.'],
+          ['Riesgos principales', 'Hasta cinco, agrupados por proyecto y tipo de problema, con su impacto explicado y qué hacer.'],
+          ['Decisiones pendientes', 'Lo que necesita a alguien con autoridad: excepciones por aprobar, críticos vencidos, credenciales sin responsable, proyectos sin analizar y riesgos aceptados.'],
+          ['Logros', 'Lo que el equipo consiguió: problemas corregidos, análisis, despliegues riesgosos detenidos, credenciales resueltas y respuestas automáticas.'],
+          ['Cumplimiento', 'Cuántos controles ISO 27001 cumplen, están parciales o tienen brecha.'],
+        ],
+      },
+      { type: 'h', text: 'Cómo leer la nota' },
+      {
+        type: 'table',
+        head: ['Nota', 'Puntaje', 'Significado'],
+        rows: [
+          ['A', '90 a 100', 'Sólida: casi sin problemas pendientes.'],
+          ['B', '75 a 89', 'Buena: problemas acotados y bajo control.'],
+          ['C', '60 a 74', 'Mejorable: conviene dedicarle tiempo.'],
+          ['D', '40 a 59', 'Débil: hay riesgos importantes abiertos.'],
+          ['F', 'menos de 40', 'Crítica: requiere acción inmediata.'],
+        ],
+      },
+      { type: 'h', text: 'Cómo compartirlo' },
+      {
+        type: 'steps',
+        items: [
+          { title: 'Elige el periodo', text: 'Último mes, trimestre, semestre o año. Todo se compara con el inicio de ese periodo.' },
+          { title: 'Elige el alcance', text: 'Toda la organización o un solo proyecto, por ejemplo para el cliente de ese proyecto.' },
+          { title: 'Descarga el PDF', text: '"Descargar PDF" abre la impresión: elige "Guardar como PDF". El menú y los botones no salen en el documento.' },
+          { title: 'O copia el texto', text: '"Copiar resumen" copia los mensajes clave, los riesgos y las decisiones para pegarlos en un correo o un chat.' },
+        ],
+      },
+      {
+        type: 'callout',
+        tone: 'info',
+        text: 'Para que la tendencia sea fiel, analiza los repositorios con regularidad: un problema solo cuenta como corregido cuando un análisis posterior confirma que ya no está.',
+      },
+      { type: 'goto', tab: 'executive', label: 'Abrir Resumen ejecutivo' },
     ],
   },
   {
