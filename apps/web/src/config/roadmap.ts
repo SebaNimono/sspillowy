@@ -17,26 +17,6 @@ export const STAGE_LABEL: Record<RoadmapStage, string> = {
 };
 
 export const ROADMAP: Record<string, RoadmapModule> = {
-  observability: {
-    id: 'observability',
-    title: 'Observabilidad',
-    tagline: 'La salud de la plataforma, conectada con Prometheus y Grafana.',
-    description:
-      'Indicadores de funcionamiento de SSPILLOWY (disponibilidad, duración de los análisis, errores) expuestos para Prometheus y visualizados en Grafana.',
-    features: [
-      'Disponibilidad y tiempos de respuesta.',
-      'Duración y tasa de éxito de los análisis por herramienta.',
-      'Objetivos de servicio (SLO) y presupuesto de error.',
-      'Acceso directo a los paneles de Grafana.',
-    ],
-    howItWorks: [
-      'La plataforma publica sus métricas en formato Prometheus.',
-      'Grafana las consulta y las muestra en paneles.',
-      'Este módulo resume el estado y enlaza a los paneles.',
-    ],
-    stage: 'next',
-    meanwhile: { tab: 'scans', label: 'Ver Escaneos' },
-  },
   traceability: {
     id: 'traceability',
     title: 'Trazabilidad',

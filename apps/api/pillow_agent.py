@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 
 from database import SessionLocal, db_ping
 from models import PillowDailyUsage
+from obs_metrics import Timer
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
@@ -280,7 +281,14 @@ def _friendly_gemini_error(status: int, raw: str) -> str:
     return "Pillow no respondió. Intenta de nuevo en unos minutos; no se descontó ningún crédito."
 
 
-async def call_gemini(
+async def call_gemini(user_message: str, context: dict | None = None, **kwargs: Any) -> dict:
+    if not GEMINI_API_KEY:
+        return await _call_gemini(user_message, context, **kwargs)
+    with Timer("pillow", "chat"):
+        return await _call_gemini(user_message, context, **kwargs)
+
+
+async def _call_gemini(
     user_message: str,
     context: dict | None = None,
     *,

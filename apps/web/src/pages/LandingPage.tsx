@@ -317,7 +317,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ user, onCuenta, onOpen
           </article>
           <article>
             <h3>Stack</h3>
-            <p>FastAPI 3.12, PostgreSQL 16, Redis + ARQ, React + TypeScript. Observabilidad prevista: Prometheus, Grafana, Sentry. Calidad interna: Pytest, SonarQube, JMeter.</p>
+            <p>FastAPI 3.12, PostgreSQL 16, Redis + ARQ, React + TypeScript. Observabilidad: métricas Prometheus, panel Grafana y objetivos de servicio (SLO). Calidad interna: Pytest, SonarQube, JMeter.</p>
           </article>
         </div>
         </Reveal>

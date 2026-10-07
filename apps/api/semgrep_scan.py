@@ -7,6 +7,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -418,6 +419,11 @@ def run_repo_scan_job(
 
     db = SessionLocal()
     work_parent: Path | None = None
+    stats: dict[str, dict] = {}
+
+    def _mark(name: str, started: float, ok: bool) -> None:
+        stats[name] = {"s": round(time.monotonic() - started, 1), "ok": ok}
+
     try:
         scan = db.get(Scan, scan_id)
         if not scan:
@@ -440,11 +446,15 @@ def run_repo_scan_job(
                 "SCAN_FALLBACK_FIXTURE", "false"
             )
             _set_progress(db, scan, "cloning", f"Clonando {repo.url}…")
+            t0 = time.monotonic()
             try:
                 _clone_repo(repo.url, scan.branch or repo.branch or "main", clone_dir)
                 target = clone_dir
                 source_note = f"clone {repo.url}@{scan.branch}"
+                _mark("clone", t0, True)
             except Exception as clone_exc:
+                _mark("clone", t0, False)
+                scan.engine_stats = json.dumps(stats)
                 if fallback_ok and FIXTURE_DIR.exists():
                     target = FIXTURE_DIR
                     source_note = f"fixture local (clone falló: {clone_exc})"
@@ -480,6 +490,7 @@ def run_repo_scan_job(
 
         if "semgrep" in wanted and target is not None:
             _set_progress(db, scan, "semgrep", "Ejecutando Semgrep…")
+            t0 = time.monotonic()
             if semgrep_available():
                 try:
                     sg_results = _run_semgrep(target)
@@ -500,9 +511,11 @@ def run_repo_scan_job(
                     )
             else:
                 errors.append("semgrep missing")
+            _mark("semgrep", t0, "semgrep" in engines_ok)
 
         if "gitleaks" in wanted and target is not None:
             _set_progress(db, scan, "gitleaks", "Ejecutando GitLeaks…")
+            t0 = time.monotonic()
             if gitleaks_available():
                 try:
                     gl_results = run_gitleaks(target)
@@ -523,9 +536,11 @@ def run_repo_scan_job(
                     )
             else:
                 errors.append("gitleaks missing")
+            _mark("gitleaks", t0, "gitleaks" in engines_ok)
 
         if "trivy" in wanted and target is not None:
             _set_progress(db, scan, "trivy", "Ejecutando Trivy…")
+            t0 = time.monotonic()
             if trivy_available():
                 try:
                     tv_packages: list[dict] = []
@@ -556,6 +571,7 @@ def run_repo_scan_job(
                     )
             else:
                 errors.append("trivy missing")
+            _mark("trivy", t0, "trivy" in engines_ok)
 
         if "owasp_zap" in wanted:
             dast = (
@@ -564,6 +580,7 @@ def run_repo_scan_job(
                 or os.getenv("ZAP_DEFAULT_TARGET", "https://sspillowy.com").strip()
             )
             _set_progress(db, scan, "owasp_zap", f"DAST ZAP → {dast}")
+            t0 = time.monotonic()
             try:
                 zap_results = run_zap_scan(dast)
                 zap_counts = persist_zap_findings(
@@ -583,7 +600,9 @@ def run_repo_scan_job(
                     repo.name,
                     f"OWASP ZAP: {str(exc)[:400]}",
                 )
+            _mark("owasp_zap", t0, "owasp_zap" in engines_ok)
 
+        scan.engine_stats = json.dumps(stats)
         if not count_parts:
             scan.status = "FAILED"
             scan.completed_at = _now()

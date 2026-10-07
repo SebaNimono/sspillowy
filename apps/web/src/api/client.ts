@@ -918,6 +918,69 @@ export async function markAllNotificationsRead(): Promise<{ updated: number }> {
   return request('/notifications/read-all', { method: 'POST' });
 }
 
+export type ObsRange = '24h' | '7d' | '30d';
+export type ObsComponentStatus = 'up' | 'degraded' | 'down' | 'unconfigured';
+
+export interface ObsSlo {
+  id: string;
+  name: string;
+  description: string;
+  target: number;
+  value: number | null;
+  total: number;
+  bad: number;
+  budget_remaining: number | null;
+  status: 'ok' | 'at_risk' | 'breached' | 'no_data';
+}
+
+export interface ObservabilityData {
+  range: ObsRange;
+  generated_at: string;
+  status: 'operational' | 'degraded' | 'down';
+  uptime_seconds: number;
+  components: { id: string; name: string; status: ObsComponentStatus; detail: string; since?: string; last?: string | null }[];
+  slos: ObsSlo[];
+  kpis: {
+    requests: number;
+    error_pct: number | null;
+    p95_ms: number | null;
+    avg_ms: number | null;
+    scans: number;
+    scan_success_pct: number | null;
+    scan_median_minutes: number | null;
+    clone_avg_s: number | null;
+    running: number;
+  };
+  series: {
+    t: string;
+    requests: number;
+    errors: number;
+    p95_ms: number | null;
+    scans_ok: number;
+    scans_failed: number;
+    scan_minutes: number | null;
+  }[];
+  engines: {
+    id: string;
+    name: string;
+    available: boolean;
+    mode: string;
+    runs: number;
+    failures: number;
+    success_pct: number | null;
+    avg_s: number | null;
+    p95_s: number | null;
+    last_run: string | null;
+  }[];
+  routes: { method: string; path: string; count: number; error_pct: number; client_error_pct: number; avg_ms: number | null; p95_ms: number | null }[];
+  incidents: { at: string; severity: 'error' | 'warning'; title: string; target: string | null; detail: string }[];
+  integrations: { prometheus: boolean; metrics_url: string; grafana_url: string | null };
+}
+
+export async function fetchObservability(range: ObsRange): Promise<ObservabilityData> {
+  return request(`/observability?range=${range}`);
+}
+
 export type ComplianceStatus = 'COMPLIANT' | 'PARTIAL' | 'GAP' | 'PENDING' | 'NOT_APPLICABLE';
 
 export interface ComplianceRequirement {

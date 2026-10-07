@@ -63,6 +63,9 @@ from runbooks import router as runbooks_router  # noqa: E402
 from compliance import current_period, iso_controls  # noqa: E402
 from compliance import router as compliance_router  # noqa: E402
 from executive import router as executive_router  # noqa: E402
+from obs_metrics import MetricsMiddleware  # noqa: E402
+from observability import metrics_router, start_flusher  # noqa: E402
+from observability import router as observability_router  # noqa: E402
 from database import init_db, db_ping, SessionLocal  # noqa: E402
 import database as _database  # noqa: E402
 from email_service import mailer_status  # noqa: E402
@@ -100,6 +103,7 @@ app = FastAPI(
 async def on_startup():
     ok = init_db()
     print(f"[sspillowy] database ready={ok}")
+    start_flusher()
     if not ok:
         return
     db = SessionLocal()
@@ -125,6 +129,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(MetricsMiddleware)
 
 app.include_router(auth_meta_router)
 app.include_router(password_auth_router)
@@ -145,6 +150,8 @@ app.include_router(velocity_router)
 app.include_router(runbooks_router)
 app.include_router(executive_router)
 app.include_router(compliance_router)
+app.include_router(observability_router)
+app.include_router(metrics_router)
 
 # Estado de lectura de notificaciones (efímero por instancia; hallazgos sí son persistentes)
 _READ_NOTIFICATION_IDS: set[str] = set()

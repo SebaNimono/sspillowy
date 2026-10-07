@@ -72,6 +72,7 @@ export const DOC_SECTIONS: DocSection[] = [
           ['Resumen ejecutivo', 'Explicar el estado de la seguridad a dirección o a un cliente, en una página.'],
           ['Compliance continuo', 'Medir tu preparación para cada norma o marco y descargar la evidencia.'],
           ['Notificaciones', 'Enterarte de lo crítico apenas aparece.'],
+          ['Observabilidad', 'Comprobar que la plataforma y sus análisis funcionan bien.'],
         ],
       },
     ],
@@ -297,10 +298,21 @@ export const DOC_SECTIONS: DocSection[] = [
         ],
       },
 
-      { type: 'h', text: '15. Módulos en camino' },
+      { type: 'h', text: '15. Observabilidad · la salud de la plataforma' },
+      {
+        type: 'list',
+        items: [
+          'Muestra si cada parte de la plataforma funciona: la API, la base de datos, los motores de análisis, el webhook de GitHub, el correo y Pillow.',
+          'Los objetivos de servicio dicen si la plataforma cumple lo prometido (por ejemplo, que el 95% de los análisis terminen bien) y cuánto margen queda.',
+          'Si algo falló, lo verás en Incidentes recientes con la hora y el detalle.',
+        ],
+      },
+      { type: 'goto', tab: 'observability', label: 'Ir a Observabilidad' },
+
+      { type: 'h', text: '16. Módulos en camino' },
       {
         type: 'p',
-        text: 'Las secciones con la etiqueta "Pronto" están en desarrollo: Observabilidad, Trazabilidad e Integraciones. Al abrirlas verás qué harán y qué puedes usar mientras tanto.',
+        text: 'Las secciones con la etiqueta "Pronto" están en desarrollo: Trazabilidad e Integraciones. Al abrirlas verás qué harán y qué puedes usar mientras tanto.',
       },
 
       { type: 'h', text: 'Pon a prueba lo aprendido' },
@@ -1065,8 +1077,121 @@ export const DOC_SECTIONS: DocSection[] = [
       { type: 'goto', tab: 'notifications', label: 'Ver Notificaciones' },
     ],
   },
+  {
+    id: 'observabilidad',
+    group: 'Gobernanza',
+    title: 'Observabilidad',
+    summary: 'Cómo saber si la plataforma y sus análisis funcionan bien.',
+    blocks: [
+      {
+        type: 'p',
+        text: 'Observabilidad muestra la salud de SSPILLOWY: si cada parte está en línea, qué tan rápido responde, cuántos análisis terminan bien y cuánto tardan. Sirve para detectar un problema antes de que alguien lo reporte y para demostrar que la plataforma cumple lo que promete.',
+      },
+      { type: 'h', text: 'Componentes' },
+      {
+        type: 'table',
+        head: ['Componente', 'Qué se comprueba'],
+        rows: [
+          ['API', 'Que la plataforma esté en línea y desde cuándo.'],
+          ['Base de datos', 'Que responda y en cuánto tiempo.'],
+          ['Cola de análisis', 'Cuántos análisis están en curso y si alguno quedó atascado.'],
+          ['Motores', 'Que Semgrep, Gitleaks, Trivy y OWASP ZAP estén instalados y no fallen seguido.'],
+          ['Webhook de GitHub', 'Que lleguen los avisos de cada push y no fallen.'],
+          ['Correo', 'Que los avisos por correo se envíen sin errores.'],
+          ['Pillow', 'Que el asistente responda sin errores.'],
+        ],
+      },
+      {
+        type: 'table',
+        head: ['Estado', 'Significado'],
+        rows: [
+          ['Operativo', 'Funciona con normalidad.'],
+          ['Degradado', 'Funciona, pero con fallos frecuentes o lentitud.'],
+          ['Caído', 'No está disponible.'],
+          ['Sin configurar', 'No está activado en esta instalación.'],
+        ],
+      },
+      { type: 'h', text: 'Objetivos de servicio' },
+      {
+        type: 'p',
+        text: 'Un objetivo de servicio (SLO) es una promesa medible, por ejemplo: "el 95% de los análisis termina bien". El presupuesto de error es el margen de fallos que esa promesa permite. Si un objetivo pide 95%, se pueden fallar 5 de cada 100; cuando ese margen se agota, el objetivo se incumple.',
+      },
+      {
+        type: 'table',
+        head: ['Objetivo', 'Meta'],
+        rows: [
+          ['Disponibilidad de la API', '99,5% de las peticiones sin error del servidor.'],
+          ['Velocidad de la API', '95% de las peticiones respondidas en menos de 1 segundo.'],
+          ['Análisis exitosos', '95% de los análisis terminan con resultados.'],
+          ['Análisis a tiempo', '90% de los análisis terminan en menos de 15 minutos.'],
+          ['Respuestas de Pillow', '95% de las consultas respondidas sin error.'],
+        ],
+      },
+      {
+        type: 'p',
+        text: 'Cada tarjeta muestra el valor actual, la meta y la barra del presupuesto restante. "Presupuesto casi agotado" avisa cuando queda menos de un 25%.',
+      },
+      { type: 'h', text: 'Gráficos y tablas' },
+      {
+        type: 'list',
+        items: [
+          'Tráfico y latencia: peticiones, errores y el tiempo de respuesta p95 (el 95% de las peticiones fue más rápido que ese valor).',
+          'Análisis: exitosos y fallidos por periodo, con su duración media.',
+          'Motores: ejecuciones, porcentaje de éxito y duración de cada herramienta.',
+          'Rutas de la API: las más usadas, las más lentas y las que tienen errores.',
+          'Incidentes recientes: análisis fallidos, motores con error, automatizaciones fallidas, análisis atascados y errores del servidor.',
+        ],
+      },
+      {
+        type: 'callout',
+        tone: 'tip',
+        text: 'La página se actualiza sola cada minuto. Elige 24 horas para ver el detalle por hora, o 7 y 30 días para ver tendencias.',
+      },
+      { type: 'goto', tab: 'observability', label: 'Ver Observabilidad' },
+    ],
+  },
 
   // ───────────────────────── Integraciones
+  {
+    id: 'prometheus-grafana',
+    group: 'Integraciones',
+    title: 'Prometheus y Grafana',
+    summary: 'Lleva las métricas de la plataforma a tu propio monitoreo.',
+    blocks: [
+      {
+        type: 'p',
+        text: 'SSPILLOWY publica sus métricas en formato Prometheus. Así puedes guardar el historial completo, crear alertas propias y armar paneles en Grafana junto al resto de tus sistemas.',
+      },
+      {
+        type: 'steps',
+        items: [
+          { title: 'Pide el token de métricas', text: 'El administrador de SSPILLOWY habilita las métricas y te entrega el token de acceso.' },
+          { title: 'Configura Prometheus', text: 'En Observabilidad, copia la configuración de la tarjeta "Prometheus y Grafana", reemplaza el token y agrégala a tu prometheus.yml.' },
+          { title: 'Importa el panel', text: 'Descarga "Panel para Grafana" e impórtalo en Grafana desde Dashboards → New → Import. Elige tu fuente de Prometheus.' },
+        ],
+      },
+      {
+        type: 'table',
+        head: ['Métrica', 'Qué mide'],
+        rows: [
+          ['sspillowy_up', 'La plataforma está en línea.'],
+          ['sspillowy_http_requests_total', 'Peticiones por ruta y tipo de respuesta.'],
+          ['sspillowy_http_request_duration_seconds', 'Tiempo de respuesta por ruta.'],
+          ['sspillowy_scans_last_24h', 'Análisis de las últimas 24 horas por estado.'],
+          ['sspillowy_engine_available', 'Motores de análisis instalados.'],
+          ['sspillowy_findings_open', 'Hallazgos abiertos por severidad.'],
+          ['sspillowy_secret_incidents_open', 'Secretos expuestos pendientes.'],
+          ['sspillowy_email_sends_total / sspillowy_pillow_requests_total', 'Correos y consultas a Pillow por resultado.'],
+        ],
+      },
+      {
+        type: 'callout',
+        tone: 'info',
+        text: 'Si el administrador configuró el enlace a Grafana, verás el botón "Abrir Grafana" en Observabilidad.',
+      },
+      { type: 'goto', tab: 'observability', label: 'Ir a Observabilidad' },
+    ],
+  },
   {
     id: 'webhook',
     group: 'Integraciones',

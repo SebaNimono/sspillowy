@@ -12,6 +12,8 @@ from pathlib import Path
 import httpx
 from dotenv import load_dotenv
 
+from obs_metrics import Timer
+
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 def _resend_key() -> str:
@@ -109,6 +111,15 @@ https://sspillowy.com
 
 def send_email_sync(*, to: str, subject: str, text: str, html_body: str) -> bool:
     """Envío síncrono (Resend o SMTP). Usable desde jobs en background."""
+    if not mailer_configured():
+        return _deliver(to=to, subject=subject, text=text, html_body=html_body)
+    with Timer("email", "send") as t:
+        ok = _deliver(to=to, subject=subject, text=text, html_body=html_body)
+        t.error = not ok
+    return ok
+
+
+def _deliver(*, to: str, subject: str, text: str, html_body: str) -> bool:
     if _resend_key():
         try:
             res = httpx.post(

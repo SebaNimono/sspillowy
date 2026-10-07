@@ -73,7 +73,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       id: 'observability',
       label: t('nav.groupObservability'),
-      items: [navItem('observability', Activity, true)],
+      items: [navItem('observability', Activity)],
     },
     {
       id: 'governance',

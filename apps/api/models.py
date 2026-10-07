@@ -88,6 +88,8 @@ class Scan(Base):
     progress_detail = Column(Text, nullable=True)
     # Motores que terminaron bien, separados por coma (None en escaneos anteriores a este campo)
     engines_ok = Column(Text, nullable=True)
+    # JSON: {"clone": {"s": 3.1, "ok": true}, "semgrep": {"s": 41.2, "ok": true}, ...}
+    engine_stats = Column(Text, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     completed_at = Column(DateTime, nullable=True)
 
@@ -338,6 +340,26 @@ class ComplianceSnapshot(Base):
     passing = Column(Integer, default=0)
     total = Column(Integer, default=0)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class ObsBucket(Base):
+    """Métricas de funcionamiento agregadas por hora (API, correo, Pillow)."""
+
+    __tablename__ = "obs_buckets"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    bucket = Column(DateTime, nullable=False, index=True)
+    # http | email | pillow
+    kind = Column(String, nullable=False, index=True)
+    # http: "GET /api/v1/findings" · email: "send" · pillow: "chat"
+    key = Column(String, nullable=False)
+    count = Column(Integer, default=0)
+    errors = Column(Integer, default=0)
+    client_errors = Column(Integer, default=0)
+    sum_ms = Column(Float, default=0.0)
+    max_ms = Column(Float, default=0.0)
+    # JSON: conteos por tramo de latencia (ver observability.LAT_BOUNDS)
+    hist = Column(Text, nullable=True)
 
 
 class PillowDailyUsage(Base):

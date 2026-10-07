@@ -21,6 +21,7 @@ export const PILLOW_PAGE_LABEL: Record<string, string> = {
   gates: 'Security Gates',
   notifications: 'Notificaciones',
   reports: 'Compliance continuo',
+  observability: 'Observabilidad',
   docs: 'Documentación',
 };
 
@@ -39,6 +40,11 @@ export const PILLOW_PAGE_SUGGESTIONS: Record<string, string[]> = {
     'Explícame este resumen como para gerencia',
     '¿Qué decisión debería tomar primero?',
     '¿Qué le digo a un cliente sobre nuestra seguridad?',
+  ],
+  observability: [
+    '¿Está todo funcionando bien?',
+    '¿Por qué se incumple este objetivo de servicio?',
+    '¿Qué significa el presupuesto de error?',
   ],
   runbooks: [
     '¿Qué runbooks me recomiendas para empezar?',

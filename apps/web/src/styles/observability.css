@@ -1,0 +1,398 @@
+/* Observabilidad */
+
+.ob-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.ob-toolbar-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  text-decoration: none;
+}
+
+.ob-muted {
+  color: var(--fg-muted);
+  font-size: 0.78rem;
+}
+
+.ob-error {
+  color: #cf222e;
+  font-size: 0.88rem;
+}
+
+.ob-empty {
+  text-align: center;
+  color: var(--fg-muted);
+  padding: 2rem;
+}
+
+.ob-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  border-radius: 10px;
+  padding: 0.8rem 1rem;
+  margin-bottom: 1rem;
+  font-size: 0.92rem;
+  border: 1px solid;
+}
+
+.ob-banner span {
+  margin-left: auto;
+  font-size: 0.8rem;
+  opacity: 0.85;
+}
+
+.ob-banner.is-ok {
+  background: #dafbe1;
+  border-color: #aceebb;
+  color: #116329;
+}
+
+.ob-banner.is-warn {
+  background: #fff8c5;
+  border-color: #eac54f;
+  color: #7d4e00;
+}
+
+.ob-banner.is-bad {
+  background: #ffebe9;
+  border-color: #ffcecb;
+  color: #a40e26;
+}
+
+.ob-components {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 0.6rem;
+  margin-bottom: 1.25rem;
+}
+
+.ob-component {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.6rem;
+  background: #ffffff;
+  border: 1px solid var(--border-default, #d0d7de);
+  border-radius: 10px;
+  padding: 0.7rem 0.85rem;
+}
+
+.ob-component strong {
+  display: block;
+  font-size: 0.86rem;
+}
+
+.ob-component small {
+  font-size: 0.74rem;
+  color: var(--fg-muted);
+}
+
+.ob-component > span {
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.ob-component.is-down {
+  border-color: #ffcecb;
+}
+
+.ob-component.is-degraded {
+  border-color: #eac54f;
+}
+
+.ob-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fg-muted);
+  margin: 0 0 0.6rem;
+}
+
+.ob-slos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.ob-slo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0;
+}
+
+.ob-slo-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.86rem;
+}
+
+.ob-slo-head span {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-align: right;
+}
+
+.ob-slo-value {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.ob-slo-value b {
+  font-size: 1.6rem;
+  font-weight: 800;
+}
+
+.ob-slo-value small {
+  font-size: 0.78rem;
+  color: var(--fg-muted);
+}
+
+.ob-slo p {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--fg-muted);
+}
+
+.ob-budget {
+  height: 6px;
+  border-radius: 999px;
+  background: #eaeef2;
+  overflow: hidden;
+}
+
+.ob-budget i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+}
+
+.ob-kpis {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.ob-kpis > div {
+  background: #ffffff;
+  border: 1px solid var(--border-default, #d0d7de);
+  border-radius: 10px;
+  padding: 0.7rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.ob-kpis span {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fg-muted);
+}
+
+.ob-kpis strong {
+  font-size: 1.25rem;
+}
+
+.ob-kpis strong.is-bad {
+  color: #cf222e;
+}
+
+.ob-charts,
+.ob-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.ob-charts .card,
+.ob-grid .card {
+  margin: 0;
+  min-width: 0;
+}
+
+.ob-charts h3,
+.ob-grid h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.95rem;
+  margin: 0 0 0.75rem;
+}
+
+.ob-chart {
+  height: 240px;
+}
+
+.ob-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.ob-mini-tabs .vl-range {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.6rem;
+}
+
+.ob-table td {
+  font-size: 0.82rem;
+}
+
+.ob-table td.is-bad {
+  color: #cf222e;
+  font-weight: 700;
+}
+
+.ob-table td.is-warn {
+  color: #9a6700;
+  font-weight: 700;
+}
+
+.ob-route {
+  word-break: break-all;
+}
+
+.ob-route code {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #0969da;
+  margin-right: 0.25rem;
+}
+
+.ob-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 0.45rem;
+  vertical-align: middle;
+}
+
+.ob-incidents {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 340px;
+  overflow-y: auto;
+}
+
+.ob-incidents li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.6rem;
+  align-items: start;
+  padding: 0.55rem 0;
+}
+
+.ob-incidents li + li {
+  border-top: 1px solid #eaeef2;
+}
+
+.ob-incidents li.is-error > svg {
+  color: #cf222e;
+}
+
+.ob-incidents li.is-warning > svg {
+  color: #9a6700;
+}
+
+.ob-incidents strong {
+  display: block;
+  font-size: 0.84rem;
+  word-break: break-word;
+}
+
+.ob-incidents small {
+  font-size: 0.75rem;
+  color: var(--fg-muted);
+  word-break: break-word;
+}
+
+.ob-incidents time {
+  font-size: 0.72rem;
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+.ob-ok {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #1a7f37;
+  font-size: 0.86rem;
+  margin: 0;
+}
+
+.ob-connect p {
+  margin: 0 0 0.6rem;
+  font-size: 0.84rem;
+  line-height: 1.5;
+  color: var(--fg-muted);
+}
+
+.ob-connect-status {
+  font-size: 0.82rem;
+  margin-bottom: 0.6rem;
+  word-break: break-all;
+}
+
+.ob-connect-status code {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+}
+
+.ob-code {
+  background: #f6f8fa;
+  border: 1px solid #eaeef2;
+  border-radius: 8px;
+  padding: 0.75rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  overflow-x: auto;
+  margin: 0 0 0.6rem;
+}
+
+.ob-connect-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.ob-connect-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+@media (max-width: 1100px) {
+  .ob-kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .ob-charts,
+  .ob-grid {
+    grid-template-columns: 1fr;
+  }
+}
