@@ -1,5 +1,17 @@
 import { SecretStep } from '../api/client';
 
+const FOCUS_KEY = 'sspillowy_secret_focus';
+
+export function focusSecretFinding(findingId: string) {
+  sessionStorage.setItem(FOCUS_KEY, findingId);
+}
+
+export function takeSecretFocus(): string | null {
+  const id = sessionStorage.getItem(FOCUS_KEY);
+  sessionStorage.removeItem(FOCUS_KEY);
+  return id;
+}
+
 export interface SecretProviderGuide {
   label: string;
   color: string;

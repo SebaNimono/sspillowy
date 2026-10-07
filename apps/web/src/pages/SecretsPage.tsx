@@ -15,7 +15,7 @@ import { Header } from '../components/Header';
 import { SidebarState } from '../components/Sidebar';
 import { Toast, ToastMessage } from '../components/Toast';
 import { SecretIncident, SecretStatus, SecretStep, fetchSecrets, updateSecret } from '../api/client';
-import { SECRET_STEPS, providerGuide } from '../config/secretProviders';
+import { SECRET_STEPS, providerGuide, takeSecretFocus } from '../config/secretProviders';
 import { SEVERITY_COLOR, SEVERITY_LABEL } from '../utils/findingGroups';
 import { formatDateTime } from '../utils/formatDateTime';
 import { formatFilePath } from '../utils/formatFilePath';
@@ -70,8 +70,15 @@ export const SecretsPage: React.FC<PageProps> = ({ onNavigate, ...headerProps })
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setItems(await fetchSecrets());
+      const list = await fetchSecrets();
+      setItems(list);
       setError(null);
+      const focusId = takeSecretFocus();
+      const target = focusId ? list.find((s) => s.finding_ids.includes(focusId)) : undefined;
+      if (target) {
+        if (target.status !== 'OPEN' && target.status !== 'IN_PROGRESS') setStatusFilter('all');
+        setActiveId(target.id);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudieron cargar los secretos');
     } finally {

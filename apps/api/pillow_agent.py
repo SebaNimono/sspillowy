@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 import os
 import re
 from datetime import date, datetime, timedelta, timezone
@@ -30,6 +32,7 @@ GEMINI_MODEL_FALLBACKS = [
 PILLOW_DAILY_CREDITS = int(os.getenv("PILLOW_DAILY_CREDITS", "2"))
 
 router = APIRouter(prefix="/api/v1/pillow", tags=["Pillow"])
+logger = logging.getLogger("sspillowy.pillow")
 
 
 def _admin_emails() -> set[str]:
@@ -265,15 +268,16 @@ def _gemini_model_candidates() -> list[str]:
     return ordered
 
 
+_RETRYABLE_STATUS = {429, 500, 502, 503, 504}
+
+
 def _friendly_gemini_error(status: int, raw: str) -> str:
-    if status == 404:
-        return (
-            "El modelo de Gemini configurado ya no está disponible. "
-            "En Railway cambia GEMINI_MODEL a gemini-3.6-flash y redeploy."
-        )
-    if status in (401, 403):
-        return "API key de Gemini inválida o sin permisos. Revisa GEMINI_API_KEY en Railway."
-    return f"Gemini no respondió ({status}). Intenta de nuevo en unos minutos."
+    logger.warning("Proveedor IA respondió %s: %s", status, raw)
+    if status in (404, 401, 403):
+        return "Pillow no está disponible ahora mismo por un problema de configuración. Avisa al administrador."
+    if status in (429, 503):
+        return "Pillow está saturado en este momento. Intenta de nuevo en unos minutos; no se descontó ningún crédito."
+    return "Pillow no respondió. Intenta de nuevo en unos minutos; no se descontó ningún crédito."
 
 
 async def call_gemini(
@@ -287,7 +291,7 @@ async def call_gemini(
     max_tokens: int = 2048,
 ) -> dict:
     if not GEMINI_API_KEY:
-        raise HTTPException(status_code=503, detail="Pillow no está configurado (falta GEMINI_API_KEY en el servidor).")
+        raise HTTPException(status_code=503, detail="Pillow aún no está activado en el servidor. Avisa al administrador.")
     schema = schema or PILLOW_RESPONSE_SCHEMA
 
     ctx_block = ""
@@ -326,7 +330,19 @@ async def call_gemini(
                 if use_schema:
                     gen_config["responseSchema"] = schema
                 payload = {**base_payload, "generationConfig": gen_config}
-                res = await client.post(url, params={"key": GEMINI_API_KEY}, json=payload)
+                for attempt in range(3):
+                    try:
+                        res = await client.post(url, params={"key": GEMINI_API_KEY}, json=payload)
+                    except httpx.HTTPError as exc:
+                        logger.warning("Proveedor IA sin respuesta (%s): %s", model, exc)
+                        res = None
+                    if res is not None and res.status_code not in _RETRYABLE_STATUS:
+                        break
+                    if attempt < 2:
+                        await asyncio.sleep(1.5 * (attempt + 1))
+                if res is None:
+                    last_status = 504
+                    break
                 if res.status_code == 200:
                     body = res.json()
                     candidates = body.get("candidates") or []
@@ -335,13 +351,13 @@ async def call_gemini(
                         if block:
                             raise HTTPException(
                                 status_code=502,
-                                detail="Gemini bloqueó la respuesta por políticas de contenido. Reformula la pregunta.",
+                                detail="Pillow no puede responder a eso por sus políticas de contenido. Reformula la pregunta.",
                             )
-                        raise HTTPException(status_code=502, detail="Gemini devolvió una respuesta vacía.")
+                        raise HTTPException(status_code=502, detail="Pillow devolvió una respuesta vacía. Intenta de nuevo.")
                     parts = (candidates[0].get("content") or {}).get("parts") or []
                     text = "".join(p.get("text", "") for p in parts if isinstance(p, dict)).strip()
                     if not text:
-                        raise HTTPException(status_code=502, detail="Gemini devolvió una respuesta vacía.")
+                        raise HTTPException(status_code=502, detail="Pillow devolvió una respuesta vacía. Intenta de nuevo.")
                     return _parse_gemini_json(text)
                 last_status = res.status_code
                 last_raw = res.text[:300]
@@ -443,7 +459,7 @@ async def pillow_chat(body: PillowChatBody):
     except json.JSONDecodeError as exc:
         raise HTTPException(
             status_code=502,
-            detail="Pillow no pudo interpretar la respuesta de Gemini. Intenta de nuevo.",
+            detail="Pillow no pudo interpretar su propia respuesta. Intenta de nuevo.",
         ) from exc
     except Exception as exc:
         db.rollback()

@@ -8,6 +8,7 @@ import { SEVERITY_COLOR, SEVERITY_LABEL, Severity } from '../utils/findingGroups
 import { formatFilePath } from '../utils/formatFilePath';
 import { formatDateTime } from '../utils/formatDateTime';
 import { usePillowPageContext } from '../config/pillowContext';
+import { focusSecretFinding } from '../config/secretProviders';
 import '../styles/fixintel.css';
 
 interface PageProps {
@@ -205,7 +206,7 @@ export const FixIntelPage: React.FC<PageProps> = ({ onNavigate, ...headerProps }
       <Toast toast={toast} onClose={() => setToast(null)} />
       <Header
         title="Fix Intelligence"
-        subtitle="Qué corregir primero y cómo hacerlo: prioridad explicada y triaje asistido por IA, con la decisión final siempre en tus manos."
+        subtitle="Qué corregir primero y cómo hacerlo: prioridad explicada y análisis de Pillow, con la decisión final siempre en tus manos."
         onNavigate={onNavigate}
         {...headerProps}
       />
@@ -250,12 +251,12 @@ export const FixIntelPage: React.FC<PageProps> = ({ onNavigate, ...headerProps }
               <span className="fi-kpi-hint">se corrigen actualizando una versión</span>
             </div>
             <div className="fi-kpi" style={{ ['--c' as string]: '#8250df' }}>
-              <span className="fi-kpi-label">Analizados por IA</span>
+              <span className="fi-kpi-label">Analizados por Pillow</span>
               <span className="fi-kpi-value">{kpis.triaged}</span>
               <span className="fi-kpi-hint">{kpis.likely_false_positive} probables falsos positivos</span>
             </div>
             <div className="fi-kpi" style={{ ['--c' as string]: '#6e7781' }}>
-              <span className="fi-kpi-label">Acierto de la IA</span>
+              <span className="fi-kpi-label">Acierto de Pillow</span>
               <span className="fi-kpi-value">
                 {kpis.ai_acceptance_rate === null ? '—' : `${Math.round(kpis.ai_acceptance_rate * 100)}%`}
               </span>
@@ -288,7 +289,7 @@ export const FixIntelPage: React.FC<PageProps> = ({ onNavigate, ...headerProps }
               disabled={!selected.size || triaging}
             >
               <Wand2 size={14} className={triaging ? 'fi-spin' : ''} />
-              <span>{triaging ? 'Analizando…' : `Analizar con IA (${selected.size}/${maxBatch})`}</span>
+              <span>{triaging ? 'Analizando…' : `Analizar con Pillow (${selected.size}/${maxBatch})`}</span>
             </button>
             <div className="fi-chips">
               {chips.map((c) => (
@@ -304,7 +305,7 @@ export const FixIntelPage: React.FC<PageProps> = ({ onNavigate, ...headerProps }
               ))}
             </div>
             <p className="fi-note">
-              Cada análisis con IA usa 1 crédito diario de Pillow y revisa hasta {maxBatch} hallazgos a la vez.
+              Cada análisis usa 1 crédito diario de Pillow y revisa hasta {maxBatch} hallazgos a la vez.
             </p>
           </div>
 
@@ -317,7 +318,7 @@ export const FixIntelPage: React.FC<PageProps> = ({ onNavigate, ...headerProps }
                   <th>Hallazgo</th>
                   <th>Severidad</th>
                   <th>Por qué</th>
-                  <th>IA</th>
+                  <th>Pillow</th>
                 </tr>
               </thead>
               <tbody>
@@ -470,6 +471,12 @@ export const FixIntelPage: React.FC<PageProps> = ({ onNavigate, ...headerProps }
                     </span>
                   </div>
                   {active.ai_summary && <p className="fi-desc">{active.ai_summary}</p>}
+                  {active.engine === 'gitleaks' && (
+                    <p className="fi-muted">
+                      Pillow no ve el valor del secreto ni el código: se basa en el tipo de regla, la ruta y el repositorio.
+                      Confirma en el archivo si es una clave real o de prueba antes de aceptar.
+                    </p>
+                  )}
                   {active.ai_remediation && (
                     <>
                       <h4>Corrección sugerida</h4>
@@ -507,7 +514,11 @@ export const FixIntelPage: React.FC<PageProps> = ({ onNavigate, ...headerProps }
             </section>
 
             {active.engine === 'gitleaks' && (
-              <button type="button" className="btn btn-secondary fi-drawer-link" onClick={() => onNavigate?.('secrets')}>
+              <button type="button" className="btn btn-secondary fi-drawer-link" onClick={() => {
+                  focusSecretFinding(active.id);
+                  onNavigate?.('secrets');
+                }}
+              >
                 <span>Abrir en Secret Management</span>
                 <ArrowRight size={14} />
               </button>

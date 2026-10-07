@@ -25,6 +25,7 @@ router = APIRouter(prefix="/api/v1/fix-intel", tags=["Fix Intelligence"])
 
 VERDICTS = ("LIKELY_REAL", "NEEDS_REVIEW", "LIKELY_FALSE_POSITIVE")
 MAX_TRIAGE_BATCH = 5
+BLIND_CONFIDENCE_CAP = 0.7
 
 _SEVERITY_BASE = {"CRITICAL": 40, "HIGH": 30, "MEDIUM": 18, "LOW": 8, "INFO": 3}
 _SEVERITY_ES = {"CRITICAL": "crítica", "HIGH": "alta", "MEDIUM": "media", "LOW": "baja", "INFO": "informativa"}
@@ -90,10 +91,10 @@ def _priority(f: Finding) -> tuple[int, list[dict], str | None]:
         reasons.append({"label": "Ruta de test o ejemplo", "tone": "down", "delta": -15})
     if f.ai_verdict == "LIKELY_REAL":
         score += 10
-        reasons.append({"label": "IA: probable real", "tone": "up", "delta": 10})
+        reasons.append({"label": "Pillow: probable real", "tone": "up", "delta": 10})
     elif f.ai_verdict == "LIKELY_FALSE_POSITIVE":
         score -= 20
-        reasons.append({"label": "IA: probable falso positivo", "tone": "down", "delta": -20})
+        reasons.append({"label": "Pillow: probable falso positivo", "tone": "down", "delta": -20})
     return max(0, min(100, score)), reasons, fix
 
 
@@ -146,7 +147,11 @@ def _item(f: Finding, repo_names: dict[str, str]) -> dict:
         "fix_hint": _fix_hint(f),
         "effort": _effort(f),
         "ai_verdict": f.ai_verdict,
-        "ai_confidence": f.ai_confidence,
+        "ai_confidence": (
+            min(f.ai_confidence, BLIND_CONFIDENCE_CAP)
+            if f.ai_confidence is not None and (f.engine or "") == "gitleaks"
+            else f.ai_confidence
+        ),
         "ai_summary": f.ai_summary,
         "ai_remediation": f.ai_remediation,
         "ai_triaged_at": _iso(f.ai_triaged_at),
@@ -282,7 +287,10 @@ Para cada hallazgo decide un veredicto:
   valores dummy, dependencias solo de desarrollo, entrada no controlada por el usuario, etc.).
 Reglas:
 - Responde en español, claro y concreto. No inventes datos que no estén en el hallazgo o el fragmento.
-- confidence entre 0 y 1; sé conservador si no ves el código.
+- confidence entre 0 y 1. Si code_visible es false NO viste el código ni el valor: la confianza no puede
+  superar 0.7 y el summary debe aclarar que el análisis se basa solo en la regla, la ruta y el repositorio.
+- En secretos (Gitleaks) considera claves de ejemplo, de test o de desarrollo local, sobre todo si el
+  repositorio o la ruta sugieren pruebas, demos o tutoriales; en ese caso prefiere NEEDS_REVIEW.
 - summary: 1-2 frases explicando por qué ese veredicto y el impacto.
 - remediation: pasos concretos para corregir (máx. 5 pasos cortos). Puedes incluir un ejemplo breve de código
   o el comando para actualizar la dependencia. Si es probable falso positivo, explica cómo confirmarlo o suprimirlo.
@@ -348,7 +356,7 @@ async def fix_intel_triage(body: TriageBody, session=Depends(require_hub_write))
     _require_db()
     actor = ((session or {}).get("email") or "").strip().lower()
     if not actor:
-        raise HTTPException(status_code=401, detail="Inicia sesión para usar el triaje con IA.")
+        raise HTTPException(status_code=401, detail="Inicia sesión para analizar con Pillow.")
     ids = list(dict.fromkeys(body.finding_ids))
 
     db = SessionLocal()
@@ -365,12 +373,14 @@ async def fix_intel_triage(body: TriageBody, session=Depends(require_hub_write))
         repos = {r.id: r for r in db.query(Repository).filter(Repository.id.in_({f.repository_id for f in findings}))}
 
         payload: list[dict] = []
+        code_seen: set[str] = set()
         async with httpx.AsyncClient(timeout=6.0, follow_redirects=True) as client:
             for f in findings:
                 repo = repos.get(f.repository_id)
                 pkg, version, fix = _package_info(f)
                 entry: dict[str, Any] = {
                     "finding_id": f.id,
+                    "repository": repo.name if repo else None,
                     "engine": f.engine,
                     "severity": f.severity,
                     "title": f.title,
@@ -384,8 +394,10 @@ async def fix_intel_triage(body: TriageBody, session=Depends(require_hub_write))
                 if pkg:
                     entry["package"] = {"name": pkg, "version": version, "fixed_in": fix}
                 snippet = await _snippet(client, repo, f)
+                entry["code_visible"] = bool(snippet)
                 if snippet:
                     entry["code_snippet"] = snippet
+                    code_seen.add(f.id)
                 payload.append(entry)
 
         parsed = await call_gemini(
@@ -398,7 +410,7 @@ async def fix_intel_triage(body: TriageBody, session=Depends(require_hub_write))
         )
         results = parsed.get("results") if isinstance(parsed, dict) else None
         if not isinstance(results, list) or not results:
-            raise HTTPException(status_code=502, detail="La IA no devolvió un triaje válido. Intenta de nuevo.")
+            raise HTTPException(status_code=502, detail="Pillow no devolvió un análisis válido. Intenta de nuevo; no se descontó ningún crédito.")
 
         by_id = {f.id: f for f in findings}
         now = _now()
@@ -416,6 +428,8 @@ async def fix_intel_triage(body: TriageBody, session=Depends(require_hub_write))
                 conf = max(0.0, min(1.0, float(r.get("confidence") or 0)))
             except (TypeError, ValueError):
                 conf = 0.0
+            if f.id not in code_seen:
+                conf = min(conf, BLIND_CONFIDENCE_CAP)
             f.ai_triaged = True
             f.ai_verdict = verdict
             f.ai_confidence = round(conf, 2)
@@ -425,7 +439,7 @@ async def fix_intel_triage(body: TriageBody, session=Depends(require_hub_write))
             f.ai_feedback = None
             updated += 1
         if not updated:
-            raise HTTPException(status_code=502, detail="La IA no devolvió un triaje válido. Intenta de nuevo.")
+            raise HTTPException(status_code=502, detail="Pillow no devolvió un análisis válido. Intenta de nuevo; no se descontó ningún crédito.")
 
         credits_remaining = _consume_credit(db, actor)
         _audit(db, "FIX_INTEL_TRIAGE", f"{updated} hallazgos", ", ".join(ids)[:900], actor)
@@ -454,7 +468,7 @@ def fix_intel_decision(finding_id: str, body: DecisionBody, session=Depends(requ
         if not f:
             raise HTTPException(status_code=404, detail="Hallazgo no encontrado.")
         if not f.ai_verdict:
-            raise HTTPException(status_code=400, detail="Este hallazgo aún no tiene sugerencia de la IA.")
+            raise HTTPException(status_code=400, detail="Este hallazgo aún no tiene sugerencia de Pillow.")
         repo = db.get(Repository, f.repository_id)
 
         if body.decision == "accept":

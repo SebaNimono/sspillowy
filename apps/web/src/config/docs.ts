@@ -199,7 +199,7 @@ export const DOC_SECTIONS: DocSection[] = [
         items: [
           'Todos los hallazgos pendientes en una sola cola, ordenados por una prioridad de 0 a 100 que explica sus motivos (severidad, exposición, fix disponible, ruta de test…).',
           'Los "quick wins" se corrigen actualizando una versión: empieza por ellos para bajar mucho riesgo con poco esfuerzo.',
-          'Selecciona hasta 5 hallazgos y pulsa "Analizar con IA": Pillow estima si son reales o falsos positivos y propone la corrección.',
+          'Selecciona hasta 5 hallazgos y pulsa "Analizar con Pillow": Pillow estima si son reales o falsos positivos y propone la corrección.',
           'Tú aceptas o descartas cada sugerencia. Nada cambia de estado sin tu decisión, y lo decidido se mantiene en los siguientes análisis.',
         ],
       },
@@ -275,7 +275,7 @@ export const DOC_SECTIONS: DocSection[] = [
           { title: 'Responde a un secreto', text: 'En Secret Management, abre un secreto, asígnate como responsable y lee cómo se rota en su proveedor.' },
           { title: 'Encuentra una actualización', text: 'En la vista agrupada, ubica una librería vulnerable y la versión a la que hay que actualizar.' },
           { title: 'Busca una librería', text: 'En Supply Chain & SBOM, averigua si usas "requests" y en qué versión.' },
-          { title: 'Pide una segunda opinión', text: 'En Fix Intelligence, analiza con IA el hallazgo más prioritario y decide si aceptas su sugerencia.' },
+          { title: 'Pide una segunda opinión', text: 'En Fix Intelligence, analiza con Pillow el hallazgo más prioritario y decide si aceptas su sugerencia.' },
           { title: 'Toma una decisión', text: 'Marca un hallazgo como En revisión.' },
           { title: 'Explica el gate', text: 'En Security Gates, identifica por qué tu proyecto está aprobado o bloqueado.' },
           { title: 'Busca un término', text: 'En el Glosario, encuentra qué significa "SCA".' },
@@ -322,7 +322,7 @@ export const DOC_SECTIONS: DocSection[] = [
       { type: 'h', text: '“Tengo cientos de hallazgos y no sé por dónde empezar”' },
       {
         type: 'p',
-        text: 'Abre Fix Intelligence. La cola ya está ordenada por prioridad: corrige primero los urgentes y los quick wins. Para los dudosos, usa "Analizar con IA" y acepta los falsos positivos que Pillow detecte; salen de la cola y no vuelven en los siguientes análisis.',
+        text: 'Abre Fix Intelligence. La cola ya está ordenada por prioridad: corrige primero los urgentes y los quick wins. Para los dudosos, usa "Analizar con Pillow" y acepta los falsos positivos que Pillow detecte; salen de la cola y no vuelven en los siguientes análisis.',
       },
       { type: 'h', text: '“No quiero que llegue código inseguro a producción”' },
       {
@@ -511,7 +511,7 @@ export const DOC_SECTIONS: DocSection[] = [
     id: 'fix-intelligence',
     group: 'Cómo funciona',
     title: 'Fix Intelligence',
-    summary: 'La cola de corrección priorizada y el triaje asistido por IA.',
+    summary: 'La cola de corrección priorizada y el análisis de Pillow.',
     blocks: [
       {
         type: 'p',
@@ -528,10 +528,10 @@ export const DOC_SECTIONS: DocSection[] = [
           ['Fix disponible', '+10: se corrige actualizando una versión (quick win)'],
           ['Inyección (OWASP A03)', '+8: una de las categorías más explotadas'],
           ['Ruta de test o ejemplo', '−15: código que normalmente no llega a producción'],
-          ['Opinión de la IA', '+10 si es probable real, −20 si es probable falso positivo'],
+          ['Opinión de Pillow', '+10 si es probable real, −20 si es probable falso positivo'],
         ],
       },
-      { type: 'h', text: 'Triaje con IA paso a paso' },
+      { type: 'h', text: 'Análisis con Pillow paso a paso' },
       {
         type: 'steps',
         items: [
@@ -544,12 +544,12 @@ export const DOC_SECTIONS: DocSection[] = [
       {
         type: 'callout',
         tone: 'info',
-        text: 'Tus decisiones y los análisis de la IA se conservan al volver a escanear: un falso positivo aceptado no vuelve a aparecer en la cola.',
+        text: 'Tus decisiones y los análisis de Pillow se conservan al volver a escanear: un falso positivo aceptado no vuelve a aparecer en la cola.',
       },
       {
         type: 'callout',
         tone: 'tip',
-        text: 'El indicador "Acierto de la IA" muestra qué porcentaje de sugerencias aceptó tu equipo. Te ayuda a decidir cuánto confiar en ella.',
+        text: 'El indicador "Acierto de Pillow" muestra qué porcentaje de sugerencias aceptó tu equipo. Te ayuda a decidir cuánto confiar en sus sugerencias.',
       },
       { type: 'goto', tab: 'fixIntel', label: 'Abrir Fix Intelligence' },
     ],
@@ -873,7 +873,7 @@ jobs:
           ['El análisis falla al empezar', 'Revisa que la URL del repositorio sea correcta. Si es privado, la plataforma necesita permiso de lectura.'],
           ['Veo muchos hallazgos de la misma librería', 'Son vulnerabilidades distintas (CVE) del mismo paquete. Usa la vista agrupada: normalmente se resuelven todas actualizando a una versión.'],
           ['Corregí algo pero sigue apareciendo', 'Lanza un nuevo análisis (o haz push a la rama si tienes el webhook activo): los resultados anteriores se reemplazan por los nuevos.'],
-          ['¿Se pierde lo que decidí al volver a escanear?', 'No. Los falsos positivos, riesgos aceptados y análisis de la IA se trasladan al nuevo análisis.'],
+          ['¿Se pierde lo que decidí al volver a escanear?', 'No. Los falsos positivos, riesgos aceptados y análisis de Pillow se trasladan al nuevo análisis.'],
           ['¿Qué hago con un falso positivo?', 'Márcalo como "Falso positivo". Deja de contar para el gate y queda registrado quién lo decidió.'],
           ['Me pide iniciar sesión de nuevo', 'Tu sesión expiró. Vuelve a entrar y repite la acción.'],
           ['El webhook no lanza análisis', 'Comprueba que el repositorio esté agregado, que el secreto sea correcto y revisa "Recent deliveries" en GitHub.'],

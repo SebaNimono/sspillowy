@@ -164,7 +164,7 @@ export const PillowAgent: React.FC<PillowAgentProps> = ({ userEmail, page }) => 
                 <span>
                   Créditos hoy: <strong>{quota.credits_remaining}</strong> / {quota.daily_limit}
                 </span>
-                {!quota.configured && <em>API Gemini pendiente en servidor</em>}
+                {!quota.configured && <em>Pillow aún no está activado en el servidor</em>}
                 {isAdmin && <PillowAdminPanel adminEmail={userKey} onCreditsReset={refreshQuota} />}
               </div>
             )}
