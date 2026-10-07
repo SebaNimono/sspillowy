@@ -22,7 +22,6 @@ import { SidebarState } from '../components/Sidebar';
 import { HeatmapCalendar } from '../components/HeatmapCalendar';
 import { AnimatedNumber } from '../components/AnimatedNumber';
 import { DashboardSettings } from '../components/DashboardSettings';
-import { PillowAgent } from '../components/PillowAgent';
 import { PillowWidgetBoard } from '../components/PillowWidgetBoard';
 import { useI18n } from '../i18n/I18nProvider';
 import {
@@ -38,7 +37,8 @@ import {
   fetchScans,
 } from '../api/client';
 import { ALERT_COLORS, DashboardConfig, healthAlert, loadDashboardConfig, metricAlert } from '../config/dashboardConfig';
-import { PlacedPillowWidget, loadPlacedWidgets, savePlacedWidgets } from '../config/pillowWidgets';
+import { PILLOW_WIDGETS_EVENT, PlacedPillowWidget, loadPlacedWidgets, savePlacedWidgets } from '../config/pillowWidgets';
+import { usePillowPageContext } from '../config/pillowContext';
 import {
   SEVERITIES,
   SEVERITY_COLOR,
@@ -316,6 +316,14 @@ export const DashboardPage: React.FC<PageProps> = ({
   }, [load]);
 
   useEffect(() => {
+    const onWidgets = () => setPillowWidgets(loadPlacedWidgets());
+    window.addEventListener(PILLOW_WIDGETS_EVENT, onWidgets);
+    return () => window.removeEventListener(PILLOW_WIDGETS_EVENT, onWidgets);
+  }, []);
+
+  usePillowPageContext('dashboard', stats as unknown as Record<string, unknown>);
+
+  useEffect(() => {
     if (!autoRefresh) return undefined;
     const id = window.setInterval(load, REFRESH_MS);
     return () => window.clearInterval(id);
@@ -516,14 +524,6 @@ export const DashboardPage: React.FC<PageProps> = ({
   const gatePie = (Object.keys(GATE_META) as GateKey[])
     .map((k) => ({ name: GATE_META[k].label, value: derived.gateCounts[k], fill: GATE_META[k].color }))
     .filter((d) => d.value > 0);
-
-  const handleAddPillowWidget = (widget: PlacedPillowWidget) => {
-    setPillowWidgets((prev) => {
-      const next = [...prev, widget];
-      savePlacedWidgets(next);
-      return next;
-    });
-  };
 
   const handleRemovePillowWidget = (id: string) => {
     setPillowWidgets((prev) => {
@@ -984,8 +984,6 @@ export const DashboardPage: React.FC<PageProps> = ({
       )}
 
       <PillowWidgetBoard widgets={pillowWidgets} stats={stats} onRemove={handleRemovePillowWidget} />
-
-      <PillowAgent userEmail={user?.email} dashboardContext={stats} onAddWidget={handleAddPillowWidget} />
     </div>
   );
 };

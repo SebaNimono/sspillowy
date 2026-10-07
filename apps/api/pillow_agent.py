@@ -65,22 +65,35 @@ Tipos de widget que el usuario puede añadir al dashboard (usa solo estos ids en
 """
 
 SYSTEM_PROMPT = f"""Eres Pillow, el agente de IA de SSPILLOWY (plataforma DevSecOps).
-Ayudas a diseñar dashboards de seguridad: qué gráficos usar y cómo interpretar métricas.
+Acompañas al usuario en todas las secciones de la plataforma: Risk Posture (dashboards), Priorización contextual
+(hallazgos), Fix Intelligence (triaje y remediación), Secret Management, Supply Chain & SBOM, Escaneos, Security Gates,
+Compliance continuo y Documentación. Explicas qué significan los datos de la pantalla actual, priorizas qué atender
+primero y cómo corregirlo.
 Reglas:
-- Responde en español, conciso y profesional.
-- Nunca ejecutes acciones: solo sugieres widgets y explicas.
-- Si faltan datos en el contexto, dilo y sugiere qué registrar primero (repos, escaneos).
-- suggested_widgets: máximo 4 items, cada uno con type (id del catálogo), title y metric opcional.
+- Responde en español, conciso y profesional. Usa los datos del contexto; no inventes cifras ni hallazgos.
+- Nunca ejecutes acciones ni cierres hallazgos: solo explicas y propones. Las decisiones las toma una persona (HITL).
+- Si faltan datos en el contexto, dilo y sugiere qué hacer primero (agregar repos, escanear).
+- Ten en cuenta la conversación previa para dar continuidad.
+- suggested_widgets: SOLO si la pantalla actual es el dashboard (page = dashboard) y el usuario pide visualizaciones;
+  en cualquier otro caso devuelve una lista vacía. Máximo 4 items con type (id del catálogo), title y metric opcional.
 {WIDGET_CATALOG}
 Responde SOLO JSON válido con esta forma:
 {{"reply": "texto para el usuario", "suggested_widgets": [{{"type": "bar_chart", "title": "...", "metric": "findings_by_engine"}}]}}
 """
 
 
+class PillowHistoryLine(BaseModel):
+    role: str = Field(max_length=10)
+    text: str = Field(max_length=3000)
+
+
 class PillowChatBody(BaseModel):
     message: str = Field(min_length=2, max_length=2000)
     user_key: str = Field(min_length=3, max_length=255)
     dashboard_context: dict[str, Any] | None = None
+    page: str | None = Field(default=None, max_length=40)
+    page_context: dict[str, Any] | None = None
+    history: list[PillowHistoryLine] | None = None
 
 
 class PillowQuotaResponse(BaseModel):
@@ -263,18 +276,40 @@ def _friendly_gemini_error(status: int, raw: str) -> str:
     return f"Gemini no respondió ({status}). Intenta de nuevo en unos minutos."
 
 
-async def _call_gemini(user_message: str, context: dict | None) -> dict:
+async def call_gemini(
+    user_message: str,
+    context: dict | None = None,
+    *,
+    system_prompt: str = SYSTEM_PROMPT,
+    schema: dict[str, Any] | None = None,
+    history: list[dict] | None = None,
+    context_label: str = "Contexto actual",
+    max_tokens: int = 2048,
+) -> dict:
     if not GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="Pillow no está configurado (falta GEMINI_API_KEY en el servidor).")
+    schema = schema or PILLOW_RESPONSE_SCHEMA
 
     ctx_block = ""
     if context:
-        ctx_block = f"\nContexto actual del dashboard (JSON):\n{json.dumps(context, ensure_ascii=False)[:4000]}\n"
+        ctx_block = f"\n{context_label} (JSON):\n{json.dumps(context, ensure_ascii=False, default=str)[:6000]}\n"
 
-    user_text = f"{ctx_block}\nPregunta del usuario:\n{user_message}"
+    contents: list[dict] = []
+    for line in (history or [])[-8:]:
+        role = "model" if line.get("role") == "pillow" else "user"
+        text = str(line.get("text") or "").strip()[:1500]
+        if not text or (not contents and role == "model"):
+            continue
+        if contents and contents[-1]["role"] == role:
+            contents[-1]["parts"][0]["text"] += f"\n{text}"
+        else:
+            contents.append({"role": role, "parts": [{"text": text}]})
+    if contents and contents[-1]["role"] == "user":
+        contents.append({"role": "model", "parts": [{"text": "(sin respuesta)"}]})
+    contents.append({"role": "user", "parts": [{"text": f"{ctx_block}\nPregunta del usuario:\n{user_message}"}]})
     base_payload = {
-        "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
-        "contents": [{"role": "user", "parts": [{"text": user_text}]}],
+        "system_instruction": {"parts": [{"text": system_prompt}]},
+        "contents": contents,
     }
 
     last_status = 502
@@ -285,11 +320,11 @@ async def _call_gemini(user_message: str, context: dict | None) -> dict:
             for use_schema in (True, False):
                 gen_config: dict[str, Any] = {
                     "temperature": 0.35,
-                    "maxOutputTokens": 2048,
+                    "maxOutputTokens": max_tokens,
                     "responseMimeType": "application/json",
                 }
                 if use_schema:
-                    gen_config["responseSchema"] = PILLOW_RESPONSE_SCHEMA
+                    gen_config["responseSchema"] = schema
                 payload = {**base_payload, "generationConfig": gen_config}
                 res = await client.post(url, params={"key": GEMINI_API_KEY}, json=payload)
                 if res.status_code == 200:
@@ -365,10 +400,21 @@ async def pillow_chat(body: PillowChatBody):
                 detail=f"Límite diario alcanzado ({PILLOW_DAILY_CREDITS} consultas). Vuelve mañana.",
             )
 
-        parsed = await _call_gemini(body.message.strip(), body.dashboard_context)
+        page = (body.page or "dashboard").strip()
+        context: dict[str, Any] = {"page": page}
+        if body.page_context:
+            context["data"] = body.page_context
+        elif body.dashboard_context:
+            context["data"] = body.dashboard_context
+        parsed = await call_gemini(
+            body.message.strip(),
+            context,
+            history=[h.model_dump() for h in body.history or []],
+            context_label="Pantalla actual del usuario y sus datos",
+        )
         credits_remaining = _consume_credit(db, key)
 
-        widgets_raw = parsed.get("suggested_widgets") or []
+        widgets_raw = (parsed.get("suggested_widgets") or []) if page == "dashboard" else []
         widgets: list[PillowWidgetSuggestion] = []
         if isinstance(widgets_raw, list):
             for item in widgets_raw[:4]:

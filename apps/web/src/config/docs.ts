@@ -193,7 +193,19 @@ export const DOC_SECTIONS: DocSection[] = [
       },
       { type: 'goto', tab: 'sbom', label: 'Ir a Supply Chain & SBOM' },
 
-      { type: 'h', text: '6. Security Gates · el control del despliegue' },
+      { type: 'h', text: '6. Fix Intelligence · qué corregir primero y cómo' },
+      {
+        type: 'list',
+        items: [
+          'Todos los hallazgos pendientes en una sola cola, ordenados por una prioridad de 0 a 100 que explica sus motivos (severidad, exposición, fix disponible, ruta de test…).',
+          'Los "quick wins" se corrigen actualizando una versión: empieza por ellos para bajar mucho riesgo con poco esfuerzo.',
+          'Selecciona hasta 5 hallazgos y pulsa "Analizar con IA": Pillow estima si son reales o falsos positivos y propone la corrección.',
+          'Tú aceptas o descartas cada sugerencia. Nada cambia de estado sin tu decisión, y lo decidido se mantiene en los siguientes análisis.',
+        ],
+      },
+      { type: 'goto', tab: 'fixIntel', label: 'Ir a Fix Intelligence' },
+
+      { type: 'h', text: '7. Security Gates · el control del despliegue' },
       {
         type: 'list',
         items: [
@@ -205,19 +217,19 @@ export const DOC_SECTIONS: DocSection[] = [
       },
       { type: 'goto', tab: 'gates', label: 'Ir a Security Gates' },
 
-      { type: 'h', text: '7. Risk Posture · la vista general' },
+      { type: 'h', text: '8. Risk Posture · la vista general' },
       {
         type: 'list',
         items: [
           'Elige el periodo (7, 30 o 90 días) y activa "En vivo" para actualizar cada minuto.',
           'Los indicadores comparan con el periodo anterior: activos, críticos, fuera de plazo, gate aprobado y escaneos.',
           'Los widgets responden: ¿vamos mejorando?, ¿corregimos a tiempo?, ¿dónde está el riesgo?, ¿cuánto revisó el equipo?',
-          'Con "Configurar" eliges qué widgets ver y tus umbrales de alerta. El asistente Pillow responde preguntas sobre tus hallazgos.',
+          'Con "Configurar" eliges qué widgets ver y tus umbrales de alerta. Desde aquí Pillow también puede añadir widgets a tu tablero.',
         ],
       },
       { type: 'goto', tab: 'dashboard', label: 'Ir a Risk Posture' },
 
-      { type: 'h', text: '8. Compliance continuo · la evidencia' },
+      { type: 'h', text: '9. Compliance continuo · la evidencia' },
       {
         type: 'list',
         items: [
@@ -228,7 +240,7 @@ export const DOC_SECTIONS: DocSection[] = [
       },
       { type: 'goto', tab: 'reports', label: 'Ir a Compliance continuo' },
 
-      { type: 'h', text: '9. Notificaciones · los avisos' },
+      { type: 'h', text: '10. Notificaciones · los avisos' },
       {
         type: 'list',
         items: [
@@ -239,10 +251,20 @@ export const DOC_SECTIONS: DocSection[] = [
       },
       { type: 'goto', tab: 'notifications', label: 'Ir a Notificaciones' },
 
-      { type: 'h', text: '10. Módulos en camino' },
+      { type: 'h', text: '11. Pillow · tu asistente en todas las secciones' },
+      {
+        type: 'list',
+        items: [
+          'El botón "Pillow" está abajo a la derecha en todas las pantallas. Responde con los datos de la sección donde estás.',
+          'La conversación se guarda: puedes cambiar de sección y seguir preguntando sin repetir el contexto. El botón de reinicio empieza una nueva.',
+          'Cada pregunta usa un crédito diario. Pillow explica y sugiere; nunca cambia nada por ti.',
+        ],
+      },
+
+      { type: 'h', text: '12. Módulos en camino' },
       {
         type: 'p',
-        text: 'Las secciones con la etiqueta "Pronto" están en desarrollo: Security Velocity, Resumen ejecutivo, Fix Intelligence, Runbooks & RPA, Observabilidad, Trazabilidad e Integraciones. Al abrirlas verás qué harán y qué puedes usar mientras tanto.',
+        text: 'Las secciones con la etiqueta "Pronto" están en desarrollo: Security Velocity, Resumen ejecutivo, Runbooks & RPA, Observabilidad, Trazabilidad e Integraciones. Al abrirlas verás qué harán y qué puedes usar mientras tanto.',
       },
 
       { type: 'h', text: 'Pon a prueba lo aprendido' },
@@ -252,6 +274,7 @@ export const DOC_SECTIONS: DocSection[] = [
           { title: 'Responde a un secreto', text: 'En Secret Management, abre un secreto, asígnate como responsable y lee cómo se rota en su proveedor.' },
           { title: 'Encuentra una actualización', text: 'En la vista agrupada, ubica una librería vulnerable y la versión a la que hay que actualizar.' },
           { title: 'Busca una librería', text: 'En Supply Chain & SBOM, averigua si usas "requests" y en qué versión.' },
+          { title: 'Pide una segunda opinión', text: 'En Fix Intelligence, analiza con IA el hallazgo más prioritario y decide si aceptas su sugerencia.' },
           { title: 'Toma una decisión', text: 'Marca un hallazgo como En revisión.' },
           { title: 'Explica el gate', text: 'En Security Gates, identifica por qué tu proyecto está aprobado o bloqueado.' },
           { title: 'Busca un término', text: 'En el Glosario, encuentra qué significa "SCA".' },
@@ -289,6 +312,11 @@ export const DOC_SECTIONS: DocSection[] = [
       {
         type: 'p',
         text: 'En Supply Chain & SBOM, usa el botón de descarga del repositorio. Obtienes un archivo CycloneDX 1.5 con todas las librerías, sus licencias y las vulnerabilidades conocidas.',
+      },
+      { type: 'h', text: '“Tengo cientos de hallazgos y no sé por dónde empezar”' },
+      {
+        type: 'p',
+        text: 'Abre Fix Intelligence. La cola ya está ordenada por prioridad: corrige primero los urgentes y los quick wins. Para los dudosos, usa "Analizar con IA" y acepta los falsos positivos que Pillow detecte; salen de la cola y no vuelven en los siguientes análisis.',
       },
       { type: 'h', text: '“No quiero que llegue código inseguro a producción”' },
       {
@@ -471,6 +499,53 @@ export const DOC_SECTIONS: DocSection[] = [
         text: 'El inventario se genera con los perfiles "Código completo" y "Solo SCA / IaC". Si un repositorio aparece "Sin SBOM todavía", lanza uno de esos análisis.',
       },
       { type: 'goto', tab: 'sbom', label: 'Abrir Supply Chain & SBOM' },
+    ],
+  },
+  {
+    id: 'fix-intelligence',
+    group: 'Cómo funciona',
+    title: 'Fix Intelligence',
+    summary: 'La cola de corrección priorizada y el triaje asistido por IA.',
+    blocks: [
+      {
+        type: 'p',
+        text: 'Fix Intelligence responde dos preguntas: qué corregir primero y cómo hacerlo. Reúne todos los hallazgos pendientes de todas las herramientas en una sola cola ordenada.',
+      },
+      { type: 'h', text: 'Cómo se calcula la prioridad' },
+      {
+        type: 'table',
+        head: ['Factor', 'Efecto'],
+        rows: [
+          ['Severidad', 'Base: crítica 40, alta 30, media 18, baja 8'],
+          ['Expuesto en la app en ejecución', '+15: se detectó en la aplicación publicada'],
+          ['Credencial filtrada', '+15: un secreto expuesto es explotable de inmediato'],
+          ['Fix disponible', '+10: se corrige actualizando una versión (quick win)'],
+          ['Inyección (OWASP A03)', '+8: una de las categorías más explotadas'],
+          ['Ruta de test o ejemplo', '−15: código que normalmente no llega a producción'],
+          ['Opinión de la IA', '+10 si es probable real, −20 si es probable falso positivo'],
+        ],
+      },
+      { type: 'h', text: 'Triaje con IA paso a paso' },
+      {
+        type: 'steps',
+        items: [
+          { title: 'Selecciona', text: 'Marca hasta 5 hallazgos o usa "Seleccionar los 5 más prioritarios".' },
+          { title: 'Analiza', text: 'Pillow lee cada hallazgo y, si el repositorio es público, el código alrededor de la línea. Nunca se envía el valor de un secreto.' },
+          { title: 'Revisa', text: 'Cada hallazgo recibe un veredicto (probable real, requiere revisión o probable falso positivo), un nivel de confianza y la corrección sugerida.' },
+          { title: 'Decide', text: 'Aceptar un falso positivo lo marca como tal; aceptar uno real lo pasa a "En revisión". Descartar deja todo como estaba.' },
+        ],
+      },
+      {
+        type: 'callout',
+        tone: 'info',
+        text: 'Tus decisiones y los análisis de la IA se conservan al volver a escanear: un falso positivo aceptado no vuelve a aparecer en la cola.',
+      },
+      {
+        type: 'callout',
+        tone: 'tip',
+        text: 'El indicador "Acierto de la IA" muestra qué porcentaje de sugerencias aceptó tu equipo. Te ayuda a decidir cuánto confiar en ella.',
+      },
+      { type: 'goto', tab: 'fixIntel', label: 'Abrir Fix Intelligence' },
     ],
   },
   {
@@ -772,7 +847,8 @@ jobs:
         rows: [
           ['El análisis falla al empezar', 'Revisa que la URL del repositorio sea correcta. Si es privado, la plataforma necesita permiso de lectura.'],
           ['Veo muchos hallazgos de la misma librería', 'Son vulnerabilidades distintas (CVE) del mismo paquete. Usa la vista agrupada: normalmente se resuelven todas actualizando a una versión.'],
-          ['Corregí algo pero sigue apareciendo', 'Lanza un nuevo análisis: los resultados anteriores se reemplazan por los nuevos.'],
+          ['Corregí algo pero sigue apareciendo', 'Lanza un nuevo análisis (o haz push a la rama si tienes el webhook activo): los resultados anteriores se reemplazan por los nuevos.'],
+          ['¿Se pierde lo que decidí al volver a escanear?', 'No. Los falsos positivos, riesgos aceptados y análisis de la IA se trasladan al nuevo análisis.'],
           ['¿Qué hago con un falso positivo?', 'Márcalo como "Falso positivo". Deja de contar para el gate y queda registrado quién lo decidió.'],
           ['Me pide iniciar sesión de nuevo', 'Tu sesión expiró. Vuelve a entrar y repite la acción.'],
           ['El webhook no lanza análisis', 'Comprueba que el repositorio esté agregado, que el secreto sea correcto y revisa "Recent deliveries" en GitHub.'],

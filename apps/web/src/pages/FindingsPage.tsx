@@ -40,6 +40,7 @@ import {
   ageDays,
   packageOf,
 } from '../utils/findingGroups';
+import { usePillowPageContext } from '../config/pillowContext';
 import '../styles/findings.css';
 
 interface PageProps {
@@ -204,6 +205,21 @@ export const FindingsPage: React.FC<PageProps> = ({
     }
     return { bySev, breached, fixable, total: base.length };
   }, [findings, selectedStatus, now]);
+
+  const pillowContext = useMemo(
+    () => ({
+      summary,
+      top_findings: filtered.slice(0, 15).map((f) => ({
+        title: f.title,
+        severity: f.severity,
+        engine: f.engine,
+        status: f.status,
+        file: f.file_path,
+      })),
+    }),
+    [summary, filtered],
+  );
+  usePillowPageContext('findings', loading ? null : pillowContext);
 
   const toggleSeverity = (s: Severity) =>
     setSelectedSeverities((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));

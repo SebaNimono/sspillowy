@@ -14,6 +14,8 @@ import { ReportsPage } from './pages/ReportsPage';
 import { DocsPage } from './pages/DocsPage';
 import { SecretsPage } from './pages/SecretsPage';
 import { SbomPage } from './pages/SbomPage';
+import { FixIntelPage } from './pages/FixIntelPage';
+import { PillowAgent } from './components/PillowAgent';
 import { ComingSoonPage } from './pages/ComingSoonPage';
 import { ROADMAP } from './config/roadmap';
 import {
@@ -81,6 +83,7 @@ const VALID_TABS = new Set([
   'findings',
   'secrets',
   'sbom',
+  'fixIntel',
   'scans',
   'gates',
   'notifications',
@@ -435,6 +438,8 @@ const AppShell: React.FC = () => {
         return <SecretsPage {...pageProps} />;
       case 'sbom':
         return <SbomPage {...pageProps} />;
+      case 'fixIntel':
+        return <FixIntelPage {...pageProps} />;
       default:
         if (ROADMAP[activeTab]) return <ComingSoonPage key={activeTab} module={ROADMAP[activeTab]} {...pageProps} />;
         return <DashboardPage {...pageProps} />;
@@ -458,6 +463,7 @@ const AppShell: React.FC = () => {
       >
         {renderContent()}
       </main>
+      <PillowAgent key={user?.email ?? 'anon'} userEmail={user?.email} page={activeTab} />
       <CookieBanner />
     </div>
   );

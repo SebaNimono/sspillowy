@@ -57,7 +57,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       id: 'risk',
       label: t('nav.groupRisk'),
-      items: [navItem('findings', Target), navItem('sbom', Boxes), navItem('fixIntel', Sparkles, true)],
+      items: [navItem('findings', Target), navItem('sbom', Boxes), navItem('fixIntel', Sparkles)],
     },
     {
       id: 'orchestration',

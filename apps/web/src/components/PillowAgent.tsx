@@ -1,7 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowUp, Sparkles, X, LayoutGrid, MessageSquare } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowUp, Sparkles, X, LayoutGrid, MessageSquare, RotateCcw } from 'lucide-react';
 import {
-  DashboardStats,
   fetchPillowAdminStatus,
   fetchPillowQuota,
   sendPillowMessage,
@@ -9,43 +8,56 @@ import {
   PillowWidgetSuggestion,
 } from '../api/client';
 import {
-  PlacedPillowWidget,
-  PILLOW_SUGGESTIONS,
   PillowWidgetType,
+  addPlacedWidget,
   createPlacedWidget,
   groupCatalogByCategory,
 } from '../config/pillowWidgets';
+import {
+  PILLOW_PAGE_LABEL,
+  PillowChatLine,
+  getPillowPageContext,
+  loadPillowChat,
+  savePillowChat,
+  suggestionsFor,
+} from '../config/pillowContext';
 import { PillowAdminPanel } from './PillowAdminPanel';
 
 interface PillowAgentProps {
   userEmail?: string;
-  dashboardContext?: DashboardStats | null;
-  onAddWidget: (widget: PlacedPillowWidget) => void;
+  page: string;
 }
 
 type Tab = 'ask' | 'widgets';
 
-interface ChatLine {
-  role: 'user' | 'pillow';
-  text: string;
-  suggestions?: PillowWidgetSuggestion[];
-}
+const GREETING =
+  'Hola, soy Pillow. Te acompaño en todas las secciones: pregúntame qué significa lo que ves, qué atender primero o cómo corregirlo.';
 
-export const PillowAgent: React.FC<PillowAgentProps> = ({ userEmail, dashboardContext, onAddWidget }) => {
+export const PillowAgent: React.FC<PillowAgentProps> = ({ userEmail, page }) => {
+  const userKey = userEmail?.trim().toLowerCase() || '';
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>('ask');
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [quota, setQuota] = useState<PillowQuota | null>(null);
-  const [chat, setChat] = useState<ChatLine[]>([
-    {
-      role: 'pillow',
-      text: 'Hola, soy Pillow. Pregúntame qué métricas quieres ver o añade widgets desde la pestaña lateral.',
-    },
-  ]);
+  const [chat, setChat] = useState<PillowChatLine[]>(() => loadPillowChat(userKey));
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
-  const userKey = userEmail?.trim().toLowerCase() || '';
+  const isDashboard = page === 'dashboard';
+  const pageLabel = PILLOW_PAGE_LABEL[page] ?? 'SSPILLOWY';
+
+  useEffect(() => {
+    savePillowChat(userKey, chat);
+  }, [userKey, chat]);
+
+  useEffect(() => {
+    if (!isDashboard) setTab('ask');
+  }, [isDashboard]);
+
+  useEffect(() => {
+    if (open) chatEndRef.current?.scrollIntoView({ block: 'end' });
+  }, [open, chat, sending]);
 
   const refreshQuota = () => {
     if (!userKey) return;
@@ -75,20 +87,20 @@ export const PillowAgent: React.FC<PillowAgentProps> = ({ userEmail, dashboardCo
       return;
     }
 
+    const history = chat.slice(-8).map(({ role, text: t }) => ({ role, text: t }));
     setSending(true);
     setInput('');
-    setChat((prev) => [...prev, { role: 'user', text }]);
+    setChat((prev) => [...prev, { role: 'user', text, page }]);
 
     try {
       const res = await sendPillowMessage({
         message: text,
         user_key: userKey,
-        dashboard_context: dashboardContext ? { ...dashboardContext } : undefined,
+        page,
+        page_context: getPillowPageContext(page),
+        history,
       });
-      setChat((prev) => [
-        ...prev,
-        { role: 'pillow', text: res.reply, suggestions: res.suggested_widgets },
-      ]);
+      setChat((prev) => [...prev, { role: 'pillow', text: res.reply, page, suggestions: res.suggested_widgets }]);
       setQuota((q) =>
         q
           ? { ...q, credits_remaining: res.credits_remaining, credits_used: res.daily_limit - res.credits_remaining }
@@ -97,7 +109,7 @@ export const PillowAgent: React.FC<PillowAgentProps> = ({ userEmail, dashboardCo
     } catch (err) {
       setChat((prev) => [
         ...prev,
-        { role: 'pillow', text: err instanceof Error ? err.message : 'No pude responder ahora.' },
+        { role: 'pillow', text: err instanceof Error ? err.message : 'No pude responder ahora.', page },
       ]);
     } finally {
       setSending(false);
@@ -105,13 +117,13 @@ export const PillowAgent: React.FC<PillowAgentProps> = ({ userEmail, dashboardCo
   };
 
   const addFromCatalog = (type: PillowWidgetType, title: string) => {
-    onAddWidget(createPlacedWidget(type, title));
+    addPlacedWidget(createPlacedWidget(type, title));
     setTab('ask');
-    setChat((prev) => [...prev, { role: 'pillow', text: `Añadí «${title}» (${type}) a tu tablero.` }]);
+    setChat((prev) => [...prev, { role: 'pillow', text: `Añadí «${title}» (${type}) a tu tablero.`, page }]);
   };
 
   const addSuggestion = (s: PillowWidgetSuggestion) => {
-    onAddWidget(createPlacedWidget(s.type as PillowWidgetType, s.title, s.metric ?? undefined));
+    addPlacedWidget(createPlacedWidget(s.type as PillowWidgetType, s.title, s.metric ?? undefined));
   };
 
   return (
@@ -126,12 +138,25 @@ export const PillowAgent: React.FC<PillowAgentProps> = ({ userEmail, dashboardCo
           <aside className="pillow-panel" onClick={(e) => e.stopPropagation()} aria-label="Agente Pillow">
             <header className="pillow-panel-head">
               <div>
-                <span className="pillow-panel-kicker">Agente IA · HITL</span>
+                <span className="pillow-panel-kicker">Agente IA · HITL · {pageLabel}</span>
                 <h2>Pillow</h2>
               </div>
-              <button type="button" className="pillow-panel-close" onClick={() => setOpen(false)} aria-label="Cerrar">
-                <X size={18} />
-              </button>
+              <div className="pillow-panel-actions">
+                {chat.length > 0 && (
+                  <button
+                    type="button"
+                    className="pillow-panel-close"
+                    onClick={() => setChat([])}
+                    aria-label="Nueva conversación"
+                    title="Nueva conversación"
+                  >
+                    <RotateCcw size={16} />
+                  </button>
+                )}
+                <button type="button" className="pillow-panel-close" onClick={() => setOpen(false)} aria-label="Cerrar">
+                  <X size={18} />
+                </button>
+              </div>
             </header>
 
             {quota && (
@@ -140,30 +165,33 @@ export const PillowAgent: React.FC<PillowAgentProps> = ({ userEmail, dashboardCo
                   Créditos hoy: <strong>{quota.credits_remaining}</strong> / {quota.daily_limit}
                 </span>
                 {!quota.configured && <em>API Gemini pendiente en servidor</em>}
-                {isAdmin && (
-                  <PillowAdminPanel adminEmail={userKey} onCreditsReset={refreshQuota} />
-                )}
+                {isAdmin && <PillowAdminPanel adminEmail={userKey} onCreditsReset={refreshQuota} />}
               </div>
             )}
 
-            <div className="pillow-tabs">
-              <button type="button" className={tab === 'ask' ? 'is-active' : ''} onClick={() => setTab('ask')}>
-                <MessageSquare size={14} />
-                Preguntar
-              </button>
-              <button type="button" className={tab === 'widgets' ? 'is-active' : ''} onClick={() => setTab('widgets')}>
-                <LayoutGrid size={14} />
-                Widgets
-              </button>
-            </div>
+            {isDashboard && (
+              <div className="pillow-tabs">
+                <button type="button" className={tab === 'ask' ? 'is-active' : ''} onClick={() => setTab('ask')}>
+                  <MessageSquare size={14} />
+                  Preguntar
+                </button>
+                <button type="button" className={tab === 'widgets' ? 'is-active' : ''} onClick={() => setTab('widgets')}>
+                  <LayoutGrid size={14} />
+                  Widgets
+                </button>
+              </div>
+            )}
 
             {tab === 'ask' ? (
               <div className="pillow-ask">
                 <div className="pillow-chat">
-                  {chat.map((line, i) => (
+                  {[{ role: 'pillow', text: GREETING } as PillowChatLine, ...chat].map((line, i) => (
                     <div key={i} className={`pillow-chat-line pillow-chat-line--${line.role}`}>
+                      {line.role === 'user' && line.page && line.page !== page && (
+                        <span className="pillow-chat-origin">desde {PILLOW_PAGE_LABEL[line.page] ?? line.page}</span>
+                      )}
                       <p>{line.text}</p>
-                      {line.suggestions?.length ? (
+                      {isDashboard && line.suggestions?.length ? (
                         <div className="pillow-suggestions">
                           {line.suggestions.map((s) => (
                             <button key={`${s.type}-${s.title}`} type="button" onClick={() => addSuggestion(s)}>
@@ -184,10 +212,11 @@ export const PillowAgent: React.FC<PillowAgentProps> = ({ userEmail, dashboardCo
                       <span className="pillow-typing-label">Pillow está pensando…</span>
                     </div>
                   )}
+                  <div ref={chatEndRef} />
                 </div>
 
                 <div className="pillow-suggestion-chips">
-                  {PILLOW_SUGGESTIONS.map((s) => (
+                  {suggestionsFor(page).map((s) => (
                     <button key={s} type="button" onClick={() => setInput(s)}>
                       {s}
                     </button>
@@ -197,7 +226,7 @@ export const PillowAgent: React.FC<PillowAgentProps> = ({ userEmail, dashboardCo
                 <div className="pillow-input-row">
                   <textarea
                     rows={3}
-                    placeholder="Describe qué quieres entender en tu dashboard de seguridad…"
+                    placeholder={`Pregunta sobre ${pageLabel}…`}
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => {

@@ -529,6 +529,86 @@ export async function fetchSbom(repositoryId?: string): Promise<{ repositories: 
   return request(`/sbom${qs}`);
 }
 
+export type AiVerdict = 'LIKELY_REAL' | 'NEEDS_REVIEW' | 'LIKELY_FALSE_POSITIVE';
+
+export interface FixIntelReason {
+  label: string;
+  tone: 'up' | 'down' | 'neutral';
+  delta: number;
+}
+
+export interface FixIntelItem {
+  id: string;
+  repository_id: string;
+  repository_name: string;
+  engine: string;
+  severity: string;
+  title: string;
+  description: string;
+  file_path: string | null;
+  line_number: number | null;
+  cwe: string | null;
+  owasp_category: string | null;
+  status: string;
+  score: number;
+  reasons: FixIntelReason[];
+  package: string | null;
+  version: string | null;
+  fix_version: string | null;
+  fix_hint: string;
+  effort: 'Bajo' | 'Medio' | 'Alto';
+  ai_verdict: AiVerdict | null;
+  ai_confidence: number | null;
+  ai_summary: string | null;
+  ai_remediation: string | null;
+  ai_triaged_at: string | null;
+  ai_feedback: 'ACCEPTED' | 'DISMISSED' | null;
+  created_at: string | null;
+}
+
+export interface FixIntelKpis {
+  active: number;
+  triaged: number;
+  likely_real: number;
+  needs_review: number;
+  likely_false_positive: number;
+  quick_wins: number;
+  urgent: number;
+  ai_accepted: number;
+  ai_dismissed: number;
+  ai_acceptance_rate: number | null;
+}
+
+export interface FixIntelQueue {
+  kpis: FixIntelKpis;
+  items: FixIntelItem[];
+  repositories: { id: string; name: string }[];
+  max_batch: number;
+}
+
+export async function fetchFixIntel(repositoryId?: string): Promise<FixIntelQueue> {
+  const qs = repositoryId ? `?repository_id=${encodeURIComponent(repositoryId)}` : '';
+  return request(`/fix-intel${qs}`);
+}
+
+export async function triageFindings(
+  findingIds: string[],
+): Promise<{ items: FixIntelItem[]; credits_remaining: number; daily_limit: number }> {
+  return request('/fix-intel/triage', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ finding_ids: findingIds }),
+  });
+}
+
+export async function decideFixIntel(findingId: string, decision: 'accept' | 'dismiss'): Promise<FixIntelItem> {
+  return request(`/fix-intel/${findingId}/decision`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ decision }),
+  });
+}
+
 export async function downloadCycloneDx(repositoryId: string): Promise<Blob> {
   const res = await fetch(`${API_BASE}/sbom/${repositoryId}/cyclonedx`, { headers: authHeaders() });
   if (!res.ok) {
@@ -732,6 +812,9 @@ export async function sendPillowMessage(body: {
   message: string;
   user_key: string;
   dashboard_context?: Record<string, unknown>;
+  page?: string;
+  page_context?: Record<string, unknown>;
+  history?: { role: 'user' | 'pillow'; text: string }[];
 }): Promise<PillowChatResult> {
   const res = await fetch(`${API_BASE}/pillow/chat`, {
     method: 'POST',

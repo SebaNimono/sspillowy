@@ -113,6 +113,11 @@ class Finding(Base):
     ai_confidence = Column(Float, nullable=True)
     ai_summary = Column(Text, nullable=True)
     ai_remediation = Column(Text, nullable=True)
+    # LIKELY_REAL | NEEDS_REVIEW | LIKELY_FALSE_POSITIVE
+    ai_verdict = Column(String, nullable=True)
+    ai_triaged_at = Column(DateTime, nullable=True)
+    # ACCEPTED | DISMISSED: decisión humana sobre la sugerencia de la IA
+    ai_feedback = Column(String, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     repository = relationship("Repository", back_populates="findings")

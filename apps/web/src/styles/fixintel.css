@@ -1,0 +1,487 @@
+/* Fix Intelligence */
+
+.fi-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.fi-kpi {
+  --c: #0969da;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.8rem 0.95rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-left: 3px solid var(--c);
+  border-radius: 8px;
+}
+
+.fi-kpi-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fg-muted);
+}
+
+.fi-kpi-value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--c);
+  line-height: 1.2;
+}
+
+.fi-kpi-hint {
+  font-size: 0.7rem;
+  color: #8c959f;
+}
+
+.fi-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.8rem 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.fi-toolbar .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.fi-toolbar-spacer {
+  flex: 1;
+}
+
+.fi-select {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.38rem 0.55rem;
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.fi-chips {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.fi-chip {
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 0.28rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-default);
+  background: #ffffff;
+  color: var(--fg-muted);
+  cursor: pointer;
+  display: inline-flex;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.fi-chip em {
+  font-style: normal;
+  font-weight: 700;
+  font-size: 0.72rem;
+}
+
+.fi-chip.is-active {
+  background: #0969da;
+  border-color: #0969da;
+  color: #ffffff;
+}
+
+.fi-note {
+  flex-basis: 100%;
+  font-size: 0.75rem;
+  color: #8c959f;
+}
+
+.fi-spin {
+  animation: fi-spin 0.9s linear infinite;
+}
+
+@keyframes fi-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.fi-table-card {
+  padding: 0;
+  overflow-x: auto;
+}
+
+.fi-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.fi-table thead th {
+  text-align: left;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fg-muted);
+  padding: 0.65rem 0.8rem;
+  border-bottom: 1px solid var(--border-default);
+  background: #f6f8fa;
+}
+
+.fi-table tbody td {
+  padding: 0.65rem 0.8rem;
+  border-bottom: 1px solid #eaeef2;
+  vertical-align: middle;
+}
+
+.fi-table tbody tr {
+  cursor: pointer;
+}
+
+.fi-table tbody tr:hover,
+.fi-table tbody tr.is-open {
+  background: #f6f8ff;
+}
+
+.fi-score {
+  --c: #6e7781;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 90px;
+}
+
+.fi-score strong {
+  color: var(--c);
+  width: 1.6rem;
+  text-align: right;
+}
+
+.fi-score span,
+.fi-confidence span {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: #eaeef2;
+  overflow: hidden;
+  display: block;
+}
+
+.fi-score i,
+.fi-confidence i {
+  display: block;
+  height: 100%;
+  background: var(--c, #8250df);
+  border-radius: 999px;
+}
+
+.fi-title-cell {
+  min-width: 280px;
+}
+
+.fi-reasons {
+  min-width: 170px;
+}
+
+.fi-title-cell strong {
+  display: block;
+  color: var(--fg-default);
+  word-break: break-word;
+}
+
+.fi-meta {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--fg-muted);
+  word-break: break-all;
+}
+
+.fi-sev,
+.fi-verdict {
+  --c: #6e7781;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.12rem 0.5rem;
+  border-radius: 999px;
+  color: var(--c);
+  background: color-mix(in srgb, var(--c) 10%, #ffffff);
+  white-space: nowrap;
+}
+
+.fi-reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.fi-reason {
+  font-size: 0.7rem;
+  padding: 0.08rem 0.4rem;
+  border-radius: 4px;
+  background: #f6f8fa;
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+.fi-reason.is-up {
+  background: #fff1e5;
+  color: #bc4c00;
+}
+
+.fi-reason.is-down {
+  background: #dafbe1;
+  color: #1a7f37;
+}
+
+.fi-muted {
+  font-size: 0.75rem;
+  color: #8c959f;
+}
+
+.fi-none {
+  padding: 1.5rem;
+  text-align: center;
+  color: var(--fg-muted);
+  font-size: 0.85rem;
+}
+
+.fi-more {
+  padding: 0.75rem;
+  display: flex;
+  justify-content: center;
+}
+
+.fi-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.5rem;
+  padding: 2.5rem 1.5rem;
+  color: var(--fg-muted);
+}
+
+.fi-empty h3 {
+  font-size: 1.05rem;
+  color: var(--fg-default);
+}
+
+.fi-empty p {
+  max-width: 540px;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.fi-error {
+  color: #cf222e;
+}
+
+/* Panel lateral */
+
+.fi-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(31, 35, 40, 0.35);
+  z-index: 900;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.fi-drawer {
+  width: min(520px, 100%);
+  height: 100%;
+  overflow-y: auto;
+  background: #ffffff;
+  box-shadow: -8px 0 24px rgba(31, 35, 40, 0.15);
+  padding: 1.25rem 1.35rem 5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.fi-drawer-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.fi-drawer-head h2 {
+  font-size: 1.05rem;
+  margin: 0.4rem 0 0.2rem;
+  word-break: break-word;
+}
+
+.fi-icon-btn {
+  border: 1px solid var(--border-default);
+  background: #ffffff;
+  color: var(--fg-muted);
+  border-radius: 6px;
+  padding: 0.3rem;
+  cursor: pointer;
+  display: inline-flex;
+}
+
+.fi-section h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fg-muted);
+  margin-bottom: 0.45rem;
+}
+
+.fi-section h4 {
+  font-size: 0.8rem;
+  margin: 0.6rem 0 0.3rem;
+}
+
+.fi-breakdown {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.82rem;
+}
+
+.fi-breakdown li {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  background: #f6f8fa;
+}
+
+.fi-breakdown li.is-up b {
+  color: #bc4c00;
+}
+
+.fi-breakdown li.is-down b {
+  color: #1a7f37;
+}
+
+.fi-hint {
+  font-size: 0.88rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 6px;
+  background: #ddf4ff;
+  color: #0a3069;
+  margin-bottom: 0.3rem;
+}
+
+.fi-desc {
+  font-size: 0.85rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin-bottom: 0.3rem;
+}
+
+.fi-ai {
+  border: 1px solid #d8b9ff;
+  background: #fbf8ff;
+  border-radius: 8px;
+  padding: 0.85rem 0.95rem;
+}
+
+.fi-ai .btn,
+.fi-decision-actions .btn,
+.fi-drawer-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.fi-ai-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.fi-confidence {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--fg-muted);
+  min-width: 170px;
+}
+
+.fi-remediation {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #ffffff;
+  border: 1px solid #eaeef2;
+  border-radius: 6px;
+  padding: 0.65rem 0.75rem;
+  margin-bottom: 0.35rem;
+}
+
+.fi-decision {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed #d8b9ff;
+}
+
+.fi-decision-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.45rem;
+}
+
+.fi-feedback {
+  margin-top: 0.6rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.fi-feedback.is-accepted {
+  color: #1a7f37;
+}
+
+.fi-feedback.is-dismissed {
+  color: #6e7781;
+}
+
+.fi-link {
+  margin-top: 0.6rem;
+  display: block;
+  font: inherit;
+  font-size: 0.78rem;
+  color: #8250df;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.fi-link:disabled {
+  color: #8c959f;
+  cursor: default;
+}
+
+.fi-drawer-link {
+  align-self: flex-start;
+}

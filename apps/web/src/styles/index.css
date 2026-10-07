@@ -3496,6 +3496,19 @@ a.cookie-inline {
   color: #1f2328;
 }
 
+.pillow-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.pillow-chat-origin {
+  display: block;
+  font-size: 0.65rem;
+  opacity: 0.75;
+  margin-bottom: 0.15rem;
+}
+
 .pillow-panel-close {
   border: none;
   background: transparent;

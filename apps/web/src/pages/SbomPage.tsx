@@ -6,6 +6,7 @@ import { Toast, ToastMessage } from '../components/Toast';
 import { SbomComponent, SbomRepository, downloadCycloneDx, fetchSbom } from '../api/client';
 import { SEVERITY_COLOR, SEVERITY_LABEL, SEVERITY_RANK, Severity } from '../utils/findingGroups';
 import { formatDateTime } from '../utils/formatDateTime';
+import { usePillowPageContext } from '../config/pillowContext';
 import '../styles/sbom.css';
 
 interface PageProps {
@@ -170,6 +171,26 @@ export const SbomPage: React.FC<PageProps> = ({ onNavigate, ...headerProps }) =>
     }),
     [groups, scoped],
   );
+
+  const pillowContext = useMemo(
+    () => ({
+      kpis,
+      top_vulnerable: groups
+        .filter((g) => g.worst)
+        .slice(0, 12)
+        .map((g) => ({
+          package: g.name,
+          ecosystem: g.ecosystem,
+          versions: g.versions,
+          worst_severity: g.worst,
+          vulnerabilities: g.vulnCount,
+          fix_version: g.fixVersion,
+          repositories: g.repos,
+        })),
+    }),
+    [kpis, groups],
+  );
+  usePillowPageContext('sbom', loaded ? pillowContext : null);
 
   const ecosystems = useMemo(() => [...new Set(components.map((c) => c.ecosystem).filter(Boolean) as string[])].sort(), [components]);
   const reposWithSbom = repos.filter((r) => r.generated_at);

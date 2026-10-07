@@ -611,6 +611,13 @@ def run_repo_scan_job(
                 f"{superseded} hallazgos previos marcados SUPERSEDED tras nuevo escaneo.",
             )
 
+        try:
+            from fix_intel import carry_forward_triage
+
+            carry_forward_triage(db, repo_id=repo.id, scan_id=scan.id)
+        except Exception as exc:
+            _append_audit(db, "scan-worker", "TRIAGE_CARRY_FAILED", repo.name, str(exc)[:400])
+
         if "gitleaks" in engines_ok:
             try:
                 from secret_management import sync_secret_incidents

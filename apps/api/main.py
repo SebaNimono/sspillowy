@@ -56,6 +56,7 @@ from pillow_agent import router as pillow_router  # noqa: E402
 from gate_bypass import router as gate_bypass_router  # noqa: E402
 from secret_management import router as secret_management_router  # noqa: E402
 from sbom import router as sbom_router  # noqa: E402
+from fix_intel import router as fix_intel_router  # noqa: E402
 from database import init_db, db_ping, SessionLocal  # noqa: E402
 import database as _database  # noqa: E402
 from email_service import mailer_status  # noqa: E402
@@ -132,6 +133,7 @@ app.include_router(microsoft_auth_router)
 app.include_router(gate_bypass_router)
 app.include_router(secret_management_router)
 app.include_router(sbom_router)
+app.include_router(fix_intel_router)
 
 # Estado de lectura de notificaciones (efímero por instancia; hallazgos sí son persistentes)
 _READ_NOTIFICATION_IDS: set[str] = set()

@@ -57,26 +57,6 @@ export const ROADMAP: Record<string, RoadmapModule> = {
     stage: 'mvp',
     meanwhile: { tab: 'dashboard', label: 'Ver Risk Posture' },
   },
-  fixIntel: {
-    id: 'fixIntel',
-    title: 'Fix Intelligence',
-    tagline: 'La IA te explica el problema y te propone cómo arreglarlo.',
-    description:
-      'Asistencia con IA para cada hallazgo: explica el riesgo en tu contexto, estima si es explotable y propone un parche. La decisión final siempre es de una persona.',
-    features: [
-      'Explicación del hallazgo en lenguaje claro.',
-      'Propuesta de corrección con el código sugerido.',
-      'Indicador de confianza de la sugerencia.',
-      'Sugerencia de prioridad para la revisión.',
-    ],
-    howItWorks: [
-      'Toma el hallazgo, el fragmento de código y la recomendación de la herramienta.',
-      'El asistente Pillow genera la explicación y la propuesta.',
-      'Tú decides: aplicar, descartar o marcar como falso positivo.',
-    ],
-    stage: 'mvp',
-    meanwhile: { tab: 'findings', label: 'Ir a Priorización contextual' },
-  },
   runbooks: {
     id: 'runbooks',
     title: 'Runbooks & RPA',

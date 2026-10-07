@@ -19,6 +19,7 @@ import { SECRET_STEPS, providerGuide } from '../config/secretProviders';
 import { SEVERITY_COLOR, SEVERITY_LABEL } from '../utils/findingGroups';
 import { formatDateTime } from '../utils/formatDateTime';
 import { formatFilePath } from '../utils/formatFilePath';
+import { usePillowPageContext } from '../config/pillowContext';
 import '../styles/secrets.css';
 
 interface PageProps {
@@ -110,6 +111,25 @@ export const SecretsPage: React.FC<PageProps> = ({ onNavigate, ...headerProps })
     const mttr = durations.length ? durations.reduce((a, b) => a + b, 0) / durations.length / DAY_MS : null;
     return { open, inProgress, resolved: resolved.length, criticalUnrotated, mttr };
   }, [items]);
+
+  const pillowContext = useMemo(
+    () => ({
+      kpis,
+      incidents: items
+        .filter((s) => s.status === 'OPEN' || s.status === 'IN_PROGRESS')
+        .slice(0, 12)
+        .map((s) => ({
+          provider: s.provider,
+          severity: s.severity,
+          status: s.status,
+          repository: s.repository_name,
+          file: s.file_path,
+          steps_done: SECRET_STEPS.filter((st) => s.steps[st.id].done).map((st) => st.id),
+        })),
+    }),
+    [kpis, items],
+  );
+  usePillowPageContext('secrets', loaded ? pillowContext : null);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();

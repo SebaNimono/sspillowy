@@ -45,6 +45,12 @@ export const PILLOW_SUGGESTIONS = [
 ];
 
 const STORAGE_KEY = 'sspillowy_pillow_widgets';
+export const PILLOW_WIDGETS_EVENT = 'sspillowy:pillow-widgets';
+
+export function addPlacedWidget(widget: PlacedPillowWidget): void {
+  savePlacedWidgets([...loadPlacedWidgets(), widget]);
+  window.dispatchEvent(new Event(PILLOW_WIDGETS_EVENT));
+}
 
 export function loadPlacedWidgets(): PlacedPillowWidget[] {
   try {

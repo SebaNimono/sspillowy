@@ -272,9 +272,22 @@ export const CONCEPTS: Concept[] = [
     expansion: 'Human-in-the-loop',
     category: 'hallazgos',
     definition: 'Principio por el que una persona valida las decisiones. La automatización detecta y propone; una persona decide.',
-    inSystem: 'Ni los motores ni la IA cierran hallazgos: un auditor cambia el estado desde Priorización contextual y queda en la bitácora.',
+    inSystem:
+      'Ni los motores ni la IA cierran hallazgos: una persona cambia el estado desde Priorización contextual o acepta la sugerencia de la IA en Fix Intelligence, y queda en la bitácora.',
     tab: 'findings',
-    related: ['estados', 'auditoria'],
+    related: ['estados', 'auditoria', 'triaje-ia'],
+  },
+  {
+    id: 'triaje-ia',
+    term: 'Triaje asistido por IA',
+    category: 'hallazgos',
+    definition:
+      'Revisión inicial de un hallazgo hecha por una IA para estimar si es un problema real o un falso positivo y proponer cómo corregirlo. Ahorra tiempo, pero la decisión final es humana.',
+    inSystem:
+      'En Fix Intelligence, Pillow analiza hasta 5 hallazgos a la vez y devuelve veredicto, confianza y corrección sugerida. Tú aceptas o descartas cada sugerencia.',
+    example: 'Una regla detecta "contraseña en el código" en tests/fixtures → Probable falso positivo, confianza 85%.',
+    tab: 'fixIntel',
+    related: ['hitl', 'falso-positivo', 'estados'],
   },
   {
     id: 'estados',
