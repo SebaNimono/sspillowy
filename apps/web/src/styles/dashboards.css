@@ -59,6 +59,22 @@
   cursor: pointer;
 }
 
+.dw-scope {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  max-width: 260px;
+  padding: 0.32rem 0.65rem;
+  border-radius: 999px;
+  background: #ddf4ff;
+  color: #0a3069;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .dw-tool-btn:disabled {
   opacity: 0.6;
   cursor: progress;

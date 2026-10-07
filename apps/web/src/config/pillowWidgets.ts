@@ -47,7 +47,18 @@ export const PILLOW_SUGGESTIONS = [
 const STORAGE_KEY = 'sspillowy_pillow_widgets';
 export const PILLOW_WIDGETS_EVENT = 'sspillowy:pillow-widgets';
 
+let widgetSink: ((widget: PlacedPillowWidget) => void) | null = null;
+
+/** El dashboard abierto recibe los widgets que añade Pillow (así van al dashboard correcto). */
+export function setPillowWidgetSink(sink: ((widget: PlacedPillowWidget) => void) | null): void {
+  widgetSink = sink;
+}
+
 export function addPlacedWidget(widget: PlacedPillowWidget): void {
+  if (widgetSink) {
+    widgetSink(widget);
+    return;
+  }
   savePlacedWidgets([...loadPlacedWidgets(), widget]);
   window.dispatchEvent(new Event(PILLOW_WIDGETS_EVENT));
 }

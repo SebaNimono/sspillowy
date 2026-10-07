@@ -230,6 +230,28 @@ class SbomSnapshot(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
+class DashboardView(Base):
+    """Dashboard guardado: alcance (repos), periodo, bloques visibles, umbrales y widgets de Pillow."""
+
+    __tablename__ = "dashboard_views"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    name = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    # JSON: lista de ids de repositorio; vacía = todos
+    repository_ids = Column(Text, nullable=True)
+    range_days = Column(Integer, default=30)
+    # JSON: {"widgets": {...}, "thresholds": {...}}
+    config = Column(Text, nullable=True)
+    pillow_widgets = Column(Text, nullable=True)
+    owner_email = Column(String, nullable=True, index=True)
+    shared = Column(Boolean, default=True)
+    # JSON: emails que lo marcaron como favorito
+    starred_by = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
 class PillowDailyUsage(Base):
     """Créditos diarios del agente Pillow por usuario (email)."""
 

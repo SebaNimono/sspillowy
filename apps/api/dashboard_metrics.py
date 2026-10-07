@@ -51,10 +51,17 @@ def _finding_day(f: Finding) -> date | None:
     return dt.date()
 
 
-def compute_dashboard_stats(db: Session) -> dict:
-    repos = db.query(Repository).filter(Repository.is_active.is_(True)).all()
-    scans_count = db.query(Scan).filter(Scan.status == "COMPLETED").count()
-    all_findings = db.query(Finding).all()
+def compute_dashboard_stats(db: Session, repo_ids: list[str] | None = None) -> dict:
+    repo_q = db.query(Repository).filter(Repository.is_active.is_(True))
+    scan_q = db.query(Scan).filter(Scan.status == "COMPLETED")
+    finding_q = db.query(Finding)
+    if repo_ids:
+        repo_q = repo_q.filter(Repository.id.in_(repo_ids))
+        scan_q = scan_q.filter(Scan.repository_id.in_(repo_ids))
+        finding_q = finding_q.filter(Finding.repository_id.in_(repo_ids))
+    repos = repo_q.all()
+    scans_count = scan_q.count()
+    all_findings = finding_q.all()
     # Dashboard = hallazgos activos (OPEN/IN_REVIEW); supersedidos no cuentan
     open_findings = [f for f in all_findings if (f.status or "") in OPEN_STATUSES]
     visible = [f for f in all_findings if (f.status or "") != "SUPERSEDED"]
@@ -85,14 +92,13 @@ def compute_dashboard_stats(db: Session) -> dict:
     }
 
 
-def compute_heatmap(db: Session, weeks: int = 12) -> dict:
+def compute_heatmap(db: Session, weeks: int = 12, repo_ids: list[str] | None = None) -> dict:
     days = weeks * 7 - 1
     today = datetime.now(timezone.utc).date()
-    findings = (
-        db.query(Finding)
-        .filter(Finding.status.in_(list(OPEN_STATUSES)))
-        .all()
-    )
+    q = db.query(Finding).filter(Finding.status.in_(list(OPEN_STATUSES)))
+    if repo_ids:
+        q = q.filter(Finding.repository_id.in_(repo_ids))
+    findings = q.all()
     by_day: dict[date, int] = defaultdict(int)
     for f in findings:
         d = _finding_day(f)
@@ -116,13 +122,13 @@ def compute_heatmap(db: Session, weeks: int = 12) -> dict:
     }
 
 
-def list_audit_events(db: Session, limit: int = 40) -> list[dict]:
-    rows = (
-        db.query(AuditEvent)
-        .order_by(AuditEvent.created_at.desc())
-        .limit(limit)
-        .all()
-    )
+def list_audit_events(db: Session, limit: int = 40, repo_ids: list[str] | None = None) -> list[dict]:
+    q = db.query(AuditEvent)
+    if repo_ids:
+        # Los eventos guardan el nombre del repositorio como target
+        names = [n for (n,) in db.query(Repository.name).filter(Repository.id.in_(repo_ids)).all()]
+        q = q.filter(AuditEvent.target.in_(names or ["__none__"]))
+    rows = q.order_by(AuditEvent.created_at.desc()).limit(limit).all()
     return [
         {
             "id": row.id,

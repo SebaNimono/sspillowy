@@ -11,9 +11,11 @@ import {
 interface DashboardSettingsProps {
   config: DashboardConfig;
   onChange: (config: DashboardConfig) => void;
+  /** false: el dashboard guarda su propia configuración en el servidor. */
+  persistLocal?: boolean;
 }
 
-export const DashboardSettings: React.FC<DashboardSettingsProps> = ({ config, onChange }) => {
+export const DashboardSettings: React.FC<DashboardSettingsProps> = ({ config, onChange, persistLocal = true }) => {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(config);
 
@@ -23,8 +25,10 @@ export const DashboardSettings: React.FC<DashboardSettingsProps> = ({ config, on
   };
 
   const apply = () => {
-    saveDashboardConfig(draft);
-    syncDashboardConfigToUrl(draft);
+    if (persistLocal) {
+      saveDashboardConfig(draft);
+      syncDashboardConfigToUrl(draft);
+    }
     onChange(draft);
     setOpen(false);
   };
@@ -55,7 +59,10 @@ export const DashboardSettings: React.FC<DashboardSettingsProps> = ({ config, on
 
         <p className="dash-settings-lead">
           Elige qué bloques ver y los umbrales de alerta. Si un valor supera el máximo (o el health baja del mínimo), se
-          marca en rojo. Los ajustes se guardan en este navegador y se reflejan en la URL.
+          marca en rojo.{' '}
+          {persistLocal
+            ? 'Los ajustes se guardan en este navegador y se reflejan en la URL.'
+            : 'Los ajustes se guardan en este dashboard y los ve todo el equipo.'}
         </p>
 
         <section className="dash-settings-section">
@@ -142,10 +149,12 @@ export const DashboardSettings: React.FC<DashboardSettingsProps> = ({ config, on
           </div>
         </section>
 
-        <p className="dash-settings-query-hint">
-          Ejemplo URL:{' '}
-          <code>?w=kpis,health,heatmap&amp;crit_max=0&amp;health_min=80</code>
-        </p>
+        {persistLocal && (
+          <p className="dash-settings-query-hint">
+            Ejemplo URL:{' '}
+            <code>?w=kpis,health,heatmap&amp;crit_max=0&amp;health_min=80</code>
+          </p>
+        )}
 
         <div className="dash-settings-actions">
           <button type="button" className="btn btn-secondary" onClick={() => setOpen(false)}>

@@ -30,14 +30,29 @@ import {
   AuditEvent,
   Finding,
   Scan,
+  DashboardView,
   fetchStats,
   fetchHeatmap,
   fetchAuditLog,
   fetchFindings,
   fetchScans,
+  updateDashboardView,
 } from '../api/client';
-import { ALERT_COLORS, DashboardConfig, healthAlert, loadDashboardConfig, metricAlert } from '../config/dashboardConfig';
-import { PILLOW_WIDGETS_EVENT, PlacedPillowWidget, loadPlacedWidgets, savePlacedWidgets } from '../config/pillowWidgets';
+import {
+  ALERT_COLORS,
+  DEFAULT_DASHBOARD_CONFIG,
+  DashboardConfig,
+  healthAlert,
+  loadDashboardConfig,
+  metricAlert,
+} from '../config/dashboardConfig';
+import {
+  PILLOW_WIDGETS_EVENT,
+  PlacedPillowWidget,
+  loadPlacedWidgets,
+  savePlacedWidgets,
+  setPillowWidgetSink,
+} from '../config/pillowWidgets';
 import { usePillowPageContext } from '../config/pillowContext';
 import {
   SEVERITIES,
@@ -70,6 +85,8 @@ import {
   Filter as FunnelIcon,
   Timer,
   ScanLine,
+  LayoutGrid,
+  FolderGit2,
 } from 'lucide-react';
 import '../styles/dashboards.css';
 
@@ -81,6 +98,10 @@ interface PageProps {
   onNavigate?: (tab: string) => void;
   unreadCount?: number;
   onGoToSite?: () => void;
+  /** Dashboard guardado; null = General (toda la organización). */
+  view?: DashboardView | null;
+  onOpenList?: () => void;
+  onViewSaved?: (view: DashboardView) => void;
 }
 
 type RangeDays = 7 | 30 | 90;
@@ -276,10 +297,20 @@ export const DashboardPage: React.FC<PageProps> = ({
   onNavigate,
   unreadCount,
   onGoToSite,
+  view = null,
+  onOpenList,
+  onViewSaved,
 }) => {
   const { t } = useI18n();
-  const [config, setConfig] = useState<DashboardConfig>(() => loadDashboardConfig());
-  const [range, setRange] = useState<RangeDays>(() => loadRange());
+  const [config, setConfig] = useState<DashboardConfig>(() =>
+    view
+      ? {
+          widgets: { ...DEFAULT_DASHBOARD_CONFIG.widgets, ...(view.config?.widgets ?? {}) },
+          thresholds: { ...DEFAULT_DASHBOARD_CONFIG.thresholds, ...(view.config?.thresholds ?? {}) },
+        }
+      : loadDashboardConfig(),
+  );
+  const [range, setRange] = useState<RangeDays>(() => (view ? view.range_days : loadRange()));
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [heatmap, setHeatmap] = useState<HeatmapData>(EMPTY_HEATMAP);
@@ -289,27 +320,61 @@ export const DashboardPage: React.FC<PageProps> = ({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
-  const [pillowWidgets, setPillowWidgets] = useState<PlacedPillowWidget[]>(() => loadPlacedWidgets());
+  const [pillowWidgets, setPillowWidgets] = useState<PlacedPillowWidget[]>(() =>
+    view ? (view.pillow_widgets as PlacedPillowWidget[]) : loadPlacedWidgets(),
+  );
 
+  const scopeKey = view?.repository_ids.join(',') ?? '';
   const load = useCallback(async () => {
+    const scope = scopeKey ? scopeKey.split(',') : undefined;
+    const inScope = (repoId: string) => !scope || scope.includes(repoId);
     setRefreshing(true);
     const [s, h, a, f, sc] = await Promise.allSettled([
-      fetchStats(),
-      fetchHeatmap(),
-      fetchAuditLog(),
+      fetchStats(scope),
+      fetchHeatmap(scope),
+      fetchAuditLog(scope),
       fetchFindings(),
       fetchScans(),
     ]);
     setStats(s.status === 'fulfilled' && s.value ? s.value : EMPTY_STATS);
     setHeatmap(h.status === 'fulfilled' && h.value?.cells?.length ? h.value : EMPTY_HEATMAP);
     setEvents(a.status === 'fulfilled' ? a.value ?? [] : []);
-    setFindings(f.status === 'fulfilled' ? f.value ?? [] : []);
-    setScans(sc.status === 'fulfilled' ? sc.value ?? [] : []);
+    setFindings(f.status === 'fulfilled' ? (f.value ?? []).filter((x) => inScope(x.repository_id)) : []);
+    setScans(sc.status === 'fulfilled' ? (sc.value ?? []).filter((x) => inScope(x.repository_id)) : []);
     const failed = [s, h, a, f, sc].find((r) => r.status === 'rejected') as PromiseRejectedResult | undefined;
     setLoadError(failed ? (failed.reason instanceof Error ? failed.reason.message : 'No se pudo cargar parte del dashboard.') : null);
     setUpdatedAt(new Date());
     setRefreshing(false);
-  }, []);
+  }, [scopeKey]);
+
+  const persistView = useCallback(
+    (patch: Parameters<typeof updateDashboardView>[1]) => {
+      if (!view) return;
+      updateDashboardView(view.id, patch)
+        .then((saved) => onViewSaved?.(saved))
+        .catch(() => undefined);
+    },
+    [view, onViewSaved],
+  );
+
+  const savePillowWidgets = useCallback(
+    (next: PlacedPillowWidget[]) => {
+      if (view) persistView({ pillow_widgets: next });
+      else savePlacedWidgets(next);
+    },
+    [view, persistView],
+  );
+
+  useEffect(() => {
+    setPillowWidgetSink((widget) =>
+      setPillowWidgets((prev) => {
+        const next = [...prev, widget];
+        savePillowWidgets(next);
+        return next;
+      }),
+    );
+    return () => setPillowWidgetSink(null);
+  }, [savePillowWidgets]);
 
   useEffect(() => {
     load();
@@ -321,7 +386,18 @@ export const DashboardPage: React.FC<PageProps> = ({
     return () => window.removeEventListener(PILLOW_WIDGETS_EVENT, onWidgets);
   }, []);
 
-  usePillowPageContext('dashboard', stats as unknown as Record<string, unknown>);
+  const pillowContext = useMemo(
+    () =>
+      stats
+        ? {
+            dashboard: view ? view.name : 'General (toda la organización)',
+            repositories_in_scope: view?.repository_names.length ? view.repository_names : 'todos',
+            stats,
+          }
+        : null,
+    [stats, view],
+  );
+  usePillowPageContext('dashboard', pillowContext);
 
   useEffect(() => {
     if (!autoRefresh) return undefined;
@@ -331,7 +407,13 @@ export const DashboardPage: React.FC<PageProps> = ({
 
   const changeRange = (r: RangeDays) => {
     setRange(r);
-    localStorage.setItem(RANGE_KEY, String(r));
+    if (view) persistView({ range_days: r });
+    else localStorage.setItem(RANGE_KEY, String(r));
+  };
+
+  const changeConfig = (next: DashboardConfig) => {
+    setConfig(next);
+    if (view) persistView({ config: next as unknown as DashboardView['config'] });
   };
 
   const resolvedStats = stats ?? EMPTY_STATS;
@@ -528,16 +610,22 @@ export const DashboardPage: React.FC<PageProps> = ({
   const handleRemovePillowWidget = (id: string) => {
     setPillowWidgets((prev) => {
       const next = prev.filter((w) => w.id !== id);
-      savePlacedWidgets(next);
+      savePillowWidgets(next);
       return next;
     });
   };
 
+  const scopeLabel = !view?.repository_names.length
+    ? 'Toda la organización'
+    : view.repository_names.length <= 2
+      ? view.repository_names.join(', ')
+      : `${view.repository_names.length} repositorios`;
+
   return (
     <div className="dash">
       <Header
-        title={t('pages.dashboard.title')}
-        subtitle={t('pages.dashboard.subtitle')}
+        title={view ? view.name : t('pages.dashboard.title')}
+        subtitle={view ? view.description || `Dashboard de ${scopeLabel.toLowerCase()}.` : t('pages.dashboard.subtitle')}
         healthScore={dataReady ? resolvedStats.overall_health_score : undefined}
         sidebarState={sidebarState}
         setSidebarState={setSidebarState}
@@ -549,6 +637,16 @@ export const DashboardPage: React.FC<PageProps> = ({
       />
 
       <div className="dw-toolbar">
+        {onOpenList && (
+          <button type="button" className="dw-tool-btn" onClick={onOpenList} title="Ver todos los dashboards">
+            <LayoutGrid size={14} />
+            <span>Dashboards</span>
+          </button>
+        )}
+        <span className="dw-scope" title={view?.repository_names.join(', ') || 'Todos los repositorios'}>
+          <FolderGit2 size={13} />
+          {scopeLabel}
+        </span>
         <div className="dw-range" role="group" aria-label="Rango de tiempo">
           {RANGES.map((r) => (
             <button key={r} type="button" className={range === r ? 'is-active' : ''} onClick={() => changeRange(r)}>
@@ -574,7 +672,7 @@ export const DashboardPage: React.FC<PageProps> = ({
           {!loading && dataReady && (
             <span className={`dash-status-pill dash-status-pill--${openAlert}`}>{active.length} hallazgos activos</span>
           )}
-          <DashboardSettings config={config} onChange={setConfig} />
+          <DashboardSettings config={config} onChange={changeConfig} persistLocal={!view} />
         </div>
       </div>
 

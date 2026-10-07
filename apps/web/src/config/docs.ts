@@ -225,6 +225,7 @@ export const DOC_SECTIONS: DocSection[] = [
           'Los indicadores comparan con el periodo anterior: activos, críticos, fuera de plazo, gate aprobado y escaneos.',
           'Los widgets responden: ¿vamos mejorando?, ¿corregimos a tiempo?, ¿dónde está el riesgo?, ¿cuánto revisó el equipo?',
           'Con "Configurar" eliges qué widgets ver y tus umbrales de alerta. Desde aquí Pillow también puede añadir widgets a tu tablero.',
+          'Con el botón "Dashboards" ves la lista completa y creas dashboards propios por producto, equipo o cliente, cada uno con sus repositorios.',
         ],
       },
       { type: 'goto', tab: 'dashboard', label: 'Ir a Risk Posture' },
@@ -312,6 +313,11 @@ export const DOC_SECTIONS: DocSection[] = [
       {
         type: 'p',
         text: 'En Supply Chain & SBOM, usa el botón de descarga del repositorio. Obtienes un archivo CycloneDX 1.5 con todas las librerías, sus licencias y las vulnerabilidades conocidas.',
+      },
+      { type: 'h', text: '“Cada equipo quiere ver solo sus proyectos”' },
+      {
+        type: 'p',
+        text: 'En Risk Posture, abre "Dashboards" y crea uno por equipo eligiendo sus repositorios. Cada equipo marca el suyo como favorito y ve sus métricas, plazos y bitácora sin el ruido del resto de la organización.',
       },
       { type: 'h', text: '“Tengo cientos de hallazgos y no sé por dónde empezar”' },
       {
@@ -552,8 +558,27 @@ export const DOC_SECTIONS: DocSection[] = [
     id: 'dashboards',
     group: 'Cómo funciona',
     title: 'Risk Posture (dashboards)',
-    summary: 'Qué muestra cada indicador y cada gráfico.',
+    summary: 'Tus dashboards, qué muestra cada indicador y cada gráfico.',
     blocks: [
+      { type: 'h', text: 'Tus dashboards' },
+      {
+        type: 'p',
+        text: 'Risk Posture abre el último dashboard que viste. El General muestra toda la organización y siempre está disponible. Además puedes crear los tuyos: cada uno elige qué repositorios incluye y muestra las mismas métricas solo de ese alcance.',
+      },
+      {
+        type: 'steps',
+        items: [
+          { title: 'Crea', text: 'Pulsa "Dashboards" y luego "Nuevo dashboard". Ponle nombre, elige "Toda la organización" o los repositorios que quieras, el periodo y quién lo ve.' },
+          { title: 'Personaliza', text: 'Dentro del dashboard, "Personalizar" guarda bloques y umbrales solo para ese dashboard. Los widgets que añadas con Pillow también se quedan en él.' },
+          { title: 'Organiza', text: 'Marca con la estrella los que más uses, filtra por favoritos, creados por ti o del equipo, y busca por nombre o por repositorio.' },
+          { title: 'Comparte', text: 'Los dashboards "Todo el equipo" los ve cualquiera; los "Solo yo" solo tú. Quien no es el autor puede duplicarlo para hacer su propia versión.' },
+        ],
+      },
+      {
+        type: 'callout',
+        tone: 'tip',
+        text: 'Ejemplos útiles: un dashboard por producto ("Backend de pagos"), uno por cliente para sus informes, o uno con solo los repositorios que van a producción.',
+      },
       { type: 'h', text: 'Controles' },
       { type: 'list', items: ['Periodo: últimos 7, 30 o 90 días.', 'Actualizar: recarga los datos.', 'En vivo: se actualiza solo cada minuto.', 'Configurar: elige qué widgets ver y tus umbrales de alerta.'] },
       { type: 'h', text: 'Indicadores' },

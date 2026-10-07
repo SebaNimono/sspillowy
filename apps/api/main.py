@@ -57,6 +57,7 @@ from gate_bypass import router as gate_bypass_router  # noqa: E402
 from secret_management import router as secret_management_router  # noqa: E402
 from sbom import router as sbom_router  # noqa: E402
 from fix_intel import router as fix_intel_router  # noqa: E402
+from dashboard_views import router as dashboard_views_router  # noqa: E402
 from database import init_db, db_ping, SessionLocal  # noqa: E402
 import database as _database  # noqa: E402
 from email_service import mailer_status  # noqa: E402
@@ -134,6 +135,7 @@ app.include_router(gate_bypass_router)
 app.include_router(secret_management_router)
 app.include_router(sbom_router)
 app.include_router(fix_intel_router)
+app.include_router(dashboard_views_router)
 
 # Estado de lectura de notificaciones (efímero por instancia; hallazgos sí son persistentes)
 _READ_NOTIFICATION_IDS: set[str] = set()
@@ -417,13 +419,20 @@ async def health_check():
     }
 
 
+def _repo_ids_param(raw: Optional[str]) -> list[str] | None:
+    ids = [p.strip() for p in (raw or "").split(",") if p.strip()]
+    return ids or None
+
+
 @app.get("/api/v1/stats", response_model=DashboardStats, tags=["Dashboard"])
-async def get_dashboard_stats(_auth=Depends(require_hub_read)):
+async def get_dashboard_stats(
+    repository_ids: Optional[str] = Query(default=None), _auth=Depends(require_hub_read)
+):
     db = SessionLocal()
     try:
         if not db_ping():
             return _empty_dashboard_stats()
-        return DashboardStats(**compute_dashboard_stats(db))
+        return DashboardStats(**compute_dashboard_stats(db, _repo_ids_param(repository_ids)))
     except Exception as exc:
         print(f"[sspillowy] dashboard stats error: {exc}")
         return _empty_dashboard_stats()
@@ -432,12 +441,16 @@ async def get_dashboard_stats(_auth=Depends(require_hub_read)):
 
 
 @app.get("/api/v1/heatmap", response_model=HeatmapResponse, tags=["Dashboard"])
-async def get_heatmap(weeks: int = Query(default=12, ge=4, le=52), _auth=Depends(require_hub_read)):
+async def get_heatmap(
+    weeks: int = Query(default=12, ge=4, le=52),
+    repository_ids: Optional[str] = Query(default=None),
+    _auth=Depends(require_hub_read),
+):
     db = SessionLocal()
     try:
         if not db_ping():
             return _empty_heatmap(weeks)
-        return HeatmapResponse(**compute_heatmap(db, weeks=weeks))
+        return HeatmapResponse(**compute_heatmap(db, weeks=weeks, repo_ids=_repo_ids_param(repository_ids)))
     except Exception as exc:
         print(f"[sspillowy] heatmap error: {exc}")
         return _empty_heatmap(weeks)
@@ -446,12 +459,16 @@ async def get_heatmap(weeks: int = Query(default=12, ge=4, le=52), _auth=Depends
 
 
 @app.get("/api/v1/audit-log", response_model=List[AuditEventResponse], tags=["Audit"])
-async def list_audit_log(limit: int = Query(default=40, ge=1, le=200), _auth=Depends(require_hub_read)):
+async def list_audit_log(
+    limit: int = Query(default=40, ge=1, le=200),
+    repository_ids: Optional[str] = Query(default=None),
+    _auth=Depends(require_hub_read),
+):
     db = SessionLocal()
     try:
         if not db_ping():
             return []
-        return list_audit_events(db, limit=limit)
+        return list_audit_events(db, limit=limit, repo_ids=_repo_ids_param(repository_ids))
     except Exception as exc:
         print(f"[sspillowy] audit log error: {exc}")
         return []

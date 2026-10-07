@@ -298,8 +298,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json();
 }
 
-export async function fetchStats(): Promise<DashboardStats> {
-  return request('/stats');
+export async function fetchStats(repositoryIds?: string[]): Promise<DashboardStats> {
+  return request(`/stats${repositoryIds?.length ? `?repository_ids=${encodeURIComponent(repositoryIds.join(','))}` : ''}`);
 }
 
 export async function fetchRepositories(): Promise<Repository[]> {
@@ -618,12 +618,74 @@ export async function downloadCycloneDx(repositoryId: string): Promise<Blob> {
   return res.blob();
 }
 
-export async function fetchHeatmap(): Promise<HeatmapData> {
-  return request('/heatmap');
+const scopeQuery = (repositoryIds?: string[]) =>
+  repositoryIds?.length ? `?repository_ids=${encodeURIComponent(repositoryIds.join(','))}` : '';
+
+export async function fetchHeatmap(repositoryIds?: string[]): Promise<HeatmapData> {
+  return request(`/heatmap${scopeQuery(repositoryIds)}`);
 }
 
-export async function fetchAuditLog(): Promise<AuditEvent[]> {
-  return request('/audit-log');
+export async function fetchAuditLog(repositoryIds?: string[]): Promise<AuditEvent[]> {
+  return request(`/audit-log${scopeQuery(repositoryIds)}`);
+}
+
+export interface DashboardViewConfig {
+  widgets: Record<string, boolean>;
+  thresholds: { critical_max: number; high_max: number; open_max: number; health_min: number };
+}
+
+export interface DashboardView {
+  id: string;
+  name: string;
+  description: string;
+  repository_ids: string[];
+  repository_names: string[];
+  range_days: 7 | 30 | 90;
+  config: DashboardViewConfig | null;
+  pillow_widgets: { id: string; type: string; title: string; metric?: string; createdAt: string }[];
+  owner_email: string | null;
+  shared: boolean;
+  starred: boolean;
+  star_count: number;
+  can_edit: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export type DashboardViewInput = Partial<
+  Pick<DashboardView, 'name' | 'description' | 'repository_ids' | 'range_days' | 'config' | 'pillow_widgets' | 'shared'>
+>;
+
+export async function fetchDashboardViews(): Promise<DashboardView[]> {
+  return request('/dashboards');
+}
+
+export async function createDashboardView(body: DashboardViewInput): Promise<DashboardView> {
+  return request('/dashboards', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function updateDashboardView(id: string, body: DashboardViewInput): Promise<DashboardView> {
+  return request(`/dashboards/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function toggleDashboardStar(id: string): Promise<DashboardView> {
+  return request(`/dashboards/${id}/star`, { method: 'POST' });
+}
+
+export async function duplicateDashboardView(id: string): Promise<DashboardView> {
+  return request(`/dashboards/${id}/duplicate`, { method: 'POST' });
+}
+
+export async function deleteDashboardView(id: string): Promise<{ ok: boolean }> {
+  return request(`/dashboards/${id}`, { method: 'DELETE' });
 }
 
 export async function fetchNotifications(unreadOnly = false): Promise<NotificationItem[]> {

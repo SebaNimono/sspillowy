@@ -15,6 +15,7 @@ import { DocsPage } from './pages/DocsPage';
 import { SecretsPage } from './pages/SecretsPage';
 import { SbomPage } from './pages/SbomPage';
 import { FixIntelPage } from './pages/FixIntelPage';
+import { RiskPosturePage } from './pages/RiskPosturePage';
 import { PillowAgent } from './components/PillowAgent';
 import { ComingSoonPage } from './pages/ComingSoonPage';
 import { ROADMAP } from './config/roadmap';
@@ -419,7 +420,7 @@ const AppShell: React.FC = () => {
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <DashboardPage {...pageProps} />;
+        return <RiskPosturePage {...pageProps} />;
       case 'repositories':
         return <RepositoriesPage {...pageProps} />;
       case 'findings':
