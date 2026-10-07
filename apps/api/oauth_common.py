@@ -11,7 +11,7 @@ from urllib.parse import quote
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Header, HTTPException
 from fastapi.responses import RedirectResponse
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
@@ -19,8 +19,15 @@ load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173").rstrip("/")
 SECRET_KEY = os.getenv("SECRET_KEY", "supersecretkey_change_me_in_production_123456789").strip()
 
-# Fallback en RAM si Postgres no está disponible
+# Caché/fallback en RAM; cada entrada lleva expires_at y se valida igual que en Postgres
 SESSIONS: dict[str, dict] = {}
+
+SESSION_TTL_HOURS = float(os.getenv("SESSION_TTL_HOURS", "12"))
+SESSION_REMEMBER_DAYS = float(os.getenv("SESSION_REMEMBER_DAYS", "30"))
+
+
+def session_ttl(remember: bool) -> timedelta:
+    return timedelta(days=SESSION_REMEMBER_DAYS) if remember else timedelta(hours=SESSION_TTL_HOURS)
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Auth"])
 
@@ -36,29 +43,37 @@ def redirect_oauth_error(code: str, detail: str = "") -> RedirectResponse:
     return frontend_redirect(q)
 
 
-def issue_state() -> str:
+def issue_state(remember: bool = False) -> str:
     """State firmado (sobrevive redeploys de Railway; no depende de RAM)."""
-    payload = base64.urlsafe_b64encode(
-        json.dumps({"n": secrets.token_urlsafe(8), "t": int(datetime.now(timezone.utc).timestamp())}).encode()
-    ).decode().rstrip("=")
+    data = {"n": secrets.token_urlsafe(8), "t": int(datetime.now(timezone.utc).timestamp())}
+    if remember:
+        data["r"] = 1
+    payload = base64.urlsafe_b64encode(json.dumps(data).encode()).decode().rstrip("=")
     sig = hmac.new(SECRET_KEY.encode(), payload.encode(), hashlib.sha256).hexdigest()[:20]
     return f"{payload}.{sig}"
 
 
-def consume_state(state: str | None) -> bool:
+def consume_state(state: str | None) -> dict | None:
+    """Devuelve el payload del state si es válido y reciente; None si no."""
     if not state or "." not in state:
-        return False
+        return None
     payload, sig = state.rsplit(".", 1)
     expected = hmac.new(SECRET_KEY.encode(), payload.encode(), hashlib.sha256).hexdigest()[:20]
     if not hmac.compare_digest(sig, expected):
-        return False
+        return None
     try:
         pad = "=" * (-len(payload) % 4)
         data = json.loads(base64.urlsafe_b64decode(payload + pad).decode())
         issued = datetime.fromtimestamp(data["t"], tz=timezone.utc)
     except (ValueError, KeyError, json.JSONDecodeError):
-        return False
-    return datetime.now(timezone.utc) - issued <= timedelta(minutes=10)
+        return None
+    if datetime.now(timezone.utc) - issued > timedelta(minutes=10):
+        return None
+    return data
+
+
+def state_remember(state_data: dict | None) -> bool:
+    return bool((state_data or {}).get("r"))
 
 
 def save_session(
@@ -68,17 +83,19 @@ def save_session(
     provider: str,
     avatar_url: str | None = None,
     provider_subject: str | None = None,
+    remember: bool = False,
     **_extra: object,
 ) -> str:
     """Upsert usuario en Supabase/Postgres + sesión. Fallback a RAM si falla la DB."""
     session_id = uuid.uuid4().hex
-    expires_at = datetime.now(timezone.utc) + timedelta(hours=12)
+    expires_at = datetime.now(timezone.utc) + session_ttl(remember)
     payload = {
         "id": session_id,
         "email": email,
         "name": name,
         "avatar_url": avatar_url,
         "provider": provider,
+        "remember": remember,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "expires_at": expires_at.isoformat(),
     }
@@ -139,10 +156,25 @@ def save_session(
     return session_id
 
 
+def _expired(iso: str | None) -> bool:
+    if not iso:
+        return True
+    try:
+        exp = datetime.fromisoformat(iso)
+    except ValueError:
+        return True
+    if exp.tzinfo is None:
+        exp = exp.replace(tzinfo=timezone.utc)
+    return exp < datetime.now(timezone.utc)
+
+
 def load_session(session_id: str) -> dict | None:
     mem = SESSIONS.get(session_id)
     if mem:
-        return mem
+        if not _expired(mem.get("expires_at")):
+            return mem
+        SESSIONS.pop(session_id, None)
+        return None
 
     try:
         from database import SessionLocal
@@ -172,6 +204,7 @@ def load_session(session_id: str) -> dict | None:
                 "provider": auth.provider,
                 "user_id": user.id,
                 "created_at": (auth.created_at or datetime.now(timezone.utc)).isoformat(),
+                "expires_at": exp.isoformat(),
             }
             SESSIONS[session_id] = data
             return data
@@ -180,6 +213,22 @@ def load_session(session_id: str) -> dict | None:
     except Exception as exc:
         print(f"[sspillowy] load_session DB error: {exc}")
         return None
+
+
+def delete_session(session_id: str) -> None:
+    SESSIONS.pop(session_id, None)
+    try:
+        from database import SessionLocal
+        from models import AuthSession
+
+        db = SessionLocal()
+        try:
+            db.query(AuthSession).filter(AuthSession.id == session_id).delete(synchronize_session=False)
+            db.commit()
+        finally:
+            db.close()
+    except Exception as exc:
+        print(f"[sspillowy] delete_session DB error: {exc}")
 
 
 def map_google_token_error(response: httpx.Response) -> tuple[str, str]:
@@ -236,3 +285,10 @@ async def get_auth_session(session_id: str):
     if not session:
         raise HTTPException(status_code=404, detail="Sesión OAuth no encontrada o expirada")
     return session
+
+
+@router.post("/logout")
+async def logout(x_session_id: str | None = Header(default=None, alias="X-Session-Id")):
+    if x_session_id and x_session_id.strip():
+        delete_session(x_session_id.strip())
+    return {"ok": True}

@@ -2,7 +2,37 @@ import React, { useEffect, useState } from 'react';
 import { Lock, Mail, ArrowRight, Github, Chrome, Code2, Globe } from 'lucide-react';
 import { Toast, ToastMessage } from '../components/Toast';
 import { AnimatedBackground } from '../components/AnimatedBackground';
-import { apiUrl, fetchAuthProviders, loginWithPassword, registerWithPassword, resendVerificationEmail, requestPasswordReset } from '../api/client';
+import {
+  apiUrl,
+  fetchAuthProviders,
+  forgetLastEmail,
+  getLastEmail,
+  getRememberPreference,
+  loginWithPassword,
+  registerWithPassword,
+  requestPasswordReset,
+  resendVerificationEmail,
+  setRememberPreference,
+} from '../api/client';
+
+const TERMS_ACCEPTED_KEY = 'sspillowy_terms_accepted';
+
+const readTermsAccepted = () => {
+  try {
+    return localStorage.getItem(TERMS_ACCEPTED_KEY) === '1';
+  } catch {
+    return false;
+  }
+};
+
+const persistTermsAccepted = (accepted: boolean) => {
+  try {
+    if (accepted) localStorage.setItem(TERMS_ACCEPTED_KEY, '1');
+    else localStorage.removeItem(TERMS_ACCEPTED_KEY);
+  } catch {
+    // ignore
+  }
+};
 
 interface LoginPageProps {
   onLoginSuccess: (email: string, name: string, sessionId?: string) => void;
@@ -24,7 +54,9 @@ const oauthErrorMessage = (code: string, detail?: string | null) => {
     case 'state_expired':
       return 'La sesión OAuth expiró. Vuelve a intentar (no abras dos pestañas a la vez).';
     case 'session_expired':
-      return 'No se pudo leer la sesión en Railway. Redeploy reciente: intenta login otra vez.';
+      return 'No se pudo completar el inicio de sesión. Vuelve a intentarlo.';
+    case 'session_ended':
+      return 'Tu sesión expiró o se cerró. Inicia sesión de nuevo para continuar.';
     case 'gitlab_http':
       return 'GitLab no respondió. Revisa el Redirect URI y reinicia uvicorn.';
     case 'google_not_configured':
@@ -71,12 +103,14 @@ const oauthErrorMessage = (code: string, detail?: string | null) => {
 export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oauthError, oauthDetail }) => {
   const [isRegister, setIsRegister] = useState(false);
   const [isForgot, setIsForgot] = useState(false);
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(getLastEmail);
+  const [rememberedEmail, setRememberedEmail] = useState(getLastEmail);
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(readTermsAccepted);
+  const [remember, setRemember] = useState(getRememberPreference);
   const [termsHint, setTermsHint] = useState(false);
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null);
 
@@ -119,6 +153,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oa
   const requireTerms = () => {
     if (acceptedTerms) {
       setTermsHint(false);
+      persistTermsAccepted(true);
+      setRememberPreference(remember);
       return true;
     }
     setTermsHint(true);
@@ -174,7 +210,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oa
         return;
       }
 
-      const result = await loginWithPassword(email.trim(), password);
+      const result = await loginWithPassword(email.trim(), password, remember);
       onLoginSuccess(result.email, result.name, result.session_id);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'No se pudo completar la solicitud.';
@@ -271,7 +307,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oa
         });
         return;
       }
-      window.location.href = apiUrl(`/auth/${provider}`);
+      const query = new URLSearchParams();
+      if (remember) query.set('remember', 'true');
+      if (rememberedEmail && (provider === 'google' || provider === 'microsoft')) {
+        query.set('login_hint', rememberedEmail);
+      }
+      const qs = query.toString();
+      window.location.href = apiUrl(`/auth/${provider}${qs ? `?${qs}` : ''}`);
     } catch {
       setToast({
         id: Date.now().toString(),
@@ -552,6 +594,31 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oa
             </div>
           </div>
 
+          {!isRegister && (
+            <div className="login-remember-row">
+              <label className="login-terms login-remember">
+                <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+                <span>
+                  Mantener sesión iniciada
+                  <small>{remember ? 'Hasta 30 días en este navegador.' : 'Se cierra al cerrar el navegador o tras 12 horas.'}</small>
+                </span>
+              </label>
+              {rememberedEmail && (
+                <button
+                  type="button"
+                  className="login-forget"
+                  onClick={() => {
+                    forgetLastEmail();
+                    setRememberedEmail('');
+                    setEmail('');
+                  }}
+                >
+                  Usar otra cuenta
+                </button>
+              )}
+            </div>
+          )}
+
           <label className={`login-terms${termsHint ? ' login-terms--warn' : ''}`}>
             <input
               type="checkbox"
@@ -559,6 +626,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oa
               onChange={(e) => {
                 setAcceptedTerms(e.target.checked);
                 if (e.target.checked) setTermsHint(false);
+                else persistTermsAccepted(false);
               }}
             />
             <span>

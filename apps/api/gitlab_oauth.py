@@ -5,7 +5,7 @@ import httpx
 from fastapi import APIRouter
 from fastapi.responses import RedirectResponse
 
-from oauth_common import consume_state, frontend_redirect, issue_state, save_session
+from oauth_common import consume_state, frontend_redirect, issue_state, save_session, state_remember
 
 GITLAB_BASE_URL = os.getenv("GITLAB_BASE_URL", "https://gitlab.com").rstrip("/")
 GITLAB_CLIENT_ID = os.getenv("GITLAB_CLIENT_ID", "").strip()
@@ -19,7 +19,7 @@ router = APIRouter(prefix="/api/v1/auth", tags=["Auth"])
 
 
 @router.get("/gitlab")
-async def gitlab_login():
+async def gitlab_login(remember: bool = False):
     if not (GITLAB_CLIENT_ID and GITLAB_CLIENT_SECRET):
         return frontend_redirect("oauth_error=gitlab_not_configured")
 
@@ -29,7 +29,7 @@ async def gitlab_login():
             "redirect_uri": GITLAB_REDIRECT_URI,
             "response_type": "code",
             "scope": "read_user",
-            "state": issue_state(),
+            "state": issue_state(remember),
         }
     )
     return RedirectResponse(f"{GITLAB_BASE_URL}/oauth/authorize?{params}", status_code=302)
@@ -39,7 +39,8 @@ async def gitlab_login():
 async def gitlab_callback(code: str | None = None, state: str | None = None, error: str | None = None):
     if error:
         return frontend_redirect(f"oauth_error={error}")
-    if not code or not consume_state(state):
+    state_data = consume_state(state)
+    if not code or not state_data:
         return frontend_redirect("oauth_error=invalid_state")
 
     try:
@@ -72,6 +73,7 @@ async def gitlab_callback(code: str | None = None, state: str | None = None, err
     username = profile.get("username") or "user"
     email = profile.get("email") or f"{username}@users.noreply.gitlab.com"
     session_id = save_session(
+        remember=state_remember(state_data),
         email=email,
         name=profile.get("name") or username,
         avatar_url=profile.get("avatar_url"),

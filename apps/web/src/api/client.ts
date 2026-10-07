@@ -167,23 +167,106 @@ const API_ORIGIN = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
 const API_BASE = `${API_ORIGIN}/api/v1`;
 
 const SESSION_STORAGE_KEY = 'sspillowy_session';
+const USER_STORAGE_KEY = 'sspillowy_user';
+const REMEMBER_KEY = 'sspillowy_remember';
+const LAST_EMAIL_KEY = 'sspillowy_last_email';
+
+/** Evento global cuando la API rechaza la sesión (expirada o cerrada en otro lado). */
+export const SESSION_EXPIRED_EVENT = 'sspillowy:session-expired';
 
 export function apiUrl(path: string): string {
   return `${API_BASE}${path}`;
 }
 
-export function getStoredSessionId(): string | null {
+export interface StoredUser {
+  email: string;
+  name: string;
+}
+
+/** "Mantener sesión iniciada": localStorage sobrevive al cierre del navegador; sessionStorage no. */
+function readBoth(key: string): string | null {
   try {
-    return localStorage.getItem(SESSION_STORAGE_KEY);
+    return sessionStorage.getItem(key) ?? localStorage.getItem(key);
   } catch {
     return null;
   }
 }
 
-export function setStoredSessionId(sessionId: string | null): void {
+function clearBoth(key: string): void {
   try {
-    if (sessionId) localStorage.setItem(SESSION_STORAGE_KEY, sessionId);
-    else localStorage.removeItem(SESSION_STORAGE_KEY);
+    sessionStorage.removeItem(key);
+    localStorage.removeItem(key);
+  } catch {
+    // ignore
+  }
+}
+
+export function getStoredSessionId(): string | null {
+  return readBoth(SESSION_STORAGE_KEY);
+}
+
+export function getStoredUser(): StoredUser | null {
+  const raw = readBoth(USER_STORAGE_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as StoredUser;
+  } catch {
+    return null;
+  }
+}
+
+export function storeSession(sessionId: string, user: StoredUser, remember: boolean): void {
+  clearStoredSession();
+  try {
+    const store = remember ? localStorage : sessionStorage;
+    store.setItem(SESSION_STORAGE_KEY, sessionId);
+    store.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+    localStorage.setItem(LAST_EMAIL_KEY, user.email);
+  } catch {
+    // ignore
+  }
+}
+
+export function clearStoredSession(): void {
+  const previous = getStoredUser();
+  if (previous?.email) {
+    try {
+      localStorage.setItem(LAST_EMAIL_KEY, previous.email);
+    } catch {
+      // ignore
+    }
+  }
+  clearBoth(SESSION_STORAGE_KEY);
+  clearBoth(USER_STORAGE_KEY);
+}
+
+export function getRememberPreference(): boolean {
+  try {
+    return localStorage.getItem(REMEMBER_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function setRememberPreference(remember: boolean): void {
+  try {
+    localStorage.setItem(REMEMBER_KEY, remember ? '1' : '0');
+  } catch {
+    // ignore
+  }
+}
+
+export function getLastEmail(): string {
+  try {
+    return localStorage.getItem(LAST_EMAIL_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+
+export function forgetLastEmail(): void {
+  try {
+    localStorage.removeItem(LAST_EMAIL_KEY);
   } catch {
     // ignore
   }
@@ -199,6 +282,9 @@ function authHeaders(extra?: HeadersInit): Headers {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = authHeaders(init?.headers);
   const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
+  if (res.status === 401) {
+    window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
+  }
   if (!res.ok) {
     let detail = `Error de API (${res.status})`;
     try {
@@ -431,6 +517,13 @@ export interface AuthSession {
   name: string;
   avatar_url?: string;
   provider: string;
+  expires_at?: string;
+}
+
+export async function logoutSession(): Promise<void> {
+  const sid = getStoredSessionId();
+  if (!sid) return;
+  await fetch(`${API_BASE}/auth/logout`, { method: 'POST', headers: { 'X-Session-Id': sid } }).catch(() => undefined);
 }
 
 export async function fetchAuthProviders(): Promise<{
@@ -487,11 +580,11 @@ export async function registerWithPassword(
   return passwordAuthRequest('/auth/register', { email, password, name: name || undefined });
 }
 
-export async function loginWithPassword(email: string, password: string): Promise<PasswordAuthResult> {
+export async function loginWithPassword(email: string, password: string, remember = false): Promise<PasswordAuthResult> {
   const res = await fetch(`${API_BASE}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, remember }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {

@@ -15,7 +15,17 @@ import { DocsPage } from './pages/DocsPage';
 import { SecretsPage } from './pages/SecretsPage';
 import { ComingSoonPage } from './pages/ComingSoonPage';
 import { ROADMAP } from './config/roadmap';
-import { fetchNotifications, fetchAuthSession, setStoredSessionId } from './api/client';
+import {
+  SESSION_EXPIRED_EVENT,
+  clearStoredSession,
+  fetchAuthSession,
+  fetchNotifications,
+  getRememberPreference,
+  getStoredSessionId,
+  getStoredUser,
+  logoutSession,
+  storeSession,
+} from './api/client';
 import { CookieBanner } from './components/CookieBanner';
 import { AppToaster } from './components/Toast';
 
@@ -58,12 +68,8 @@ function initialView(): AppView {
   const legal = legalFromLocation();
   if (legal) return legal;
   if (resetTokenFromLocation()) return 'reset-password';
-  try {
-    // Si hay sesión guardada, no mandar al landing al recargar
-    if (localStorage.getItem('sspillowy_user')) return 'console';
-  } catch {
-    // ignore
-  }
+  // Si hay sesión guardada, no mandar al landing al recargar (se valida contra la API al arrancar)
+  if (getStoredUser() && getStoredSessionId()) return 'console';
   return 'site';
 }
 
@@ -112,15 +118,10 @@ const AppShell: React.FC = () => {
   const [oauthError, setOauthError] = useState<string | null>(null);
   const [oauthDetail, setOauthDetail] = useState<string | null>(null);
 
-  const [user, setUser] = useState<{ email: string; name: string } | null>(() => {
-    try {
-      const saved = localStorage.getItem('sspillowy_user');
-      if (saved) return JSON.parse(saved);
-    } catch {
-      // ignore
-    }
-    return null;
-  });
+  const [user, setUser] = useState<{ email: string; name: string } | null>(() =>
+    getStoredSessionId() ? getStoredUser() : null,
+  );
+  const [sessionExpiresAt, setSessionExpiresAt] = useState<string | null>(null);
 
   const setActiveTab = (tab: string) => {
     setActiveTabState(tab);
@@ -147,17 +148,57 @@ const AppShell: React.FC = () => {
     if (user && view === 'console') refreshUnread();
   }, [user, activeTab, view]);
 
-  const handleLoginSuccess = (email: string, name: string, sessionId?: string) => {
+  const handleLoginSuccess = (email: string, name: string, sessionId?: string, expiresAt?: string) => {
     const newUser = { email, name };
+    if (sessionId) storeSession(sessionId, newUser, getRememberPreference());
     setUser(newUser);
+    setSessionExpiresAt(expiresAt ?? null);
+    setOauthError(null);
+    setOauthDetail(null);
     setView('console');
-    try {
-      localStorage.setItem('sspillowy_user', JSON.stringify(newUser));
-      if (sessionId) setStoredSessionId(sessionId);
-    } catch {
-      // ignore
-    }
   };
+
+  const expireSession = () => {
+    clearStoredSession();
+    setUser(null);
+    setSessionExpiresAt(null);
+    setOauthError('session_ended');
+    setOauthDetail(null);
+    setView('login');
+  };
+
+  useEffect(() => {
+    if (!user) return;
+    const onExpired = () => expireSession();
+    window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
+  }, [user]);
+
+  useEffect(() => {
+    if (!user || !sessionExpiresAt) return;
+    const ms = new Date(sessionExpiresAt).getTime() - Date.now();
+    if (Number.isNaN(ms)) return;
+    const timer = window.setTimeout(expireSession, Math.min(Math.max(ms, 0), 2_147_000_000));
+    return () => window.clearTimeout(timer);
+  }, [user, sessionExpiresAt]);
+
+  useEffect(() => {
+    if (!user) return;
+    let lastCheck = Date.now();
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible' || Date.now() - lastCheck < 60_000) return;
+      lastCheck = Date.now();
+      const sid = getStoredSessionId();
+      if (!sid) return expireSession();
+      fetchAuthSession(sid)
+        .then((s) => setSessionExpiresAt(s.expires_at ?? null))
+        .catch((err) => {
+          if (!(err instanceof TypeError)) expireSession();
+        });
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [user]);
 
   useEffect(() => {
     // Legacy #privacidad → /privacidad (Google / enlaces viejos)
@@ -222,7 +263,7 @@ const AppShell: React.FC = () => {
     if (sessionId) {
       fetchAuthSession(sessionId)
         .then((session) => {
-          handleLoginSuccess(session.email, session.name, session.id || sessionId);
+          handleLoginSuccess(session.email, session.name, session.id || sessionId, session.expires_at);
         })
         .catch(() => {
           setOauthError('session_expired');
@@ -235,19 +276,34 @@ const AppShell: React.FC = () => {
       return () => window.removeEventListener('popstate', onPop);
     }
 
-    setBootstrapping(false);
+    const storedSid = getStoredSessionId();
+    if (!storedSid) {
+      clearStoredSession();
+      setUser(null);
+      setView((current) => (current === 'console' ? 'site' : current));
+      setBootstrapping(false);
+      return () => window.removeEventListener('popstate', onPop);
+    }
+
+    fetchAuthSession(storedSid)
+      .then((session) => setSessionExpiresAt(session.expires_at ?? null))
+      .catch((err) => {
+        // Sin conexión con la API no cerramos la sesión; solo si la API la rechaza.
+        if (!(err instanceof TypeError)) expireSession();
+      })
+      .finally(() => setBootstrapping(false));
     return () => window.removeEventListener('popstate', onPop);
   }, []);
 
   const handleLogout = () => {
+    logoutSession().finally(clearStoredSession);
     setUser(null);
+    setSessionExpiresAt(null);
     setView('site');
     setActiveTabState('dashboard');
     window.history.pushState({}, '', '/');
     try {
-      localStorage.removeItem('sspillowy_user');
       localStorage.removeItem(CONSOLE_TAB_KEY);
-      setStoredSessionId(null);
     } catch {
       // ignore
     }

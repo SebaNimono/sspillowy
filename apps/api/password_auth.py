@@ -30,6 +30,7 @@ class RegisterBody(BaseModel):
 class LoginBody(BaseModel):
     email: str = Field(min_length=5, max_length=255)
     password: str = Field(min_length=1, max_length=128)
+    remember: bool = False
 
 
 class AuthResponse(BaseModel):
@@ -195,6 +196,7 @@ async def login(body: LoginBody):
             provider="password",
             avatar_url=user.avatar_url,
             provider_subject=user.id,
+            remember=body.remember,
         )
         return AuthResponse(
             session_id=session_id,

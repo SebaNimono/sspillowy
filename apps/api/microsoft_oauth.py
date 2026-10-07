@@ -12,6 +12,7 @@ from oauth_common import (
     map_microsoft_token_error,
     redirect_oauth_error,
     save_session,
+    state_remember,
 )
 
 MICROSOFT_CLIENT_ID = os.getenv("MICROSOFT_CLIENT_ID", "").strip()
@@ -30,21 +31,24 @@ def _authority() -> str:
 
 
 @router.get("/microsoft")
-async def microsoft_login():
+async def microsoft_login(remember: bool = False, login_hint: str | None = None):
     if not (MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET):
         return redirect_oauth_error("microsoft_not_configured")
 
-    params = urlencode(
-        {
-            "client_id": MICROSOFT_CLIENT_ID,
-            "redirect_uri": MICROSOFT_REDIRECT_URI,
-            "response_type": "code",
-            "response_mode": "query",
-            "scope": "openid profile email User.Read",
-            "state": issue_state(),
-            "prompt": "select_account",
-        }
-    )
+    query = {
+        "client_id": MICROSOFT_CLIENT_ID,
+        "redirect_uri": MICROSOFT_REDIRECT_URI,
+        "response_type": "code",
+        "response_mode": "query",
+        "scope": "openid profile email User.Read",
+        "state": issue_state(remember),
+    }
+    hint = (login_hint or "").strip()
+    if hint:
+        query["login_hint"] = hint
+    else:
+        query["prompt"] = "select_account"
+    params = urlencode(query)
     return RedirectResponse(f"{_authority()}/authorize?{params}", status_code=302)
 
 
@@ -52,7 +56,8 @@ async def microsoft_login():
 async def microsoft_callback(code: str | None = None, state: str | None = None, error: str | None = None):
     if error:
         return redirect_oauth_error(error)
-    if not code or not consume_state(state):
+    state_data = consume_state(state)
+    if not code or not state_data:
         return redirect_oauth_error("invalid_state")
 
     try:
@@ -92,6 +97,7 @@ async def microsoft_callback(code: str | None = None, state: str | None = None, 
         return redirect_oauth_error("microsoft_no_email")
 
     session_id = save_session(
+        remember=state_remember(state_data),
         email=email,
         name=profile.get("displayName") or email.split("@")[0],
         provider="microsoft",

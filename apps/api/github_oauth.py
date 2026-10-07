@@ -5,7 +5,7 @@ import httpx
 from fastapi import APIRouter
 from fastapi.responses import RedirectResponse
 
-from oauth_common import consume_state, frontend_redirect, issue_state, save_session
+from oauth_common import consume_state, frontend_redirect, issue_state, save_session, state_remember
 
 GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID", "").strip()
 GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET", "").strip()
@@ -18,7 +18,7 @@ router = APIRouter(prefix="/api/v1/auth", tags=["Auth"])
 
 
 @router.get("/github")
-async def github_login():
+async def github_login(remember: bool = False):
     if not (GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET):
         return frontend_redirect("oauth_error=github_not_configured")
 
@@ -27,7 +27,7 @@ async def github_login():
             "client_id": GITHUB_CLIENT_ID,
             "redirect_uri": GITHUB_REDIRECT_URI,
             "scope": "read:user user:email",
-            "state": issue_state(),
+            "state": issue_state(remember),
             "allow_signup": "true",
         }
     )
@@ -38,7 +38,8 @@ async def github_login():
 async def github_callback(code: str | None = None, state: str | None = None, error: str | None = None):
     if error:
         return frontend_redirect(f"oauth_error={error}")
-    if not code or not consume_state(state):
+    state_data = consume_state(state)
+    if not code or not state_data:
         return frontend_redirect("oauth_error=invalid_state")
 
     try:
@@ -83,6 +84,7 @@ async def github_callback(code: str | None = None, state: str | None = None, err
         return frontend_redirect("oauth_error=github_http")
 
     session_id = save_session(
+        remember=state_remember(state_data),
         email=email,
         name=profile.get("name") or profile.get("login") or email.split("@")[0],
         avatar_url=profile.get("avatar_url"),

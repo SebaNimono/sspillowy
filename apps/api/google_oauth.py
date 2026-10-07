@@ -12,6 +12,7 @@ from oauth_common import (
     map_google_token_error,
     redirect_oauth_error,
     save_session,
+    state_remember,
 )
 
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "").strip()
@@ -25,21 +26,24 @@ router = APIRouter(prefix="/api/v1/auth", tags=["Auth"])
 
 
 @router.get("/google")
-async def google_login():
+async def google_login(remember: bool = False, login_hint: str | None = None):
     if not (GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET):
         return redirect_oauth_error("google_not_configured")
 
-    params = urlencode(
-        {
-            "client_id": GOOGLE_CLIENT_ID,
-            "redirect_uri": GOOGLE_REDIRECT_URI,
-            "response_type": "code",
-            "scope": "openid email profile",
-            "state": issue_state(),
-            "access_type": "online",
-            "prompt": "select_account",
-        }
-    )
+    query = {
+        "client_id": GOOGLE_CLIENT_ID,
+        "redirect_uri": GOOGLE_REDIRECT_URI,
+        "response_type": "code",
+        "scope": "openid email profile",
+        "state": issue_state(remember),
+        "access_type": "online",
+    }
+    hint = (login_hint or "").strip()
+    if hint:
+        query["login_hint"] = hint
+    else:
+        query["prompt"] = "select_account"
+    params = urlencode(query)
     return RedirectResponse(f"https://accounts.google.com/o/oauth2/v2/auth?{params}", status_code=302)
 
 
@@ -47,7 +51,8 @@ async def google_login():
 async def google_callback(code: str | None = None, state: str | None = None, error: str | None = None):
     if error:
         return redirect_oauth_error(error)
-    if not code or not consume_state(state):
+    state_data = consume_state(state)
+    if not code or not state_data:
         return redirect_oauth_error("invalid_state")
 
     try:
@@ -87,6 +92,7 @@ async def google_callback(code: str | None = None, state: str | None = None, err
         return redirect_oauth_error("google_no_email")
 
     session_id = save_session(
+        remember=state_remember(state_data),
         email=email,
         name=profile.get("name") or email.split("@")[0],
         avatar_url=profile.get("picture"),
