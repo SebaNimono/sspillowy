@@ -55,7 +55,11 @@ export const PILLOW_PAGE_SUGGESTIONS: Record<string, string[]> = {
   sbom: ['¿Qué dependencias me exponen más?', '¿Cómo reduzco paquetes vulnerables?'],
   scans: ['¿Qué hace cada motor de escaneo?', '¿Cada cuánto debería escanear?'],
   gates: ['¿Qué política de gate me recomiendas?', '¿Cuándo es válido un bypass?'],
-  reports: ['¿Cómo preparo evidencia para una auditoría?'],
+  reports: [
+    '¿Qué controles debo resolver primero para subir mi preparación?',
+    '¿Qué marcos me conviene activar?',
+    '¿Qué evidencia necesito para los controles manuales?',
+  ],
 };
 
 const DEFAULT_SUGGESTIONS = ['¿Qué puedo hacer en esta sección?', '¿Cuál es mi mayor riesgo ahora?'];

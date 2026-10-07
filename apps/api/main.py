@@ -61,6 +61,7 @@ from dashboard_views import router as dashboard_views_router  # noqa: E402
 from velocity import first_seen_map, fingerprint, router as velocity_router  # noqa: E402
 from runbooks import router as runbooks_router  # noqa: E402
 from compliance import current_period, iso_controls  # noqa: E402
+from compliance import router as compliance_router  # noqa: E402
 from executive import router as executive_router  # noqa: E402
 from database import init_db, db_ping, SessionLocal  # noqa: E402
 import database as _database  # noqa: E402
@@ -143,6 +144,7 @@ app.include_router(dashboard_views_router)
 app.include_router(velocity_router)
 app.include_router(runbooks_router)
 app.include_router(executive_router)
+app.include_router(compliance_router)
 
 # Estado de lectura de notificaciones (efímero por instancia; hallazgos sí son persistentes)
 _READ_NOTIFICATION_IDS: set[str] = set()

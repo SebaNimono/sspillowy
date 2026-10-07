@@ -792,13 +792,9 @@ export interface ExecutiveData {
     last_scan_at: string | null;
   }[];
   compliance: {
-    standard: string;
     period: string;
-    compliant: number;
-    partial: number;
-    gap: number;
-    total: number;
-    gaps: { code: string; title: string; reason: string }[];
+    frameworks: { id: string; short: string; name: string; score: number; compliant: number; total: number }[];
+    gaps: { id: string; name: string; status: 'GAP' | 'PENDING'; reason: string; frameworks: string[] }[];
   };
 }
 
@@ -920,6 +916,89 @@ export async function markNotificationRead(id: string): Promise<NotificationItem
 
 export async function markAllNotificationsRead(): Promise<{ updated: number }> {
   return request('/notifications/read-all', { method: 'POST' });
+}
+
+export type ComplianceStatus = 'COMPLIANT' | 'PARTIAL' | 'GAP' | 'PENDING' | 'NOT_APPLICABLE';
+
+export interface ComplianceRequirement {
+  id: string;
+  title: string;
+  group: string;
+  controls: string[];
+  status: ComplianceStatus;
+  reason: string;
+  findings: number | null;
+}
+
+export interface ComplianceFramework {
+  id: string;
+  name: string;
+  short: string;
+  category: string;
+  description: string;
+  enabled: boolean;
+  score: number;
+  counts: Record<ComplianceStatus, number>;
+  total: number;
+  requirements: ComplianceRequirement[];
+  trend: { day: string; score: number }[];
+}
+
+export interface ComplianceControl {
+  id: string;
+  name: string;
+  domain: string;
+  type: 'auto' | 'manual';
+  description: string;
+  guidance: string | null;
+  status: ComplianceStatus;
+  reason: string;
+  evidence: { label: string; value: string }[];
+  owner_email: string | null;
+  note: string | null;
+  evidence_url: string | null;
+  attested_by: string | null;
+  attested_at: string | null;
+  expires_at: string | null;
+  not_applicable: boolean;
+  na_reason: string | null;
+  updated_by: string | null;
+  updated_at: string | null;
+  mappings: { framework_id: string; short: string; enabled: boolean; requirements: string[] }[];
+}
+
+export interface ComplianceOverview {
+  generated_at: string;
+  period: string;
+  domains: { id: string; name: string }[];
+  frameworks: ComplianceFramework[];
+  controls: ComplianceControl[];
+  summary: { controls: number; passing: number; failing: number; partial: number; pending: number; not_applicable: number };
+}
+
+export interface ComplianceControlPatch {
+  owner_email?: string | null;
+  note?: string | null;
+  evidence_url?: string | null;
+  attest?: boolean;
+  not_applicable?: boolean;
+  na_reason?: string | null;
+}
+
+export async function fetchCompliance(): Promise<ComplianceOverview> {
+  return request('/compliance');
+}
+
+export async function setComplianceFramework(id: string, enabled: boolean): Promise<ComplianceOverview> {
+  return request(`/compliance/frameworks/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ enabled }) });
+}
+
+export async function updateComplianceControl(id: string, body: ComplianceControlPatch): Promise<ComplianceOverview> {
+  return request(`/compliance/controls/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(body) });
+}
+
+export async function fetchComplianceEvidence(id: string): Promise<Record<string, unknown>> {
+  return request(`/compliance/frameworks/${encodeURIComponent(id)}/evidence`);
 }
 
 export async function fetchComplianceReport(): Promise<ComplianceReport> {

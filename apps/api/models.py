@@ -298,6 +298,48 @@ class RunbookExecution(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
 
 
+class ComplianceFrameworkSetting(Base):
+    """Marcos de cumplimiento activados por la organización."""
+
+    __tablename__ = "compliance_frameworks"
+
+    framework_id = Column(String, primary_key=True)
+    enabled = Column(Boolean, default=True)
+    updated_by = Column(String, nullable=True)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class ComplianceControlState(Base):
+    """Datos que aporta el equipo a un control: responsable, evidencia, verificación manual o exclusión."""
+
+    __tablename__ = "compliance_control_states"
+
+    control_id = Column(String, primary_key=True)
+    owner_email = Column(String, nullable=True)
+    note = Column(Text, nullable=True)
+    evidence_url = Column(String, nullable=True)
+    attested_by = Column(String, nullable=True)
+    attested_at = Column(DateTime, nullable=True)
+    not_applicable = Column(Boolean, default=False)
+    na_reason = Column(Text, nullable=True)
+    updated_by = Column(String, nullable=True)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class ComplianceSnapshot(Base):
+    """Preparación diaria de cada marco, para ver la tendencia."""
+
+    __tablename__ = "compliance_snapshots"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    day = Column(Date, nullable=False, index=True)
+    framework_id = Column(String, nullable=False, index=True)
+    score = Column(Integer, default=0)
+    passing = Column(Integer, default=0)
+    total = Column(Integer, default=0)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
 class PillowDailyUsage(Base):
     """Créditos diarios del agente Pillow por usuario (email)."""
 

@@ -13,7 +13,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from auth_deps import require_hub_read
-from compliance import current_period, iso_controls
+from compliance import current_period, evaluate
 from database import SessionLocal, db_ping
 from models import Finding, GateBypassRequest, Repository, RunbookExecution, Scan, SecretIncident
 from velocity import SLA_DAYS, Run, build_runs, compute_velocity, first_seen_map, fingerprint
@@ -372,15 +372,30 @@ def compute_executive(db, *, range_days: int = 30, repo_ids: list[str] | None = 
         )
     repo_rows.sort(key=lambda r: (r["score"], -r["critical"]))
 
-    controls = iso_controls(db, ids or None, now=now) if ids else []
+    ev = evaluate(db, now)
+    active = [f for f in ev["frameworks"] if f["enabled"]]
+    blocking = []
+    for ctl in ev["controls"]:
+        if ctl["status"] not in ("GAP", "PENDING"):
+            continue
+        fws = [m["short"] for m in ctl["mappings"] if m["enabled"]]
+        if fws:
+            blocking.append({"id": ctl["id"], "name": ctl["name"], "status": ctl["status"], "reason": ctl["reason"], "frameworks": fws})
+    blocking.sort(key=lambda c: (c["status"] != "GAP", -len(c["frameworks"])))
     compliance = {
-        "standard": "ISO/IEC 27001:2022",
         "period": current_period(now),
-        "compliant": sum(1 for c in controls if c["status"] == "COMPLIANT"),
-        "partial": sum(1 for c in controls if c["status"] == "PARTIAL"),
-        "gap": sum(1 for c in controls if c["status"] == "GAP"),
-        "total": len(controls),
-        "gaps": [{"code": c["code"], "title": c["title"], "reason": c["reason"]} for c in controls if c["status"] == "GAP"][:4],
+        "frameworks": [
+            {
+                "id": f["id"],
+                "short": f["short"],
+                "name": f["name"],
+                "score": f["score"],
+                "compliant": f["counts"]["COMPLIANT"],
+                "total": f["total"] - f["counts"]["NOT_APPLICABLE"],
+            }
+            for f in active
+        ],
+        "gaps": blocking[:4],
     }
 
     return {

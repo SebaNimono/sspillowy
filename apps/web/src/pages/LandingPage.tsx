@@ -66,9 +66,9 @@ const modules = [
     text: 'Umbral de críticas y altas. Un secreto bloquea el pipeline. El bypass no es un botón suelto: queda firmado.',
   },
   {
-    name: 'Informes ISO 27001',
+    name: 'Compliance continuo',
     layer: 'Evidencia',
-    text: 'Paquete JSON de controles A.8 / A.14. Pensado para auditoría, no para un PDF de marketing.',
+    text: 'ISO 27001, SOC 2, NIST, PCI DSS, CIS, OWASP y Ley 21.663 con controles compartidos: se prueba una vez y cuenta para todos.',
   },
   {
     name: 'Mapa de calor',
@@ -91,7 +91,7 @@ const facts: Array<{ count?: number; text?: string; label: string; hint: string 
   { count: 4, label: 'Motores OSS', hint: 'Semgrep, Trivy, GitLeaks, ZAP' },
   { count: 5, label: 'Estados HITL', hint: 'OPEN hasta riesgo aceptado' },
   { count: 4, label: 'Proveedores SSO', hint: 'GitHub, GitLab, Google, Microsoft' },
-  { text: 'ISO', label: 'Evidencia 27001', hint: 'Paquete JSON de controles' },
+  { count: 8, label: 'Marcos de cumplimiento', hint: 'ISO, SOC 2, NIST, PCI, CIS, OWASP, Ley 21.663' },
 ];
 
 const principles = [

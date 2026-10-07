@@ -465,44 +465,50 @@ export const ExecutivePage: React.FC<PageProps> = ({ onNavigate, ...headerProps 
 
             <section className="ex-block">
               <h3>
-                <ClipboardCheck size={15} color="#0969da" /> Cumplimiento {c.standard}
+                <ClipboardCheck size={15} color="#0969da" /> Cumplimiento normativo
               </h3>
-              {c.total ? (
+              {c.frameworks.length ? (
                 <>
-                  <div className="ex-compliance-bar" aria-hidden>
-                    <i style={{ flex: c.compliant, background: '#1a7f37' }} />
-                    <i style={{ flex: c.partial, background: '#bf8700' }} />
-                    <i style={{ flex: c.gap, background: '#cf222e' }} />
+                  <div className="ex-frameworks">
+                    {c.frameworks.map((f) => {
+                      const tone = f.score >= 80 ? '#1a7f37' : f.score >= 50 ? '#bf8700' : '#cf222e';
+                      return (
+                        <div key={f.id} className="ex-framework" title={f.name}>
+                          <div>
+                            <strong>{f.short}</strong>
+                            <span style={{ color: tone }}>{f.score}%</span>
+                          </div>
+                          <div className="ex-framework-bar" aria-hidden>
+                            <i style={{ width: `${f.score}%`, background: tone }} />
+                          </div>
+                          <small>
+                            {f.compliant} de {f.total} requisitos cumplen
+                          </small>
+                        </div>
+                      );
+                    })}
                   </div>
-                  <p className="ex-compliance-legend">
-                    <span>
-                      <b style={{ background: '#1a7f37' }} /> {c.compliant} cumplen
-                    </span>
-                    <span>
-                      <b style={{ background: '#bf8700' }} /> {c.partial} parciales
-                    </span>
-                    <span>
-                      <b style={{ background: '#cf222e' }} /> {c.gap} con brecha
-                    </span>
-                  </p>
                   {c.gaps.length > 0 && (
-                    <ul className="ex-gaps">
-                      {c.gaps.map((g) => (
-                        <li key={g.code}>
-                          <strong>
-                            {g.code} {g.title}
-                          </strong>
-                          <small>{g.reason}</small>
-                        </li>
-                      ))}
-                    </ul>
+                    <>
+                      <p className="ex-gaps-title">Lo que más frena el cumplimiento</p>
+                      <ul className="ex-gaps">
+                        {c.gaps.map((g) => (
+                          <li key={g.id}>
+                            <strong>{g.name}</strong>
+                            <small>
+                              {g.status === 'PENDING' ? 'Falta evidencia' : g.reason} · afecta a {g.frameworks.join(', ')}
+                            </small>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
                   )}
                   <button type="button" className="ex-link ex-noprint" onClick={() => onNavigate?.('reports')}>
                     Ver el detalle y la evidencia en Compliance continuo <ArrowRight size={13} />
                   </button>
                 </>
               ) : (
-                <p className="ex-none">Sin datos de cumplimiento.</p>
+                <p className="ex-none">No hay marcos normativos activos.</p>
               )}
             </section>
           </div>
