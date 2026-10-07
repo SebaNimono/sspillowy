@@ -34,7 +34,7 @@ export type SlaState = 'ok' | 'due' | 'breached' | 'closed';
 const DAY_MS = 86_400_000;
 
 export function ageDays(f: Finding, now = Date.now()): number {
-  return Math.max(0, Math.floor((now - new Date(f.created_at).getTime()) / DAY_MS));
+  return Math.max(0, Math.floor((now - new Date(f.first_seen_at ?? f.created_at).getTime()) / DAY_MS));
 }
 
 export function slaState(f: Finding, now = Date.now()): SlaState {

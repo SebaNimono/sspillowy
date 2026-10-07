@@ -17,26 +17,6 @@ export const STAGE_LABEL: Record<RoadmapStage, string> = {
 };
 
 export const ROADMAP: Record<string, RoadmapModule> = {
-  velocity: {
-    id: 'velocity',
-    title: 'Security Velocity',
-    tagline: 'Qué tan rápido detecta, decide y corrige tu equipo.',
-    description:
-      'Combina las métricas DORA de entrega de software con métricas de seguridad para responder una pregunta clave: ¿la seguridad acompaña la velocidad del equipo o la frena?',
-    features: [
-      'MTTR: tiempo medio desde que se detecta un hallazgo hasta que se corrige, por severidad.',
-      'Frecuencia de análisis y porcentaje de despliegues que pasan el gate.',
-      'Tasa de bloqueos y de bypass a lo largo del tiempo.',
-      'Comparación del MTTR con el plazo (SLA) de cada severidad.',
-    ],
-    howItWorks: [
-      'Se registra la fecha en que cada hallazgo cambia de estado.',
-      'Se cruzan los análisis y las decisiones del gate por periodo.',
-      'Se muestran tendencias semanales y mensuales por repositorio.',
-    ],
-    stage: 'mvp',
-    meanwhile: { tab: 'dashboard', label: 'Ver Risk Posture' },
-  },
   executive: {
     id: 'executive',
     title: 'Resumen ejecutivo',

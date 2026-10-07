@@ -86,6 +86,8 @@ class Scan(Base):
     # Progreso en vivo: queued | cloning | semgrep | gitleaks | trivy | owasp_zap | gate | done | failed
     progress_stage = Column(String, nullable=True)
     progress_detail = Column(Text, nullable=True)
+    # Motores que terminaron bien, separados por coma (None en escaneos anteriores a este campo)
+    engines_ok = Column(Text, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     completed_at = Column(DateTime, nullable=True)
 

@@ -58,6 +58,7 @@ from secret_management import router as secret_management_router  # noqa: E402
 from sbom import router as sbom_router  # noqa: E402
 from fix_intel import router as fix_intel_router  # noqa: E402
 from dashboard_views import router as dashboard_views_router  # noqa: E402
+from velocity import first_seen_map, fingerprint, router as velocity_router  # noqa: E402
 from database import init_db, db_ping, SessionLocal  # noqa: E402
 import database as _database  # noqa: E402
 from email_service import mailer_status  # noqa: E402
@@ -136,6 +137,7 @@ app.include_router(secret_management_router)
 app.include_router(sbom_router)
 app.include_router(fix_intel_router)
 app.include_router(dashboard_views_router)
+app.include_router(velocity_router)
 
 # Estado de lectura de notificaciones (efímero por instancia; hallazgos sí son persistentes)
 _READ_NOTIFICATION_IDS: set[str] = set()
@@ -222,7 +224,7 @@ def _display_file_path(path: str | None) -> str | None:
     return s
 
 
-def _finding_out(finding: Finding) -> FindingResponse:
+def _finding_out(finding: Finding, first_seen: dict | None = None) -> FindingResponse:
     out = FindingResponse.model_validate(finding)
     repo_name = None
     triggered = None
@@ -238,6 +240,10 @@ def _finding_out(finding: Finding) -> FindingResponse:
             "file_path": _display_file_path(out.file_path),
             "repository_name": repo_name,
             "triggered_by": triggered,
+            "first_seen_at": (first_seen or {}).get(
+                (finding.repository_id, fingerprint(finding.engine, finding.title, finding.file_path))
+            )
+            or out.created_at,
         }
     )
 
@@ -557,7 +563,8 @@ async def list_findings(
             .order_by(Finding.created_at.desc())
             .all()
         )
-        return [_finding_out(f) for f in rows]
+        first_seen = first_seen_map(db, [repository_id] if repository_id else None)
+        return [_finding_out(f, first_seen) for f in rows]
     finally:
         db.close()
 
@@ -643,7 +650,7 @@ async def update_finding_status(finding_id: str, payload: FindingStatusUpdate, _
             _refresh_repo_counters(db, repo)
         db.commit()
         db.refresh(finding)
-        return _finding_out(finding)
+        return _finding_out(finding, first_seen_map(db, [finding.repository_id]))
     finally:
         db.close()
 

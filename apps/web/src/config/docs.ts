@@ -230,7 +230,18 @@ export const DOC_SECTIONS: DocSection[] = [
       },
       { type: 'goto', tab: 'dashboard', label: 'Ir a Risk Posture' },
 
-      { type: 'h', text: '9. Compliance continuo · la evidencia' },
+      { type: 'h', text: '9. Security Velocity · el ritmo del equipo' },
+      {
+        type: 'list',
+        items: [
+          'Mide cuánto tarda el equipo en corregir, cuántos hallazgos entran y salen cada semana y si se cumplen los plazos.',
+          'Un hallazgo cuenta como corregido cuando un análisis posterior ya no lo encuentra: escanea de nuevo después de corregir.',
+          'La tabla por repositorio muestra quién reduce su deuda y quién la acumula.',
+        ],
+      },
+      { type: 'goto', tab: 'velocity', label: 'Ir a Security Velocity' },
+
+      { type: 'h', text: '10. Compliance continuo · la evidencia' },
       {
         type: 'list',
         items: [
@@ -241,7 +252,7 @@ export const DOC_SECTIONS: DocSection[] = [
       },
       { type: 'goto', tab: 'reports', label: 'Ir a Compliance continuo' },
 
-      { type: 'h', text: '10. Notificaciones · los avisos' },
+      { type: 'h', text: '11. Notificaciones · los avisos' },
       {
         type: 'list',
         items: [
@@ -252,7 +263,7 @@ export const DOC_SECTIONS: DocSection[] = [
       },
       { type: 'goto', tab: 'notifications', label: 'Ir a Notificaciones' },
 
-      { type: 'h', text: '11. Pillow · tu asistente en todas las secciones' },
+      { type: 'h', text: '12. Pillow · tu asistente en todas las secciones' },
       {
         type: 'list',
         items: [
@@ -262,10 +273,10 @@ export const DOC_SECTIONS: DocSection[] = [
         ],
       },
 
-      { type: 'h', text: '12. Módulos en camino' },
+      { type: 'h', text: '13. Módulos en camino' },
       {
         type: 'p',
-        text: 'Las secciones con la etiqueta "Pronto" están en desarrollo: Security Velocity, Resumen ejecutivo, Runbooks & RPA, Observabilidad, Trazabilidad e Integraciones. Al abrirlas verás qué harán y qué puedes usar mientras tanto.',
+        text: 'Las secciones con la etiqueta "Pronto" están en desarrollo: Resumen ejecutivo, Runbooks & RPA, Observabilidad, Trazabilidad e Integraciones. Al abrirlas verás qué harán y qué puedes usar mientras tanto.',
       },
 
       { type: 'h', text: 'Pon a prueba lo aprendido' },
@@ -318,6 +329,11 @@ export const DOC_SECTIONS: DocSection[] = [
       {
         type: 'p',
         text: 'En Risk Posture, abre "Dashboards" y crea uno por equipo eligiendo sus repositorios. Cada equipo marca el suyo como favorito y ve sus métricas, plazos y bitácora sin el ruido del resto de la organización.',
+      },
+      { type: 'h', text: '“Quiero demostrar que el equipo está mejorando”' },
+      {
+        type: 'p',
+        text: 'Abre Security Velocity con 90 días. Si el tiempo medio de corrección baja, el flujo neto es positivo y sube el porcentaje corregido en plazo, tienes la evidencia; cada indicador muestra la comparación con el trimestre anterior.',
       },
       { type: 'h', text: '“Tengo cientos de hallazgos y no sé por dónde empezar”' },
       {
@@ -552,6 +568,58 @@ export const DOC_SECTIONS: DocSection[] = [
         text: 'El indicador "Acierto de Pillow" muestra qué porcentaje de sugerencias aceptó tu equipo. Te ayuda a decidir cuánto confiar en sus sugerencias.',
       },
       { type: 'goto', tab: 'fixIntel', label: 'Abrir Fix Intelligence' },
+    ],
+  },
+  {
+    id: 'security-velocity',
+    group: 'Cómo funciona',
+    title: 'Security Velocity',
+    summary: 'Qué tan rápido corrige tu equipo y si la seguridad acompaña el ritmo de entrega.',
+    blocks: [
+      {
+        type: 'p',
+        text: 'Security Velocity responde una pregunta: ¿la seguridad acompaña la velocidad del equipo o la frena? Mide el ritmo de corrección de hallazgos y el de entrega (análisis y decisiones del gate) en el periodo que elijas.',
+      },
+      { type: 'h', text: 'Cómo sabe que algo se corrigió' },
+      {
+        type: 'p',
+        text: 'Cada hallazgo se reconoce por su herramienta, su regla y su archivo, aunque se vuelva a escanear muchas veces. Se considera corregido en el primer análisis posterior del mismo repositorio que ejecutó esa herramienta y ya no lo encontró. Si después vuelve a aparecer, cuenta como "reapareció".',
+      },
+      {
+        type: 'callout',
+        tone: 'tip',
+        text: 'Para medir bien, vuelve a escanear el repositorio después de cada corrección. Sin un segundo análisis no hay forma de saber que algo se arregló.',
+      },
+      { type: 'h', text: 'Qué significa cada indicador' },
+      {
+        type: 'table',
+        head: ['Indicador', 'Qué mide'],
+        rows: [
+          ['Tiempo medio de corrección', 'Días entre que se detecta un hallazgo y el análisis que confirma que ya no está (MTTR). También verás la mediana, menos sensible a casos extremos.'],
+          ['Corregidos / Nuevos', 'Hallazgos que salieron y que entraron en el periodo.'],
+          ['Flujo neto', 'Corregidos menos nuevos. Positivo: el equipo reduce su deuda; negativo: la acumula.'],
+          ['Corregidos en plazo', 'Porcentaje corregido dentro del plazo de su severidad: crítica 7 días, alta 30, media 90, baja 180.'],
+          ['Abiertos hoy', 'Pendientes ahora mismo, cuántos ya superaron su plazo y su antigüedad mediana.'],
+          ['Análisis por semana', 'Con qué frecuencia se analiza el código.'],
+          ['Aprobados por el gate', 'Porcentaje de análisis que pasaron el Security Gate sin bloqueo ni excepción.'],
+          ['Excepciones al gate', 'Bypass aprobados en el periodo: si crecen, la política o el backlog necesitan atención.'],
+        ],
+      },
+      {
+        type: 'p',
+        text: 'Cada indicador se compara con el periodo anterior del mismo largo, en verde si mejora y en rojo si empeora. Los hallazgos marcados como falso positivo o riesgo aceptado no cuentan.',
+      },
+      { type: 'h', text: 'Cómo leer los gráficos' },
+      {
+        type: 'list',
+        items: [
+          'Nuevos vs corregidos por semana: barras rojas y verdes, con la línea azul de pendientes al cierre de cada semana. Si la línea baja, vas ganando.',
+          'Tiempo de corrección vs plazo: la barra es el tiempo medio por severidad y la marca negra su plazo. En rojo si se pasa.',
+          'Por repositorio: ordenado por vencidos, para ver primero dónde hace falta ayuda.',
+          'Críticos y altos más antiguos: lo que lleva más tiempo esperando; desde ahí vas a Fix Intelligence para atacarlo.',
+        ],
+      },
+      { type: 'goto', tab: 'velocity', label: 'Abrir Security Velocity' },
     ],
   },
   {

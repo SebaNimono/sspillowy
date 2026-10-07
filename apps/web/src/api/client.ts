@@ -32,6 +32,7 @@ export interface Finding {
   ai_summary?: string;
   ai_remediation?: string;
   created_at: string;
+  first_seen_at?: string | null;
   repository_name?: string | null;
   triggered_by?: string | null;
 }
@@ -584,6 +585,66 @@ export interface FixIntelQueue {
   items: FixIntelItem[];
   repositories: { id: string; name: string }[];
   max_batch: number;
+}
+
+export interface VelocityFlow {
+  introduced: number;
+  fixed: number;
+  regressions: number;
+  mttr_days: number | null;
+  median_days: number | null;
+  sla_met_pct: number | null;
+}
+
+export interface VelocityData {
+  range_days: number;
+  generated_at: string;
+  has_history: boolean;
+  kpis: VelocityFlow & {
+    open: number;
+    overdue: number;
+    median_open_age_days: number | null;
+    decided: number;
+    scans: number;
+    scans_per_week: number;
+    scan_minutes: number | null;
+    gate: { passed: number; blocked: number; bypassed: number; skipped: number; pass_rate: number | null };
+    bypass_requests: number;
+    bypass_approved: number;
+  };
+  previous: VelocityFlow & { scans: number; gate_pass_rate: number | null };
+  series: { week_start: string; label: string; introduced: number; fixed: number; backlog: number; mttr_days: number | null }[];
+  by_severity: {
+    severity: Finding['severity'];
+    sla_days: number;
+    mttr_days: number | null;
+    fixed: number;
+    sla_met_pct: number | null;
+    open: number;
+    overdue: number;
+  }[];
+  by_engine: { engine: string; introduced: number; fixed: number; mttr_days: number | null; open: number }[];
+  repositories: {
+    id: string;
+    name: string;
+    open: number;
+    overdue: number;
+    introduced: number;
+    fixed: number;
+    net: number;
+    mttr_days: number | null;
+    sla_met_pct: number | null;
+    scans: number;
+    gate_pass_rate: number | null;
+    last_scan_at: string | null;
+  }[];
+  oldest_open: { title: string; severity: Finding['severity']; engine: string; repository: string; age_days: number; sla_days: number }[];
+}
+
+export async function fetchVelocity(rangeDays: number, repositoryIds?: string[]): Promise<VelocityData> {
+  const params = new URLSearchParams({ range_days: String(rangeDays) });
+  if (repositoryIds?.length) params.set('repository_ids', repositoryIds.join(','));
+  return request(`/velocity?${params.toString()}`);
 }
 
 export async function fetchFixIntel(repositoryId?: string): Promise<FixIntelQueue> {

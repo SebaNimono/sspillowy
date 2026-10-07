@@ -9,6 +9,7 @@ export interface PillowChatLine {
 
 export const PILLOW_PAGE_LABEL: Record<string, string> = {
   dashboard: 'Risk Posture',
+  velocity: 'Security Velocity',
   repositories: 'Repositorios',
   findings: 'Priorización contextual',
   fixIntel: 'Fix Intelligence',
@@ -26,6 +27,11 @@ export const PILLOW_PAGE_SUGGESTIONS: Record<string, string[]> = {
     '¿Cómo monitoreo hallazgos críticos esta semana?',
     'Quiero ver distribución por motor de escaneo',
     'Resume el health score y severidades abiertas',
+  ],
+  velocity: [
+    '¿Estamos corrigiendo más rápido que antes?',
+    '¿Qué repositorio se está quedando atrás?',
+    '¿Cómo bajo el tiempo medio de corrección?',
   ],
   findings: ['¿Qué hallazgos debería atender primero?', '¿Cuándo conviene aceptar un riesgo?'],
   fixIntel: [

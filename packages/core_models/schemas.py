@@ -52,6 +52,7 @@ class FindingResponse(FindingBase):
     ai_summary: Optional[str] = None
     ai_remediation: Optional[str] = None
     created_at: datetime
+    first_seen_at: Optional[datetime] = None
     repository_name: Optional[str] = None
     triggered_by: Optional[str] = None
 

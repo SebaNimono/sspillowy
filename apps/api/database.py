@@ -99,6 +99,7 @@ def init_db() -> bool:
             conn.execute(text("ALTER TABLE scans ADD COLUMN IF NOT EXISTS gate_detail TEXT"))
             conn.execute(text("ALTER TABLE scans ADD COLUMN IF NOT EXISTS progress_stage TEXT"))
             conn.execute(text("ALTER TABLE scans ADD COLUMN IF NOT EXISTS progress_detail TEXT"))
+            conn.execute(text("ALTER TABLE scans ADD COLUMN IF NOT EXISTS engines_ok TEXT"))
             conn.execute(text("ALTER TABLE findings ADD COLUMN IF NOT EXISTS ai_verdict TEXT"))
             conn.execute(text("ALTER TABLE findings ADD COLUMN IF NOT EXISTS ai_triaged_at TIMESTAMPTZ"))
             conn.execute(text("ALTER TABLE findings ADD COLUMN IF NOT EXISTS ai_feedback TEXT"))

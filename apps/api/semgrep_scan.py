@@ -599,6 +599,7 @@ def run_repo_scan_job(
             db.commit()
             return
 
+        scan.engines_ok = ",".join(engines_ok)
         superseded = _supersede_previous_findings(
             db, repo_id=repo.id, engines=engines_ok, keep_scan_id=scan.id
         )
