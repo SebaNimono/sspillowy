@@ -52,6 +52,7 @@ const ageLabel = (iso: string | null) => {
 export const SecretsPage: React.FC<PageProps> = ({ onNavigate, ...headerProps }) => {
   const [items, setItems] = useState<SecretIncident[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [statusFilter, setStatusFilter] = useState<'active' | SecretStatus | 'all'>('active');
@@ -74,6 +75,7 @@ export const SecretsPage: React.FC<PageProps> = ({ onNavigate, ...headerProps })
       setError(err instanceof Error ? err.message : 'No se pudieron cargar los secretos');
     } finally {
       setLoading(false);
+      setLoaded(true);
     }
   }, []);
 
@@ -164,6 +166,13 @@ export const SecretsPage: React.FC<PageProps> = ({ onNavigate, ...headerProps })
         {...headerProps}
       />
 
+      {!loaded ? (
+        <div className="card sm-empty">
+          <RefreshCw size={22} className="sm-spin" />
+          <p>Cargando secretos…</p>
+        </div>
+      ) : (
+      <>
       <div className="sm-kpis">
         <div className="sm-kpi" style={{ ['--c' as string]: '#cf222e' }}>
           <span className="sm-kpi-label">Abiertos</span>
@@ -308,6 +317,9 @@ export const SecretsPage: React.FC<PageProps> = ({ onNavigate, ...headerProps })
             </tbody>
           </table>
         </div>
+      )}
+
+      </>
       )}
 
       {active && (

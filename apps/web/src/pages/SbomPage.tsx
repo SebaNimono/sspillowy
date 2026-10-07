@@ -67,6 +67,7 @@ export const SbomPage: React.FC<PageProps> = ({ onNavigate, ...headerProps }) =>
   const [repos, setRepos] = useState<SbomRepository[]>([]);
   const [components, setComponents] = useState<SbomComponent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [query, setQuery] = useState('');
@@ -88,6 +89,7 @@ export const SbomPage: React.FC<PageProps> = ({ onNavigate, ...headerProps }) =>
       setError(err instanceof Error ? err.message : 'No se pudo cargar el inventario');
     } finally {
       setLoading(false);
+      setLoaded(true);
     }
   }, []);
 
@@ -200,7 +202,7 @@ export const SbomPage: React.FC<PageProps> = ({ onNavigate, ...headerProps }) =>
     { id: 'direct', label: 'Directas' },
   ];
 
-  const empty = !loading && !error && components.length === 0;
+  const empty = loaded && !error && components.length === 0;
 
   return (
     <div>
@@ -212,7 +214,14 @@ export const SbomPage: React.FC<PageProps> = ({ onNavigate, ...headerProps }) =>
         {...headerProps}
       />
 
-      {error && <div className="card sb-empty sb-error">{error}</div>}
+      {!loaded && (
+        <div className="card sb-empty">
+          <RefreshCw size={22} className="sb-spin" />
+          <p>Cargando inventario de dependencias…</p>
+        </div>
+      )}
+
+      {loaded && error && <div className="card sb-empty sb-error">{error}</div>}
 
       {empty && (
         <div className="card sb-empty">
@@ -229,7 +238,7 @@ export const SbomPage: React.FC<PageProps> = ({ onNavigate, ...headerProps }) =>
         </div>
       )}
 
-      {!empty && !error && (
+      {loaded && !empty && !error && (
         <>
           <div className="sb-kpis">
             <div className="sb-kpi" style={{ ['--c' as string]: '#0969da' }}>
