@@ -192,6 +192,39 @@ class SecretIncident(Base):
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
+class SbomComponent(Base):
+    """Inventario vigente de dependencias de un repositorio (último análisis con Trivy)."""
+
+    __tablename__ = "sbom_components"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    repository_id = Column(String, ForeignKey("repositories.id"), nullable=False, index=True)
+    scan_id = Column(String, nullable=True)
+    name = Column(String, nullable=False, index=True)
+    version = Column(String, nullable=True)
+    ecosystem = Column(String, nullable=True)
+    purl = Column(String, nullable=True)
+    licenses = Column(String, nullable=True)
+    manifest = Column(String, nullable=True)
+    direct = Column(Boolean, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class SbomSnapshot(Base):
+    """Resumen de cada SBOM generado y su diferencia con el anterior."""
+
+    __tablename__ = "sbom_snapshots"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    repository_id = Column(String, ForeignKey("repositories.id"), nullable=False, index=True)
+    scan_id = Column(String, nullable=True)
+    component_count = Column(Integer, default=0)
+    added = Column(Text, nullable=True)
+    removed = Column(Text, nullable=True)
+    updated = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
 class PillowDailyUsage(Base):
     """Créditos diarios del agente Pillow por usuario (email)."""
 

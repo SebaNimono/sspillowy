@@ -487,6 +487,57 @@ export async function updateSecret(
   });
 }
 
+export interface SbomComponent {
+  id: string;
+  repository_id: string;
+  repository_name: string | null;
+  name: string;
+  version: string | null;
+  ecosystem: string | null;
+  purl: string | null;
+  licenses: string | null;
+  manifest: string | null;
+  direct: boolean | null;
+  vulnerabilities: {
+    count: number;
+    max_severity: Finding['severity'];
+    cves: string[];
+    fix_version: string | null;
+  } | null;
+}
+
+export interface SbomChange {
+  ecosystem: string;
+  name: string;
+  version?: string;
+  from?: string;
+  to?: string;
+}
+
+export interface SbomRepository {
+  id: string;
+  name: string;
+  component_count: number;
+  vulnerable_count: number;
+  ecosystems: Record<string, number>;
+  generated_at: string | null;
+  changes: { added: SbomChange[]; removed: SbomChange[]; updated: SbomChange[] };
+}
+
+export async function fetchSbom(repositoryId?: string): Promise<{ repositories: SbomRepository[]; components: SbomComponent[] }> {
+  const qs = repositoryId ? `?repository_id=${encodeURIComponent(repositoryId)}` : '';
+  return request(`/sbom${qs}`);
+}
+
+export async function downloadCycloneDx(repositoryId: string): Promise<Blob> {
+  const res = await fetch(`${API_BASE}/sbom/${repositoryId}/cyclonedx`, { headers: authHeaders() });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(typeof data.detail === 'string' ? data.detail : `Error de API (${res.status})`);
+  }
+  return res.blob();
+}
+
 export async function fetchHeatmap(): Promise<HeatmapData> {
   return request('/heatmap');
 }

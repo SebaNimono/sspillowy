@@ -59,7 +59,7 @@ export interface PackageInfo {
 /** Trivy guarda "Paquete: pkg@version → fix X" en la descripción. */
 export function packageOf(f: Finding): PackageInfo | null {
   if (f.engine !== 'trivy') return null;
-  const m = /Paquete:\s*([^\s@]+)@(\S*)(?:\s*→\s*fix\s*(.+))?/.exec(f.description || '');
+  const m = /Paquete:\s*(\S+)@([^\s@]*)(?:\s*→\s*fix\s*(.+))?/.exec(f.description || '');
   if (!m) return null;
   return { name: m[1], version: m[2], fix: m[3]?.trim() || null };
 }

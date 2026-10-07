@@ -70,7 +70,20 @@ export const CONCEPTS: Concept[] = [
       'Lo hace Trivy leyendo archivos como requirements.txt o package-lock.json. En Priorización contextual se agrupa por librería e indica a qué versión actualizar.',
     example: 'Pillow 6.2.0 tiene 30 CVE; actualizar a 10.2.0 los corrige todos.',
     tab: 'findings',
-    related: ['trivy', 'cve', 'fix-version', 'agrupacion'],
+    related: ['trivy', 'cve', 'fix-version', 'agrupacion', 'sbom'],
+  },
+  {
+    id: 'sbom',
+    term: 'SBOM',
+    expansion: 'Software Bill of Materials',
+    category: 'analisis',
+    definition:
+      'El inventario de componentes de un software: cada librería de terceros con su versión y su licencia. Es la "lista de ingredientes" que permite saber qué usas y responder rápido ante una vulnerabilidad nueva.',
+    inSystem:
+      'Se genera en cada análisis con dependencias y se consulta en Supply Chain & SBOM: búsqueda global, licencias, cambios entre análisis y exportación en formato CycloneDX.',
+    example: '¿Usamos log4j? → Sí, en 2 repositorios, versiones 2.14.1 y 2.17.0.',
+    tab: 'sbom',
+    related: ['sca', 'trivy', 'cve'],
   },
   {
     id: 'secretos',

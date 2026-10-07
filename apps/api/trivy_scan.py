@@ -35,10 +35,52 @@ def _map_severity(raw: str | None) -> str:
     return mapping.get(s, "MEDIUM")
 
 
-def run_trivy_fs(target: Path, timeout: int = 300) -> list[dict]:
+def _extract_packages(results: list[dict]) -> list[dict]:
+    """Inventario de paquetes (SBOM) a partir de un reporte Trivy con --list-all-pkgs."""
+    license_by_pkg: dict[str, set[str]] = {}
+    for block in results:
+        for lic in block.get("Licenses") or []:
+            pkg = lic.get("PkgName")
+            if pkg and lic.get("Name"):
+                license_by_pkg.setdefault(pkg, set()).add(str(lic["Name"]))
+
+    packages: list[dict] = []
+    for block in results:
+        if (block.get("Class") or "") not in ("lang-pkgs", "os-pkgs"):
+            continue
+        ecosystem = block.get("Type") or ""
+        manifest = block.get("Target") or ""
+        for pkg in block.get("Packages") or []:
+            name = pkg.get("Name")
+            if not name:
+                continue
+            licenses = set(pkg.get("Licenses") or []) | license_by_pkg.get(name, set())
+            relationship = (pkg.get("Relationship") or "").lower()
+            if relationship in ("direct", "root"):
+                direct = True
+            elif relationship == "indirect" or pkg.get("Indirect"):
+                direct = False
+            else:
+                direct = None
+            packages.append(
+                {
+                    "name": str(name)[:300],
+                    "version": (pkg.get("Version") or "")[:120] or None,
+                    "ecosystem": ecosystem[:40] or None,
+                    "purl": ((pkg.get("Identifier") or {}).get("PURL") or "")[:500] or None,
+                    "licenses": ", ".join(sorted(licenses))[:500] or None,
+                    "manifest": manifest,
+                    "direct": direct,
+                }
+            )
+    return packages
+
+
+def run_trivy_fs(target: Path, timeout: int = 300, packages_out: list[dict] | None = None) -> list[dict]:
     """
     Devuelve lista plana de hallazgos normalizados:
     {kind, severity, title, description, file_path, cwe, vuln_id}
+    Si se pasa `packages_out`, lo llena con el inventario completo de paquetes (SBOM).
     """
     if not trivy_available():
         raise RuntimeError("trivy no está instalado en el contenedor.")
@@ -61,7 +103,8 @@ def run_trivy_fs(target: Path, timeout: int = 300) -> list[dict]:
         "--output",
         str(out_file),
         "--scanners",
-        os.getenv("TRIVY_SCANNERS", "vuln,misconfig,secret"),
+        os.getenv("TRIVY_SCANNERS", "vuln,misconfig,secret,license"),
+        "--list-all-pkgs",
         "--skip-dirs",
         skip_dirs,
         "--quiet",
@@ -83,6 +126,12 @@ def run_trivy_fs(target: Path, timeout: int = 300) -> list[dict]:
         return []
     data = json.loads(raw)
     results = data.get("Results") or []
+    if packages_out is not None:
+        packages_out.extend(
+            p
+            for p in _extract_packages(results)
+            if "fixtures/" not in (p["manifest"] or "").replace("\\", "/").lower()
+        )
     flat: list[dict] = []
 
     for block in results:

@@ -528,10 +528,20 @@ def run_repo_scan_job(
             _set_progress(db, scan, "trivy", "Ejecutando Trivy…")
             if trivy_available():
                 try:
-                    tv_results = run_trivy_fs(target)
+                    tv_packages: list[dict] = []
+                    tv_results = run_trivy_fs(target, packages_out=tv_packages)
                     tv_counts = persist_trivy_findings(
                         db, scan=scan, repo=repo, results=tv_results, scan_root=target
                     )
+                    try:
+                        from sbom import persist_sbom
+
+                        n_pkgs = persist_sbom(
+                            db, scan=scan, repo=repo, packages=tv_packages, scan_root=target
+                        )
+                        engine_notes.append(f"SBOM {n_pkgs} paquetes")
+                    except Exception as exc:
+                        _append_audit(db, "scan-worker", "SBOM_FAILED", repo.name, str(exc)[:400])
                     count_parts.append(tv_counts)
                     engine_notes.append(f"Trivy {sum(tv_counts.values())}")
                     engines_ok.append("trivy")

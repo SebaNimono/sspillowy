@@ -57,26 +57,6 @@ export const ROADMAP: Record<string, RoadmapModule> = {
     stage: 'mvp',
     meanwhile: { tab: 'dashboard', label: 'Ver Risk Posture' },
   },
-  sbom: {
-    id: 'sbom',
-    title: 'Supply Chain & SBOM',
-    tagline: 'Todas las librerías que usas, siempre al día.',
-    description:
-      'Un inventario vivo de las dependencias de cada repositorio (SBOM). Responde en segundos preguntas como "¿usamos log4j? ¿en qué proyectos y en qué versión?".',
-    features: [
-      'Lista de librerías por repositorio con su versión y licencia.',
-      'Marcado de las librerías vulnerables y la versión a la que actualizar.',
-      'Búsqueda global de un paquete en toda la organización.',
-      'Exportación en formato estándar CycloneDX.',
-    ],
-    howItWorks: [
-      'Cada análisis de dependencias genera el SBOM del repositorio.',
-      'Se compara con el anterior para detectar librerías nuevas o eliminadas.',
-      'Se cruza con las vulnerabilidades conocidas para priorizar.',
-    ],
-    stage: 'mvp',
-    meanwhile: { tab: 'findings', label: 'Ver dependencias vulnerables' },
-  },
   fixIntel: {
     id: 'fixIntel',
     title: 'Fix Intelligence',

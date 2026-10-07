@@ -181,7 +181,19 @@ export const DOC_SECTIONS: DocSection[] = [
       },
       { type: 'goto', tab: 'secrets', label: 'Ir a Secret Management' },
 
-      { type: 'h', text: '5. Security Gates · el control del despliegue' },
+      { type: 'h', text: '5. Supply Chain & SBOM · el inventario de librerías' },
+      {
+        type: 'list',
+        items: [
+          'Cada análisis de dependencias guarda el inventario completo (SBOM) de cada repositorio: paquete, versión, licencia y manifiesto.',
+          'Escribe un nombre en el buscador para saber al instante si lo usas, en qué repositorios y en qué versión.',
+          'Los filtros muestran las librerías vulnerables, las de licencia a revisar y las que no declaran licencia.',
+          'En el panel lateral ves qué librerías se añadieron, quitaron o actualizaron en el último análisis, y puedes exportar el SBOM en CycloneDX.',
+        ],
+      },
+      { type: 'goto', tab: 'sbom', label: 'Ir a Supply Chain & SBOM' },
+
+      { type: 'h', text: '6. Security Gates · el control del despliegue' },
       {
         type: 'list',
         items: [
@@ -193,7 +205,7 @@ export const DOC_SECTIONS: DocSection[] = [
       },
       { type: 'goto', tab: 'gates', label: 'Ir a Security Gates' },
 
-      { type: 'h', text: '6. Risk Posture · la vista general' },
+      { type: 'h', text: '7. Risk Posture · la vista general' },
       {
         type: 'list',
         items: [
@@ -205,7 +217,7 @@ export const DOC_SECTIONS: DocSection[] = [
       },
       { type: 'goto', tab: 'dashboard', label: 'Ir a Risk Posture' },
 
-      { type: 'h', text: '7. Compliance continuo · la evidencia' },
+      { type: 'h', text: '8. Compliance continuo · la evidencia' },
       {
         type: 'list',
         items: [
@@ -216,7 +228,7 @@ export const DOC_SECTIONS: DocSection[] = [
       },
       { type: 'goto', tab: 'reports', label: 'Ir a Compliance continuo' },
 
-      { type: 'h', text: '8. Notificaciones · los avisos' },
+      { type: 'h', text: '9. Notificaciones · los avisos' },
       {
         type: 'list',
         items: [
@@ -227,10 +239,10 @@ export const DOC_SECTIONS: DocSection[] = [
       },
       { type: 'goto', tab: 'notifications', label: 'Ir a Notificaciones' },
 
-      { type: 'h', text: '9. Módulos en camino' },
+      { type: 'h', text: '10. Módulos en camino' },
       {
         type: 'p',
-        text: 'Las secciones con la etiqueta "Pronto" están en desarrollo: Security Velocity, Resumen ejecutivo, Supply Chain, Fix Intelligence, Runbooks & RPA, Observabilidad, Trazabilidad e Integraciones. Al abrirlas verás qué harán y qué puedes usar mientras tanto.',
+        text: 'Las secciones con la etiqueta "Pronto" están en desarrollo: Security Velocity, Resumen ejecutivo, Fix Intelligence, Runbooks & RPA, Observabilidad, Trazabilidad e Integraciones. Al abrirlas verás qué harán y qué puedes usar mientras tanto.',
       },
 
       { type: 'h', text: 'Pon a prueba lo aprendido' },
@@ -239,6 +251,7 @@ export const DOC_SECTIONS: DocSection[] = [
         items: [
           { title: 'Responde a un secreto', text: 'En Secret Management, abre un secreto, asígnate como responsable y lee cómo se rota en su proveedor.' },
           { title: 'Encuentra una actualización', text: 'En la vista agrupada, ubica una librería vulnerable y la versión a la que hay que actualizar.' },
+          { title: 'Busca una librería', text: 'En Supply Chain & SBOM, averigua si usas "requests" y en qué versión.' },
           { title: 'Toma una decisión', text: 'Marca un hallazgo como En revisión.' },
           { title: 'Explica el gate', text: 'En Security Gates, identifica por qué tu proyecto está aprobado o bloqueado.' },
           { title: 'Busca un término', text: 'En el Glosario, encuentra qué significa "SCA".' },
@@ -265,7 +278,17 @@ export const DOC_SECTIONS: DocSection[] = [
       { type: 'h', text: '“Actualicé dependencias y quiero comprobarlo”' },
       {
         type: 'p',
-        text: 'Lanza "Solo SCA / IaC". Los hallazgos del análisis anterior se reemplazan por los nuevos, así que verás solo lo que sigue pendiente.',
+        text: 'Lanza "Solo SCA / IaC". Los hallazgos del análisis anterior se reemplazan por los nuevos, así que verás solo lo que sigue pendiente. En Supply Chain & SBOM, el panel del repositorio muestra exactamente qué librerías cambiaron de versión.',
+      },
+      { type: 'h', text: '“Salió una vulnerabilidad famosa: ¿nos afecta?”' },
+      {
+        type: 'p',
+        text: 'Escribe el nombre de la librería (por ejemplo "log4j") en el buscador de Supply Chain & SBOM. Verás al instante si la usas, en qué repositorios y en qué versión, sin esperar a un nuevo análisis.',
+      },
+      { type: 'h', text: '“Un cliente o auditor me pide el SBOM”' },
+      {
+        type: 'p',
+        text: 'En Supply Chain & SBOM, usa el botón de descarga del repositorio. Obtienes un archivo CycloneDX 1.5 con todas las librerías, sus licencias y las vulnerabilidades conocidas.',
       },
       { type: 'h', text: '“No quiero que llegue código inseguro a producción”' },
       {
@@ -409,6 +432,45 @@ export const DOC_SECTIONS: DocSection[] = [
         text: 'Dentro de un grupo puedes cambiar el estado de todos sus hallazgos a la vez.',
       },
       { type: 'goto', tab: 'findings', label: 'Abrir Priorización contextual' },
+    ],
+  },
+  {
+    id: 'sbom',
+    group: 'Cómo funciona',
+    title: 'Supply Chain & SBOM',
+    summary: 'El inventario de todas las librerías que usan tus proyectos.',
+    blocks: [
+      {
+        type: 'p',
+        text: 'Un SBOM (Software Bill of Materials) es la lista de ingredientes de tu software: cada librería de terceros, su versión y su licencia. SSPILLOWY lo genera automáticamente en cada análisis que incluye dependencias y siempre muestra el más reciente de cada repositorio.',
+      },
+      { type: 'h', text: 'Qué puedes hacer' },
+      {
+        type: 'steps',
+        items: [
+          { title: 'Buscar en toda la organización', text: 'Escribe un nombre de librería y obtienes la respuesta directa: si la usas, en cuántos repositorios y en qué versiones.' },
+          { title: 'Ver el riesgo', text: 'Cada librería indica si tiene vulnerabilidades activas, su severidad máxima y la versión mínima a la que actualizar para corregirlas todas.' },
+          { title: 'Revisar licencias', text: 'Las licencias copyleft (GPL, AGPL, LGPL, MPL…) se marcan "a revisar" porque pueden obligarte a publicar tu código. Las que no declaran licencia también se señalan.' },
+          { title: 'Seguir los cambios', text: 'Cada repositorio muestra qué librerías se añadieron, eliminaron o actualizaron respecto al análisis anterior.' },
+          { title: 'Exportar', text: 'Descarga el SBOM en formato estándar CycloneDX 1.5 para clientes, auditores u otras herramientas.' },
+        ],
+      },
+      { type: 'h', text: 'Ecosistemas compatibles' },
+      {
+        type: 'p',
+        text: 'Python (requirements.txt, Pipfile.lock, poetry.lock), Node (package-lock.json, yarn.lock, pnpm-lock.yaml), Go (go.mod), Java (pom.xml, Gradle), Rust (Cargo.lock), PHP (composer.lock), Ruby (Gemfile.lock) y .NET.',
+      },
+      {
+        type: 'callout',
+        tone: 'tip',
+        text: 'Usa archivos de bloqueo (lockfiles) siempre que puedas: listan también las dependencias indirectas y sus versiones exactas, así el inventario es completo.',
+      },
+      {
+        type: 'callout',
+        tone: 'info',
+        text: 'El inventario se genera con los perfiles "Código completo" y "Solo SCA / IaC". Si un repositorio aparece "Sin SBOM todavía", lanza uno de esos análisis.',
+      },
+      { type: 'goto', tab: 'sbom', label: 'Abrir Supply Chain & SBOM' },
     ],
   },
   {

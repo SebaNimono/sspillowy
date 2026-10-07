@@ -13,6 +13,7 @@ import { NotificationsPage } from './pages/NotificationsPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { DocsPage } from './pages/DocsPage';
 import { SecretsPage } from './pages/SecretsPage';
+import { SbomPage } from './pages/SbomPage';
 import { ComingSoonPage } from './pages/ComingSoonPage';
 import { ROADMAP } from './config/roadmap';
 import {
@@ -79,6 +80,7 @@ const VALID_TABS = new Set([
   'repositories',
   'findings',
   'secrets',
+  'sbom',
   'scans',
   'gates',
   'notifications',
@@ -431,6 +433,8 @@ const AppShell: React.FC = () => {
         return <DocsPage {...pageProps} />;
       case 'secrets':
         return <SecretsPage {...pageProps} />;
+      case 'sbom':
+        return <SbomPage {...pageProps} />;
       default:
         if (ROADMAP[activeTab]) return <ComingSoonPage key={activeTab} module={ROADMAP[activeTab]} {...pageProps} />;
         return <DashboardPage {...pageProps} />;
