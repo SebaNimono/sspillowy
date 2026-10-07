@@ -37,26 +37,6 @@ export const ROADMAP: Record<string, RoadmapModule> = {
     stage: 'mvp',
     meanwhile: { tab: 'dashboard', label: 'Ver Risk Posture' },
   },
-  runbooks: {
-    id: 'runbooks',
-    title: 'Runbooks & RPA',
-    tagline: 'Respuestas automáticas ante eventos de seguridad.',
-    description:
-      'Define reglas del tipo "si pasa esto, haz aquello" para que SSPILLOWY responda solo ante eventos frecuentes, sin intervención manual.',
-    features: [
-      'Disparadores: secreto detectado, nuevo crítico, gate bloqueado, plazo vencido.',
-      'Acciones: avisar por correo, crear una tarea, asignar un responsable, lanzar un análisis.',
-      'Plantillas listas para los casos más comunes.',
-      'Historial de cada ejecución.',
-    ],
-    howItWorks: [
-      'Eliges un disparador y una o varias acciones.',
-      'La regla se evalúa al terminar cada análisis o cambio de estado.',
-      'Cada ejecución queda registrada en la bitácora.',
-    ],
-    stage: 'next',
-    meanwhile: { tab: 'notifications', label: 'Ver Notificaciones' },
-  },
   observability: {
     id: 'observability',
     title: 'Observabilidad',

@@ -59,6 +59,7 @@ from sbom import router as sbom_router  # noqa: E402
 from fix_intel import router as fix_intel_router  # noqa: E402
 from dashboard_views import router as dashboard_views_router  # noqa: E402
 from velocity import first_seen_map, fingerprint, router as velocity_router  # noqa: E402
+from runbooks import router as runbooks_router  # noqa: E402
 from database import init_db, db_ping, SessionLocal  # noqa: E402
 import database as _database  # noqa: E402
 from email_service import mailer_status  # noqa: E402
@@ -138,6 +139,7 @@ app.include_router(sbom_router)
 app.include_router(fix_intel_router)
 app.include_router(dashboard_views_router)
 app.include_router(velocity_router)
+app.include_router(runbooks_router)
 
 # Estado de lectura de notificaciones (efímero por instancia; hallazgos sí son persistentes)
 _READ_NOTIFICATION_IDS: set[str] = set()

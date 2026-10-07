@@ -254,6 +254,50 @@ class DashboardView(Base):
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
+class Runbook(Base):
+    """Regla "cuando pasa X → haz Y" que se evalúa al terminar cada análisis."""
+
+    __tablename__ = "runbooks"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    name = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    enabled = Column(Boolean, default=True)
+    # SECRET_DETECTED | NEW_FINDING | GATE_BLOCKED | SLA_BREACHED | SCAN_FAILED
+    trigger = Column(String, nullable=False, index=True)
+    # JSON: {"repository_ids": [...], "min_severity": "CRITICAL"}
+    conditions = Column(Text, nullable=True)
+    # JSON: [{"type": "email", ...}, ...]
+    actions = Column(Text, nullable=False)
+    template = Column(String, nullable=True)
+    owner_email = Column(String, nullable=True)
+    run_count = Column(Integer, default=0)
+    last_run_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class RunbookExecution(Base):
+    __tablename__ = "runbook_executions"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    runbook_id = Column(String, nullable=False, index=True)
+    runbook_name = Column(String, nullable=False)
+    trigger = Column(String, nullable=False)
+    repository_id = Column(String, nullable=True, index=True)
+    repository_name = Column(String, nullable=True)
+    scan_id = Column(String, nullable=True)
+    # SUCCESS | PARTIAL | FAILED | SIMULATED
+    status = Column(String, nullable=False)
+    summary = Column(Text, nullable=True)
+    # JSON: [{"type", "label", "ok", "message"}]
+    results = Column(Text, nullable=True)
+    # JSON: fingerprints que dispararon la ejecución (evita repetir avisos de plazo vencido)
+    fingerprints = Column(Text, nullable=True)
+    actor = Column(String, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+
+
 class PillowDailyUsage(Base):
     """Créditos diarios del agente Pillow por usuario (email)."""
 

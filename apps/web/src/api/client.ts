@@ -641,6 +641,92 @@ export interface VelocityData {
   oldest_open: { title: string; severity: Finding['severity']; engine: string; repository: string; age_days: number; sla_days: number }[];
 }
 
+export type RunbookTrigger = 'SECRET_DETECTED' | 'NEW_FINDING' | 'GATE_BLOCKED' | 'SLA_BREACHED' | 'SCAN_FAILED';
+
+export type RunbookAction =
+  | { type: 'email'; to: string[]; security_team: boolean }
+  | { type: 'webhook'; url: string; kind: 'slack' | 'teams' | 'generic' }
+  | { type: 'assign_owner'; email: string }
+  | { type: 'set_in_review' }
+  | { type: 'rescan' };
+
+export interface RunbookInput {
+  name: string;
+  description?: string;
+  enabled: boolean;
+  trigger: RunbookTrigger;
+  conditions: { repository_ids: string[]; min_severity: Finding['severity'] };
+  actions: RunbookAction[];
+  template?: string | null;
+}
+
+export interface Runbook extends RunbookInput {
+  id: string;
+  description: string;
+  repository_names: string[];
+  owner_email: string | null;
+  run_count: number;
+  last_run_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface RunbookList {
+  runbooks: Runbook[];
+  email_ready: boolean;
+  security_team: string[];
+}
+
+export interface RunbookExecution {
+  id: string;
+  runbook_id: string;
+  runbook_name: string;
+  trigger: RunbookTrigger;
+  repository_id: string | null;
+  repository_name: string | null;
+  scan_id: string | null;
+  status: 'SUCCESS' | 'PARTIAL' | 'FAILED' | 'SIMULATED';
+  summary: string;
+  results: { type: RunbookAction['type']; label: string; ok: boolean; message: string }[];
+  actor: string | null;
+  created_at: string | null;
+}
+
+export async function fetchRunbooks(): Promise<RunbookList> {
+  return request('/runbooks');
+}
+
+export async function createRunbook(body: RunbookInput): Promise<Runbook> {
+  return request('/runbooks', { method: 'POST', body: JSON.stringify(body) });
+}
+
+export async function updateRunbook(id: string, body: RunbookInput): Promise<Runbook> {
+  return request(`/runbooks/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(body) });
+}
+
+export async function setRunbookEnabled(id: string, enabled: boolean): Promise<Runbook> {
+  return request(`/runbooks/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ enabled }) });
+}
+
+export async function deleteRunbook(id: string): Promise<void> {
+  await request(`/runbooks/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+export async function testRunbook(
+  id: string,
+  repositoryId?: string,
+): Promise<{ matched: boolean; reason: string; execution: RunbookExecution | null }> {
+  return request(`/runbooks/${encodeURIComponent(id)}/test`, {
+    method: 'POST',
+    body: JSON.stringify({ repository_id: repositoryId || null }),
+  });
+}
+
+export async function fetchRunbookExecutions(runbookId?: string): Promise<RunbookExecution[]> {
+  const qs = runbookId ? `?runbook_id=${encodeURIComponent(runbookId)}` : '';
+  return request(`/runbooks/executions${qs}`);
+}
+
 export async function fetchVelocity(rangeDays: number, repositoryIds?: string[]): Promise<VelocityData> {
   const params = new URLSearchParams({ range_days: String(rangeDays) });
   if (repositoryIds?.length) params.set('repository_ids', repositoryIds.join(','));

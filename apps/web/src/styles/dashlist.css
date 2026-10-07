@@ -343,7 +343,7 @@
 .dl-modal-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 1000;
+  z-index: 1250;
   background: rgba(31, 35, 40, 0.4);
   display: flex;
   align-items: center;

@@ -296,7 +296,7 @@
   position: fixed;
   inset: 0;
   background: rgba(31, 35, 40, 0.35);
-  z-index: 900;
+  z-index: 1250;
   display: flex;
   justify-content: flex-end;
 }

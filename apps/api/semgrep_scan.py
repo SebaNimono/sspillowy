@@ -656,3 +656,9 @@ def run_repo_scan_job(
         db.close()
         if work_parent and work_parent.exists():
             shutil.rmtree(work_parent, ignore_errors=True)
+        try:
+            from runbooks import run_runbooks_for_scan
+
+            run_runbooks_for_scan(scan_id)
+        except Exception as exc:
+            print(f"[sspillowy] runbooks hook failed: {exc}")

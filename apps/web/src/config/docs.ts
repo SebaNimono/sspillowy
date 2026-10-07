@@ -241,7 +241,18 @@ export const DOC_SECTIONS: DocSection[] = [
       },
       { type: 'goto', tab: 'velocity', label: 'Ir a Security Velocity' },
 
-      { type: 'h', text: '10. Compliance continuo · la evidencia' },
+      { type: 'h', text: '10. Runbooks & RPA · respuestas automáticas' },
+      {
+        type: 'list',
+        items: [
+          'Un runbook es una regla "cuando pase esto, haz esto": por ejemplo, si aparece un secreto, avisar a seguridad y asignar un responsable.',
+          'Se revisan solos al terminar cada análisis. Empieza desde una plantilla y ajústala a tu equipo.',
+          'Con "Probar" ves qué haría sin enviar ni cambiar nada; el historial muestra todo lo que se ejecutó.',
+        ],
+      },
+      { type: 'goto', tab: 'runbooks', label: 'Ir a Runbooks & RPA' },
+
+      { type: 'h', text: '11. Compliance continuo · la evidencia' },
       {
         type: 'list',
         items: [
@@ -252,7 +263,7 @@ export const DOC_SECTIONS: DocSection[] = [
       },
       { type: 'goto', tab: 'reports', label: 'Ir a Compliance continuo' },
 
-      { type: 'h', text: '11. Notificaciones · los avisos' },
+      { type: 'h', text: '12. Notificaciones · los avisos' },
       {
         type: 'list',
         items: [
@@ -263,7 +274,7 @@ export const DOC_SECTIONS: DocSection[] = [
       },
       { type: 'goto', tab: 'notifications', label: 'Ir a Notificaciones' },
 
-      { type: 'h', text: '12. Pillow · tu asistente en todas las secciones' },
+      { type: 'h', text: '13. Pillow · tu asistente en todas las secciones' },
       {
         type: 'list',
         items: [
@@ -273,10 +284,10 @@ export const DOC_SECTIONS: DocSection[] = [
         ],
       },
 
-      { type: 'h', text: '13. Módulos en camino' },
+      { type: 'h', text: '14. Módulos en camino' },
       {
         type: 'p',
-        text: 'Las secciones con la etiqueta "Pronto" están en desarrollo: Resumen ejecutivo, Runbooks & RPA, Observabilidad, Trazabilidad e Integraciones. Al abrirlas verás qué harán y qué puedes usar mientras tanto.',
+        text: 'Las secciones con la etiqueta "Pronto" están en desarrollo: Resumen ejecutivo, Observabilidad, Trazabilidad e Integraciones. Al abrirlas verás qué harán y qué puedes usar mientras tanto.',
       },
 
       { type: 'h', text: 'Pon a prueba lo aprendido' },
@@ -334,6 +345,11 @@ export const DOC_SECTIONS: DocSection[] = [
       {
         type: 'p',
         text: 'Abre Security Velocity con 90 días. Si el tiempo medio de corrección baja, el flujo neto es positivo y sube el porcentaje corregido en plazo, tienes la evidencia; cada indicador muestra la comparación con el trimestre anterior.',
+      },
+      { type: 'h', text: '“Quiero enterarme al instante si se filtra una credencial”' },
+      {
+        type: 'p',
+        text: 'En Runbooks & RPA usa la plantilla "Respuesta a secretos filtrados": avisa por correo al equipo de seguridad, asigna un responsable y deja el secreto en revisión en cuanto un análisis lo detecta. Pulsa "Probar" para ver qué haría antes de activarlo.',
       },
       { type: 'h', text: '“Tengo cientos de hallazgos y no sé por dónde empezar”' },
       {
@@ -620,6 +636,73 @@ export const DOC_SECTIONS: DocSection[] = [
         ],
       },
       { type: 'goto', tab: 'velocity', label: 'Abrir Security Velocity' },
+    ],
+  },
+  {
+    id: 'runbooks',
+    group: 'Cómo funciona',
+    title: 'Runbooks & RPA',
+    summary: 'Respuestas automáticas: cuando pasa algo en un análisis, SSPILLOWY avisa, asigna o actúa por ti.',
+    blocks: [
+      {
+        type: 'p',
+        text: 'Un runbook es una regla con tres partes: cuándo se activa, en qué repositorios y qué acciones realiza. Al terminar cada análisis, SSPILLOWY revisa los runbooks activos y ejecuta los que correspondan, sin que nadie tenga que estar mirando.',
+      },
+      { type: 'h', text: 'Cuándo se activa' },
+      {
+        type: 'table',
+        head: ['Disparador', 'Se activa cuando…'],
+        rows: [
+          ['Secreto detectado', 'Aparece una credencial que no estaba en análisis anteriores del repositorio.'],
+          ['Nuevo hallazgo', 'Aparece un hallazgo nuevo con la severidad mínima que elijas (por ejemplo, alto o más).'],
+          ['Gate bloqueado', 'El Security Gate bloquea un análisis.'],
+          ['Plazo vencido', 'Un hallazgo pendiente supera el plazo de su severidad. Se avisa una sola vez por hallazgo.'],
+          ['Análisis fallido', 'Un análisis termina con error y no produce resultados.'],
+        ],
+      },
+      {
+        type: 'p',
+        text: 'Solo cuenta lo nuevo: un hallazgo que ya existía en el análisis anterior no vuelve a disparar el runbook, así que no recibirás el mismo aviso cada vez que escanees.',
+      },
+      { type: 'h', text: 'Qué puede hacer' },
+      {
+        type: 'table',
+        head: ['Acción', 'Qué hace'],
+        rows: [
+          ['Enviar correo', 'Avisa con un resumen del evento al equipo de seguridad y a los correos que agregues.'],
+          ['Publicar en canal', 'Envía el aviso a un canal de Slack, Microsoft Teams o a cualquier URL que reciba avisos (webhook).'],
+          ['Asignar responsable', 'Asigna el secreto a una persona en Secret Management, si aún no tiene responsable. Solo con "Secreto detectado".'],
+          ['Pasar a En revisión', 'Marca los hallazgos del evento como "En revisión" para que nadie los pase por alto.'],
+          ['Relanzar análisis', 'Vuelve a analizar el repositorio. Útil con "Análisis fallido" para superar fallos puntuales de red o descarga.'],
+        ],
+      },
+      { type: 'h', text: 'Cómo crear uno' },
+      {
+        type: 'steps',
+        items: [
+          { title: 'Elige una plantilla', text: 'En "Empezar desde una plantilla" hay respuestas listas para los casos más comunes. También puedes partir de cero con "Nuevo runbook".' },
+          { title: 'Define cuándo y dónde', text: 'Elige el disparador y si aplica a todos los repositorios (incluidos los que agregues después) o solo a algunos.' },
+          { title: 'Agrega acciones', text: 'Puedes combinar varias. Se ejecutan en orden y, si una falla, las demás continúan.' },
+          { title: 'Prueba', text: '"Probar" lo evalúa contra el último análisis y muestra qué haría, sin enviar nada ni cambiar ningún hallazgo.' },
+          { title: 'Actívalo', text: 'Con el interruptor lo enciendes o apagas cuando quieras sin perder su configuración.' },
+        ],
+      },
+      { type: 'h', text: 'Historial' },
+      {
+        type: 'p',
+        text: 'Cada ejecución queda registrada con fecha, repositorio, resultado y el detalle de cada acción: Correcta (todo salió bien), Parcial (alguna acción falló) o Fallida. Las pruebas aparecen como "Prueba". Las ejecuciones también quedan en la bitácora de auditoría.',
+      },
+      {
+        type: 'callout',
+        tone: 'info',
+        text: 'Para enviar correos, tu administrador debe tener configurado el envío de correo y la lista del equipo de seguridad; mientras tanto el editor te lo indica. Para publicar en Slack o Teams, crea un "Incoming Webhook" en el canal y pega su URL (debe empezar por https://).',
+      },
+      {
+        type: 'callout',
+        tone: 'tip',
+        text: 'Un análisis relanzado por un runbook nunca vuelve a relanzar otro, así que no hay riesgo de bucles. Si ya hay un análisis en curso en el repositorio, el relanzamiento se omite.',
+      },
+      { type: 'goto', tab: 'runbooks', label: 'Abrir Runbooks & RPA' },
     ],
   },
   {
