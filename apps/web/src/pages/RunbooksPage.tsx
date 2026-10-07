@@ -235,7 +235,7 @@ export const RunbooksPage: React.FC<PageProps> = ({ onNavigate, ...headerProps }
     <div>
       <Toast toast={toast} onClose={() => setToast(null)} />
       <Header
-        title="Runbooks & RPA"
+        title="Automatizaciones"
         subtitle="Respuestas automáticas: cuando pasa algo en un análisis, SSPILLOWY avisa, asigna o actúa por ti."
         onNavigate={onNavigate}
         {...headerProps}

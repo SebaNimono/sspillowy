@@ -1,4 +1,4 @@
-"""Runbooks & RPA: reglas "cuando pasa X → haz Y" que se evalúan al terminar cada análisis.
+"""Automatizaciones (runbooks): reglas "cuando pasa X → haz Y" que se evalúan al terminar cada análisis.
 
 Los eventos se calculan comparando el análisis recién terminado con el historial del repositorio
 (hallazgos nuevos por fingerprint, secretos nuevos, gate bloqueado, plazos vencidos, análisis fallido).
@@ -27,7 +27,7 @@ from database import SessionLocal, db_ping
 from models import AuditEvent, Finding, Repository, Runbook, RunbookExecution, Scan, SecretIncident
 from velocity import SLA_DAYS, fingerprint, first_seen_map
 
-router = APIRouter(prefix="/api/v1/runbooks", tags=["Runbooks & RPA"])
+router = APIRouter(prefix="/api/v1/runbooks", tags=["Automatizaciones"])
 
 TRIGGERS = ("SECRET_DETECTED", "NEW_FINDING", "GATE_BLOCKED", "SLA_BREACHED", "SCAN_FAILED")
 ACTION_TYPES = ("email", "webhook", "assign_owner", "set_in_review", "rescan")

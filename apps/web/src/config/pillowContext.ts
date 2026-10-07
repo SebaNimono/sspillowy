@@ -10,7 +10,7 @@ export interface PillowChatLine {
 export const PILLOW_PAGE_LABEL: Record<string, string> = {
   dashboard: 'Risk Posture',
   velocity: 'Security Velocity',
-  runbooks: 'Runbooks & RPA',
+  runbooks: 'Automatizaciones',
   repositories: 'Repositorios',
   findings: 'Priorización contextual',
   fixIntel: 'Fix Intelligence',

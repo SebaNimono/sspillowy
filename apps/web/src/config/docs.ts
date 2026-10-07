@@ -241,7 +241,7 @@ export const DOC_SECTIONS: DocSection[] = [
       },
       { type: 'goto', tab: 'velocity', label: 'Ir a Security Velocity' },
 
-      { type: 'h', text: '10. Runbooks & RPA · respuestas automáticas' },
+      { type: 'h', text: '10. Automatizaciones · respuestas automáticas' },
       {
         type: 'list',
         items: [
@@ -250,7 +250,7 @@ export const DOC_SECTIONS: DocSection[] = [
           'Con "Probar" ves qué haría sin enviar ni cambiar nada; el historial muestra todo lo que se ejecutó.',
         ],
       },
-      { type: 'goto', tab: 'runbooks', label: 'Ir a Runbooks & RPA' },
+      { type: 'goto', tab: 'runbooks', label: 'Ir a Automatizaciones' },
 
       { type: 'h', text: '11. Compliance continuo · la evidencia' },
       {
@@ -349,7 +349,7 @@ export const DOC_SECTIONS: DocSection[] = [
       { type: 'h', text: '“Quiero enterarme al instante si se filtra una credencial”' },
       {
         type: 'p',
-        text: 'En Runbooks & RPA usa la plantilla "Respuesta a secretos filtrados": avisa por correo al equipo de seguridad, asigna un responsable y deja el secreto en revisión en cuanto un análisis lo detecta. Pulsa "Probar" para ver qué haría antes de activarlo.',
+        text: 'En Automatizaciones usa la plantilla "Respuesta a secretos filtrados": avisa por correo al equipo de seguridad, asigna un responsable y deja el secreto en revisión en cuanto un análisis lo detecta. Pulsa "Probar" para ver qué haría antes de activarlo.',
       },
       { type: 'h', text: '“Tengo cientos de hallazgos y no sé por dónde empezar”' },
       {
@@ -641,7 +641,7 @@ export const DOC_SECTIONS: DocSection[] = [
   {
     id: 'runbooks',
     group: 'Cómo funciona',
-    title: 'Runbooks & RPA',
+    title: 'Automatizaciones',
     summary: 'Respuestas automáticas: cuando pasa algo en un análisis, SSPILLOWY avisa, asigna o actúa por ti.',
     blocks: [
       {
@@ -702,7 +702,7 @@ export const DOC_SECTIONS: DocSection[] = [
         tone: 'tip',
         text: 'Un análisis relanzado por un runbook nunca vuelve a relanzar otro, así que no hay riesgo de bucles. Si ya hay un análisis en curso en el repositorio, el relanzamiento se omite.',
       },
-      { type: 'goto', tab: 'runbooks', label: 'Abrir Runbooks & RPA' },
+      { type: 'goto', tab: 'runbooks', label: 'Abrir Automatizaciones' },
     ],
   },
   {
