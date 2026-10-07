@@ -601,6 +601,14 @@ def run_repo_scan_job(
                 f"{superseded} hallazgos previos marcados SUPERSEDED tras nuevo escaneo.",
             )
 
+        if "gitleaks" in engines_ok:
+            try:
+                from secret_management import sync_secret_incidents
+
+                sync_secret_incidents(db, repo.id)
+            except Exception as exc:
+                _append_audit(db, "scan-worker", "SECRET_SYNC_FAILED", repo.name, str(exc)[:400])
+
         merged = _merge_counts(*count_parts)
         note = " + ".join(engine_notes) if engine_notes else "scan"
         if errors:

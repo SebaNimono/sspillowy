@@ -353,6 +353,54 @@ export async function rejectGateBypass(id: string, note?: string): Promise<GateB
   });
 }
 
+export type SecretStep = 'rotated' | 'revoked' | 'history_cleaned' | 'verified';
+export type SecretStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'FALSE_POSITIVE';
+
+export interface SecretIncident {
+  id: string;
+  repository_id: string;
+  repository_name: string | null;
+  rule_id: string;
+  provider: string;
+  severity: Finding['severity'];
+  file_path: string | null;
+  line_number: number | null;
+  preview: string | null;
+  status: SecretStatus;
+  owner_email: string | null;
+  notes: string | null;
+  steps: Record<SecretStep, { done: boolean; at: string | null; by: string | null }>;
+  detected_now: boolean;
+  active_findings: number;
+  finding_ids: string[];
+  first_seen_at: string | null;
+  last_seen_at: string | null;
+  resolved_at: string | null;
+  reopened_count: number;
+  updated_at: string | null;
+}
+
+export async function fetchSecrets(repositoryId?: string): Promise<SecretIncident[]> {
+  const qs = repositoryId ? `?repository_id=${encodeURIComponent(repositoryId)}` : '';
+  return request(`/secrets${qs}`);
+}
+
+export async function updateSecret(
+  id: string,
+  body: {
+    steps?: Partial<Record<SecretStep, boolean>>;
+    owner_email?: string;
+    notes?: string;
+    status?: 'FALSE_POSITIVE' | 'OPEN';
+  },
+): Promise<SecretIncident> {
+  return request(`/secrets/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
 export async function fetchHeatmap(): Promise<HeatmapData> {
   return request('/heatmap');
 }

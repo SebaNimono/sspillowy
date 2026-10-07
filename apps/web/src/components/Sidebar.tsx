@@ -66,7 +66,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         navItem('repositories', FolderGit2),
         navItem('scans', Radar),
         navItem('gates', Sliders),
-        navItem('secrets', KeyRound, true),
+        navItem('secrets', KeyRound),
         navItem('runbooks', Workflow, true),
       ],
     },

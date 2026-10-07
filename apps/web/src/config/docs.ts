@@ -166,11 +166,22 @@ export const DOC_SECTIONS: DocSection[] = [
       {
         type: 'callout',
         tone: 'warn',
-        text: 'Ante un secreto filtrado, borrarlo del código no basta: queda en el historial de Git. Rota la credencial primero y luego márcalo como Corregido.',
+        text: 'Los secretos filtrados se gestionan en Secret Management: allí se cierran con su checklist de respuesta, no marcándolos a mano como Corregido.',
       },
       { type: 'goto', tab: 'findings', label: 'Ir a Priorización contextual' },
 
-      { type: 'h', text: '4. Security Gates · el control del despliegue' },
+      { type: 'h', text: '4. Secret Management · la respuesta a fugas' },
+      {
+        type: 'list',
+        items: [
+          'Cada credencial detectada aparece una sola vez, con su proveedor (AWS, GitHub, Stripe…), el valor enmascarado y dónde está.',
+          'Ábrela y sigue el checklist: rotar, revocar, limpiar el historial y verificar. Cada paso guarda quién lo hizo y cuándo.',
+          'Al completar los cuatro pasos el secreto queda resuelto y deja de bloquear el gate. Si vuelve a aparecer, se reabre solo.',
+        ],
+      },
+      { type: 'goto', tab: 'secrets', label: 'Ir a Secret Management' },
+
+      { type: 'h', text: '5. Security Gates · el control del despliegue' },
       {
         type: 'list',
         items: [
@@ -182,7 +193,7 @@ export const DOC_SECTIONS: DocSection[] = [
       },
       { type: 'goto', tab: 'gates', label: 'Ir a Security Gates' },
 
-      { type: 'h', text: '5. Risk Posture · la vista general' },
+      { type: 'h', text: '6. Risk Posture · la vista general' },
       {
         type: 'list',
         items: [
@@ -194,7 +205,7 @@ export const DOC_SECTIONS: DocSection[] = [
       },
       { type: 'goto', tab: 'dashboard', label: 'Ir a Risk Posture' },
 
-      { type: 'h', text: '6. Compliance continuo · la evidencia' },
+      { type: 'h', text: '7. Compliance continuo · la evidencia' },
       {
         type: 'list',
         items: [
@@ -205,7 +216,7 @@ export const DOC_SECTIONS: DocSection[] = [
       },
       { type: 'goto', tab: 'reports', label: 'Ir a Compliance continuo' },
 
-      { type: 'h', text: '7. Notificaciones · los avisos' },
+      { type: 'h', text: '8. Notificaciones · los avisos' },
       {
         type: 'list',
         items: [
@@ -216,17 +227,17 @@ export const DOC_SECTIONS: DocSection[] = [
       },
       { type: 'goto', tab: 'notifications', label: 'Ir a Notificaciones' },
 
-      { type: 'h', text: '8. Módulos en camino' },
+      { type: 'h', text: '9. Módulos en camino' },
       {
         type: 'p',
-        text: 'Las secciones con la etiqueta "Pronto" están en desarrollo: Security Velocity, Resumen ejecutivo, Supply Chain, Fix Intelligence, Secret Management, Runbooks & RPA, Observabilidad, Trazabilidad e Integraciones. Al abrirlas verás qué harán y qué puedes usar mientras tanto.',
+        text: 'Las secciones con la etiqueta "Pronto" están en desarrollo: Security Velocity, Resumen ejecutivo, Supply Chain, Fix Intelligence, Runbooks & RPA, Observabilidad, Trazabilidad e Integraciones. Al abrirlas verás qué harán y qué puedes usar mientras tanto.',
       },
 
       { type: 'h', text: 'Pon a prueba lo aprendido' },
       {
         type: 'steps',
         items: [
-          { title: 'Encuentra un secreto', text: 'En Priorización contextual, filtra por la herramienta GitLeaks y decide qué harías con él.' },
+          { title: 'Responde a un secreto', text: 'En Secret Management, abre un secreto, asígnate como responsable y lee cómo se rota en su proveedor.' },
           { title: 'Encuentra una actualización', text: 'En la vista agrupada, ubica una librería vulnerable y la versión a la que hay que actualizar.' },
           { title: 'Toma una decisión', text: 'Marca un hallazgo como En revisión.' },
           { title: 'Explica el gate', text: 'En Security Gates, identifica por qué tu proyecto está aprobado o bloqueado.' },
@@ -249,7 +260,7 @@ export const DOC_SECTIONS: DocSection[] = [
       { type: 'h', text: '“Subí una contraseña o una API key por error”' },
       {
         type: 'p',
-        text: 'Lanza el perfil "Solo secretos". Rota la credencial en el proveedor (no basta con borrarla del código: queda en el historial de Git) y después marca el hallazgo como Corregido.',
+        text: 'Lanza el perfil "Solo secretos" y abre Secret Management. Sigue el checklist: rota la credencial en el proveedor, revoca la anterior, límpiala del historial de Git (borrarla del código no basta) y verifica. Al completarlo, el secreto se cierra solo y deja de bloquear el gate.',
       },
       { type: 'h', text: '“Actualicé dependencias y quiero comprobarlo”' },
       {
@@ -443,6 +454,56 @@ export const DOC_SECTIONS: DocSection[] = [
   },
 
   // ───────────────────────── Gobernanza
+  {
+    id: 'secret-management',
+    group: 'Gobernanza',
+    title: 'Secret Management',
+    summary: 'Cómo responder a una credencial filtrada hasta cerrarla con evidencia.',
+    blocks: [
+      {
+        type: 'p',
+        text: 'Cuando GitLeaks detecta una credencial en tu repositorio, Secret Management la convierte en un incidente con su propio checklist de respuesta. El incidente se mantiene aunque vuelvas a analizar el repositorio, así que el avance no se pierde.',
+      },
+      {
+        type: 'callout',
+        tone: 'warn',
+        text: 'Borrar el secreto del código no lo invalida: sigue en el historial de Git y cualquiera con acceso al repositorio puede recuperarlo. Lo único que lo neutraliza es rotarlo y revocarlo en el proveedor.',
+      },
+      { type: 'h', text: 'El checklist de respuesta' },
+      {
+        type: 'steps',
+        items: [
+          { title: 'Rotar', text: 'Emite una credencial nueva en el proveedor y despliégala donde se use. El panel muestra cómo hacerlo en AWS, GitHub, Stripe, Google Cloud y otros.' },
+          { title: 'Revocar', text: 'Invalida la credencial filtrada en el proveedor y revisa sus registros de acceso por uso indebido.' },
+          { title: 'Limpiar historial', text: 'Quita el secreto del código y reescribe el historial de Git (por ejemplo con git filter-repo o BFG).' },
+          { title: 'Verificar', text: 'Confirma que la credencial antigua ya no funciona y vuelve a analizar. Solo puedes verificar después de rotar y revocar.' },
+        ],
+      },
+      { type: 'h', text: 'Estados' },
+      {
+        type: 'table',
+        head: ['Estado', 'Significado'],
+        rows: [
+          ['Abierto', 'Detectado y sin respuesta iniciada'],
+          ['En respuesta', 'Tiene responsable o al menos un paso completado'],
+          ['Resuelto', 'Los cuatro pasos completos; sus hallazgos pasan a Corregido y dejan de bloquear el gate'],
+          ['Falso positivo', 'No es una credencial real; las nuevas detecciones del mismo valor se descartan solas'],
+        ],
+      },
+      { type: 'h', text: 'Qué más registra' },
+      {
+        type: 'list',
+        items: [
+          'Responsable y notas de cada incidente.',
+          'Quién completó cada paso y cuándo; todo queda en la bitácora de auditoría.',
+          '"Detectado en el último análisis" o "Ya no detectado", para saber si el secreto sigue en el código.',
+          'Si un secreto resuelto vuelve a aparecer, el incidente se reabre y pide verificar otra vez.',
+          'Indicadores: abiertos, en respuesta, críticos sin rotar y tiempo medio de resolución.',
+        ],
+      },
+      { type: 'goto', tab: 'secrets', label: 'Ir a Secret Management' },
+    ],
+  },
   {
     id: 'gates',
     group: 'Gobernanza',

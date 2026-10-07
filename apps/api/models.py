@@ -159,6 +159,39 @@ class AuditEvent(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
+class SecretIncident(Base):
+    """Respuesta a un secreto filtrado. Sobrevive a re-escaneos: se identifica por fingerprint."""
+
+    __tablename__ = "secret_incidents"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    fingerprint = Column(String, nullable=False, unique=True, index=True)
+    repository_id = Column(String, ForeignKey("repositories.id"), nullable=False, index=True)
+    rule_id = Column(String, nullable=False)
+    provider = Column(String, nullable=False, default="generic")
+    severity = Column(String, nullable=False, default="HIGH")
+    file_path = Column(String, nullable=True)
+    line_number = Column(Integer, nullable=True)
+    preview = Column(String, nullable=True)
+    # OPEN | IN_PROGRESS | RESOLVED | FALSE_POSITIVE
+    status = Column(String, nullable=False, default="OPEN", index=True)
+    owner_email = Column(String, nullable=True)
+    notes = Column(Text, nullable=True)
+    rotated_at = Column(DateTime, nullable=True)
+    rotated_by = Column(String, nullable=True)
+    revoked_at = Column(DateTime, nullable=True)
+    revoked_by = Column(String, nullable=True)
+    history_cleaned_at = Column(DateTime, nullable=True)
+    history_cleaned_by = Column(String, nullable=True)
+    verified_at = Column(DateTime, nullable=True)
+    verified_by = Column(String, nullable=True)
+    first_seen_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    last_seen_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    resolved_at = Column(DateTime, nullable=True)
+    reopened_count = Column(Integer, default=0)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
 class PillowDailyUsage(Base):
     """Créditos diarios del agente Pillow por usuario (email)."""
 

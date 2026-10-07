@@ -79,9 +79,9 @@ export const CONCEPTS: Concept[] = [
     definition:
       'Busca credenciales escritas en el código: claves privadas, tokens, API keys o contraseñas en cadenas de conexión.',
     inSystem:
-      'Lo hace GitLeaks. El valor nunca se muestra completo, solo enmascarado. Un secreto pendiente puede bloquear el despliegue.',
+      'Lo hace GitLeaks. El valor nunca se muestra completo, solo enmascarado. Cada secreto se gestiona en Secret Management con un checklist (rotar, revocar, limpiar historial y verificar); mientras siga pendiente puede bloquear el despliegue.',
     example: 'API_KEY = "pk9Zr4Wq…" en config.py.',
-    tab: 'findings',
+    tab: 'secrets',
     related: ['gitleaks', 'security-gate', 'cwe'],
   },
   {

@@ -97,26 +97,6 @@ export const ROADMAP: Record<string, RoadmapModule> = {
     stage: 'mvp',
     meanwhile: { tab: 'findings', label: 'Ir a Priorización contextual' },
   },
-  secrets: {
-    id: 'secrets',
-    title: 'Secret Management',
-    tagline: 'De la fuga a la credencial rotada, paso a paso.',
-    description:
-      'Un secreto filtrado no se soluciona borrándolo del código: queda en el historial. Este módulo guía la respuesta completa a cada fuga.',
-    features: [
-      'Vista dedicada de los secretos detectados por repositorio y proveedor.',
-      'Checklist de respuesta: rotar, revocar, limpiar el historial y verificar.',
-      'Estado de cada secreto hasta su cierre.',
-      'Rotación automática con proveedores compatibles (fase posterior).',
-    ],
-    howItWorks: [
-      'Usa los hallazgos de la detección de secretos.',
-      'Identifica el proveedor de la credencial (AWS, GitHub, Stripe…).',
-      'Registra cada paso de la respuesta como evidencia.',
-    ],
-    stage: 'mvp',
-    meanwhile: { tab: 'findings', label: 'Ver secretos detectados' },
-  },
   runbooks: {
     id: 'runbooks',
     title: 'Runbooks & RPA',
