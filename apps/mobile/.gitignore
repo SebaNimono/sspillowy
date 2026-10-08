@@ -46,3 +46,13 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+build/
+.dart_tool/
+.idea/
+.vscode/
+__pycache__/
+*.iml
+android/local.properties
+*.apk
+*.aab
