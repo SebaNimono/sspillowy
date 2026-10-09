@@ -1,18 +1,20 @@
-﻿services:
+﻿version: '3.8'
+
+services:
   db:
     image: postgres:16-alpine
     container_name: sspillowy_postgres
     restart: always
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-sspillowy_db}
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: sspillowy_db
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d sspillowy_db"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -42,6 +44,14 @@
     command: ["uvicorn", "apps.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     env_file:
       - .env
+    environment:
+      POSTGRES_SERVER: db
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: sspillowy_db
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/sspillowy_db
     volumes:
       - ./apps/api:/app/apps/api
       - ./packages:/app/packages
