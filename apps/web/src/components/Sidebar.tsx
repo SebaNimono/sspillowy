@@ -78,7 +78,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       id: 'governance',
       label: t('nav.groupGovernance'),
-      items: [navItem('reports', ClipboardCheck), navItem('traceability', History, true), navItem('notifications', Bell)],
+      items: [navItem('reports', ClipboardCheck), navItem('traceability', History), navItem('notifications', Bell)],
     },
     {
       id: 'resources',

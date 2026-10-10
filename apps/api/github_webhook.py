@@ -190,6 +190,9 @@ async def github_webhook(
     full_name = gh_repo.get("full_name")
     branch: str | None = None
     triggered_by = "github_webhook"
+    commit_sha: str | None = None
+    commit_message: str | None = None
+    commit_author: str | None = None
 
     if event == "push":
         if payload.get("deleted"):
@@ -199,6 +202,10 @@ async def github_webhook(
             return {"ok": True, "ignored": True, "reason": "ref no es branch"}
         pusher = (payload.get("pusher") or {}).get("name") or "github"
         triggered_by = f"github_push:{pusher}"
+        head = payload.get("head_commit") or {}
+        commit_sha = head.get("id") or payload.get("after")
+        commit_message = (head.get("message") or "").split("\n", 1)[0] or None
+        commit_author = (head.get("author") or {}).get("name") or pusher
     else:
         action = (payload.get("action") or "").lower()
         if action not in {"opened", "reopened", "synchronize"}:
@@ -209,6 +216,9 @@ async def github_webhook(
             return {"ok": True, "ignored": True, "reason": "PR sin head.ref"}
         user = ((pr.get("user") or {}).get("login")) or "github"
         triggered_by = f"github_pr:{user}"
+        commit_sha = (pr.get("head") or {}).get("sha")
+        commit_message = f"PR #{pr.get('number')}: {pr.get('title') or ''}".strip() if pr.get("number") else None
+        commit_author = user
 
     if not db_ping():
         raise HTTPException(status_code=503, detail="Base de datos no disponible")
@@ -271,6 +281,9 @@ async def github_webhook(
             low_count=0,
             progress_stage="queued",
             progress_detail="Webhook encolado…",
+            commit_sha=(commit_sha or None) and str(commit_sha)[:64],
+            commit_message=(commit_message or None) and str(commit_message)[:500],
+            commit_author=(commit_author or None) and str(commit_author)[:200],
             created_at=_now(),
             completed_at=None,
         )

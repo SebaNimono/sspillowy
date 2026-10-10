@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Header } from '../components/Header';
 import { SidebarState } from '../components/Sidebar';
 import { Toast, ToastMessage } from '../components/Toast';
-import { Finding, fetchFindings, updateFindingStatus, clearFindings } from '../api/client';
+import { Finding, TRACE_REF_KEY, fetchFindings, updateFindingStatus, clearFindings } from '../api/client';
 import {
   ShieldAlert,
   Sparkles,
@@ -20,6 +20,7 @@ import {
   Package,
   Clock,
   ArrowUpCircle,
+  History,
   X,
 } from 'lucide-react';
 import { useI18n } from '../i18n/I18nProvider';
@@ -666,6 +667,18 @@ export const FindingsPage: React.FC<PageProps> = ({
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.55rem', marginTop: '1.5rem', flexWrap: 'wrap' }}>
               <button className="btn btn-secondary" onClick={() => setActiveFinding(null)}>{t('findings.close')}</button>
+              {onNavigate && (
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    localStorage.setItem(TRACE_REF_KEY, activeFinding.id);
+                    onNavigate('traceability');
+                  }}
+                >
+                  <History size={14} />
+                  <span>Ver historia</span>
+                </button>
+              )}
               <button className="btn btn-secondary" onClick={() => applyStatus('IN_REVIEW')}>
                 <Eye size={14} />
                 <span>{t('findings.inReview')}</span>

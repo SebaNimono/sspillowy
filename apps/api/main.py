@@ -54,7 +54,21 @@ from email_verification import router as email_verification_router  # noqa: E402
 from password_reset import router as password_reset_router  # noqa: E402
 from pillow_agent import router as pillow_router  # noqa: E402
 from gate_bypass import router as gate_bypass_router  # noqa: E402
+from secret_management import router as secret_management_router  # noqa: E402
+from sbom import router as sbom_router  # noqa: E402
+from fix_intel import router as fix_intel_router  # noqa: E402
+from dashboard_views import router as dashboard_views_router  # noqa: E402
+from velocity import first_seen_map, fingerprint, router as velocity_router  # noqa: E402
+from runbooks import router as runbooks_router  # noqa: E402
+from compliance import current_period, iso_controls  # noqa: E402
+from compliance import router as compliance_router  # noqa: E402
+from executive import router as executive_router  # noqa: E402
+from obs_metrics import MetricsMiddleware  # noqa: E402
+from observability import metrics_router, start_flusher  # noqa: E402
+from observability import router as observability_router  # noqa: E402
+from traceability import router as traceability_router  # noqa: E402
 from database import init_db, db_ping, SessionLocal  # noqa: E402
+import database as _database  # noqa: E402
 from email_service import mailer_status  # noqa: E402
 from dashboard_metrics import (  # noqa: E402
     compute_dashboard_stats,
@@ -66,7 +80,10 @@ from models import (  # noqa: E402
     AuditEvent,
     Finding,
     Repository,
+    SbomComponent,
+    SbomSnapshot,
     Scan,
+    SecretIncident,
     SecurityGate,
 )
 from gate_eval import evaluate_gate  # noqa: E402
@@ -74,7 +91,6 @@ from semgrep_scan import run_repo_scan_job, semgrep_available  # noqa: E402
 from gitleaks_scan import gitleaks_available  # noqa: E402
 from trivy_scan import trivy_available  # noqa: E402
 from zap_scan import zap_available, zap_binary  # noqa: E402
-
 app = FastAPI(
     title="SSPILLOWY API Core",
     description="Software Security Platform for Intelligent, Low-latency Oversight & Warning Yield",
@@ -83,20 +99,12 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# Configuración explícita e inmediata de CORS antes de cargar routers
-app.add_middleware(
-    CORSMiddleware,
-    allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 
 @app.on_event("startup")
 async def on_startup():
     ok = init_db()
     print(f"[sspillowy] database ready={ok}")
+    start_flusher()
     if not ok:
         return
     db = SessionLocal()
@@ -115,6 +123,15 @@ async def on_startup():
         db.close()
 
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+app.add_middleware(MetricsMiddleware)
+
 app.include_router(auth_meta_router)
 app.include_router(password_auth_router)
 app.include_router(email_verification_router)
@@ -126,6 +143,17 @@ app.include_router(gitlab_auth_router)
 app.include_router(google_auth_router)
 app.include_router(microsoft_auth_router)
 app.include_router(gate_bypass_router)
+app.include_router(secret_management_router)
+app.include_router(sbom_router)
+app.include_router(fix_intel_router)
+app.include_router(dashboard_views_router)
+app.include_router(velocity_router)
+app.include_router(runbooks_router)
+app.include_router(executive_router)
+app.include_router(compliance_router)
+app.include_router(observability_router)
+app.include_router(traceability_router)
+app.include_router(metrics_router)
 
 # Estado de lectura de notificaciones (efímero por instancia; hallazgos sí son persistentes)
 _READ_NOTIFICATION_IDS: set[str] = set()
@@ -165,7 +193,7 @@ def _require_db():
         raise HTTPException(status_code=503, detail="Base de datos no disponible.")
 
 
-def _append_audit(db, actor: str, action: str, target: str, detail: str) -> None:
+def _append_audit(db, actor: str, action: str, target: str, detail: str, finding_id: str | None = None) -> None:
     db.add(
         AuditEvent(
             id=str(uuid.uuid4()),
@@ -173,9 +201,14 @@ def _append_audit(db, actor: str, action: str, target: str, detail: str) -> None
             target=target,
             detail=detail,
             actor_email=actor,
+            finding_id=finding_id,
             created_at=_now(),
         )
     )
+
+
+def _session_actor(session) -> str:
+    return ((session or {}).get("email") or "web_hub").strip().lower()
 
 
 def _refresh_repo_counters(db, repo: Repository) -> None:
@@ -212,7 +245,7 @@ def _display_file_path(path: str | None) -> str | None:
     return s
 
 
-def _finding_out(finding: Finding) -> FindingResponse:
+def _finding_out(finding: Finding, first_seen: dict | None = None) -> FindingResponse:
     out = FindingResponse.model_validate(finding)
     repo_name = None
     triggered = None
@@ -228,6 +261,10 @@ def _finding_out(finding: Finding) -> FindingResponse:
             "file_path": _display_file_path(out.file_path),
             "repository_name": repo_name,
             "triggered_by": triggered,
+            "first_seen_at": (first_seen or {}).get(
+                (finding.repository_id, fingerprint(finding.engine, finding.title, finding.file_path))
+            )
+            or out.created_at,
         }
     )
 
@@ -392,12 +429,13 @@ def _empty_heatmap(weeks: int = 12) -> HeatmapResponse:
 @app.get("/health", tags=["Health"])
 async def health_check():
     db_ok = db_ping()
+    backend = "sqlite" if _database.USING_SQLITE else "postgresql"
     return {
-        "status": "healthy" if db_ok else "degraded",
+        "status": "healthy" if db_ok and backend == "postgresql" else "degraded",
         "service": "SSPILLOWY Core API",
         "version": "0.3.0",
-        "database": "postgresql (ok)" if db_ok else "unavailable",
-        "data_source": "postgresql" if db_ok else "none",
+        "database": f"{backend} (ok)" if db_ok else "unavailable",
+        "data_source": backend if db_ok else "none",
         "semgrep": "available" if semgrep_available() else "missing",
         "gitleaks": "available" if gitleaks_available() else "missing",
         "trivy": "available" if trivy_available() else "missing",
@@ -408,13 +446,20 @@ async def health_check():
     }
 
 
+def _repo_ids_param(raw: Optional[str]) -> list[str] | None:
+    ids = [p.strip() for p in (raw or "").split(",") if p.strip()]
+    return ids or None
+
+
 @app.get("/api/v1/stats", response_model=DashboardStats, tags=["Dashboard"])
-async def get_dashboard_stats(_auth=Depends(require_hub_read)):
+async def get_dashboard_stats(
+    repository_ids: Optional[str] = Query(default=None), _auth=Depends(require_hub_read)
+):
     db = SessionLocal()
     try:
         if not db_ping():
             return _empty_dashboard_stats()
-        return DashboardStats(**compute_dashboard_stats(db))
+        return DashboardStats(**compute_dashboard_stats(db, _repo_ids_param(repository_ids)))
     except Exception as exc:
         print(f"[sspillowy] dashboard stats error: {exc}")
         return _empty_dashboard_stats()
@@ -423,12 +468,16 @@ async def get_dashboard_stats(_auth=Depends(require_hub_read)):
 
 
 @app.get("/api/v1/heatmap", response_model=HeatmapResponse, tags=["Dashboard"])
-async def get_heatmap(weeks: int = Query(default=12, ge=4, le=52), _auth=Depends(require_hub_read)):
+async def get_heatmap(
+    weeks: int = Query(default=12, ge=4, le=52),
+    repository_ids: Optional[str] = Query(default=None),
+    _auth=Depends(require_hub_read),
+):
     db = SessionLocal()
     try:
         if not db_ping():
             return _empty_heatmap(weeks)
-        return HeatmapResponse(**compute_heatmap(db, weeks=weeks))
+        return HeatmapResponse(**compute_heatmap(db, weeks=weeks, repo_ids=_repo_ids_param(repository_ids)))
     except Exception as exc:
         print(f"[sspillowy] heatmap error: {exc}")
         return _empty_heatmap(weeks)
@@ -437,12 +486,16 @@ async def get_heatmap(weeks: int = Query(default=12, ge=4, le=52), _auth=Depends
 
 
 @app.get("/api/v1/audit-log", response_model=List[AuditEventResponse], tags=["Audit"])
-async def list_audit_log(limit: int = Query(default=40, ge=1, le=200), _auth=Depends(require_hub_read)):
+async def list_audit_log(
+    limit: int = Query(default=40, ge=1, le=200),
+    repository_ids: Optional[str] = Query(default=None),
+    _auth=Depends(require_hub_read),
+):
     db = SessionLocal()
     try:
         if not db_ping():
             return []
-        return list_audit_events(db, limit=limit)
+        return list_audit_events(db, limit=limit, repo_ids=_repo_ids_param(repository_ids))
     except Exception as exc:
         print(f"[sspillowy] audit log error: {exc}")
         return []
@@ -467,7 +520,7 @@ async def list_repositories(_auth=Depends(require_hub_read)):
     status_code=status.HTTP_201_CREATED,
     tags=["Repositories"],
 )
-async def create_repository(repo: RepositoryCreate, _auth=Depends(require_hub_write)):
+async def create_repository(repo: RepositoryCreate, session=Depends(require_hub_write)):
     _require_db()
     db = SessionLocal()
     try:
@@ -491,7 +544,7 @@ async def create_repository(repo: RepositoryCreate, _auth=Depends(require_hub_wr
         db.add(row)
         _append_audit(
             db,
-            "web_hub",
+            _session_actor(session),
             "REPO_REGISTERED",
             repo.name,
             f"Repositorio {repo.url} registrado en rama {repo.branch}.",
@@ -531,13 +584,14 @@ async def list_findings(
             .order_by(Finding.created_at.desc())
             .all()
         )
-        return [_finding_out(f) for f in rows]
+        first_seen = first_seen_map(db, [repository_id] if repository_id else None)
+        return [_finding_out(f, first_seen) for f in rows]
     finally:
         db.close()
 
 
 @app.delete("/api/v1/findings", tags=["Findings"])
-async def clear_findings(repository_id: Optional[str] = None, _auth=Depends(require_hub_write)):
+async def clear_findings(repository_id: Optional[str] = None, session=Depends(require_hub_write)):
     """Vacía la matriz (todos o por repo). Útil para demos / re-escanear limpio."""
     _require_db()
     db = SessionLocal()
@@ -554,11 +608,12 @@ async def clear_findings(repository_id: Optional[str] = None, _auth=Depends(requ
             repo.open_highs = 0
             repo.total_findings = 0
             repo.health_score = 100
+        repo_label = repos[0].name if repository_id and repos else (repository_id or "all")
         _append_audit(
             db,
-            "web_hub",
+            _session_actor(session),
             "FINDINGS_CLEARED",
-            repository_id or "all",
+            repo_label,
             f"Matriz vaciada ({deleted} hallazgos eliminados).",
         )
         db.commit()
@@ -568,7 +623,7 @@ async def clear_findings(repository_id: Optional[str] = None, _auth=Depends(requ
 
 
 @app.delete("/api/v1/repositories/{repository_id}", tags=["Repositories"])
-async def delete_repository(repository_id: str, _auth=Depends(require_hub_write)):
+async def delete_repository(repository_id: str, session=Depends(require_hub_write)):
     _require_db()
     db = SessionLocal()
     try:
@@ -578,11 +633,13 @@ async def delete_repository(repository_id: str, _auth=Depends(require_hub_write)
         name = repo.name
         # Borrar hallazgos y scans primero por si cascade no está en DB remota
         db.query(Finding).filter(Finding.repository_id == repository_id).delete(synchronize_session=False)
+        for model in (SecretIncident, SbomComponent, SbomSnapshot):
+            db.query(model).filter(model.repository_id == repository_id).delete(synchronize_session=False)
         db.query(Scan).filter(Scan.repository_id == repository_id).delete(synchronize_session=False)
         db.delete(repo)
         _append_audit(
             db,
-            "web_hub",
+            _session_actor(session),
             "REPO_DELETED",
             name,
             f"Repositorio {repository_id} eliminado con sus scans/hallazgos.",
@@ -594,28 +651,30 @@ async def delete_repository(repository_id: str, _auth=Depends(require_hub_write)
 
 
 @app.patch("/api/v1/findings/{finding_id}", response_model=FindingResponse, tags=["Findings"])
-async def update_finding_status(finding_id: str, payload: FindingStatusUpdate, _auth=Depends(require_hub_write)):
+async def update_finding_status(finding_id: str, payload: FindingStatusUpdate, session=Depends(require_hub_write)):
     _require_db()
     db = SessionLocal()
     try:
         finding = db.get(Finding, finding_id)
         if not finding:
             raise HTTPException(status_code=404, detail="Hallazgo no encontrado")
+        previous = finding.status
         finding.status = payload.status.value
-        note = payload.note or "Sin nota adicional"
+        note = (payload.note or "").strip()
+        repo = db.get(Repository, finding.repository_id)
         _append_audit(
             db,
-            "auditor",
+            _session_actor(session),
             f"FINDING_{payload.status.value}",
-            finding_id,
-            f"Estado actualizado a {payload.status.value} (HITL). {note}",
+            repo.name if repo else finding.repository_id,
+            f"{finding.title} ({previous} → {payload.status.value})" + (f". {note}" if note else ""),
+            finding_id=finding_id,
         )
-        repo = db.get(Repository, finding.repository_id)
         if repo:
             _refresh_repo_counters(db, repo)
         db.commit()
         db.refresh(finding)
-        return _finding_out(finding)
+        return _finding_out(finding, first_seen_map(db, [finding.repository_id]))
     finally:
         db.close()
 
@@ -626,7 +685,7 @@ async def update_finding_status(finding_id: str, payload: FindingStatusUpdate, _
     status_code=status.HTTP_201_CREATED,
     tags=["Scans"],
 )
-async def trigger_scan(scan_in: ScanCreate, background_tasks: BackgroundTasks, _auth=Depends(require_hub_write)):
+async def trigger_scan(scan_in: ScanCreate, background_tasks: BackgroundTasks, session=Depends(require_hub_write)):
     _require_db()
     db = SessionLocal()
     try:
@@ -642,11 +701,14 @@ async def trigger_scan(scan_in: ScanCreate, background_tasks: BackgroundTasks, _
         if "owasp_zap" in engines and not target_url:
             # Fallback global; el job también lo usa
             target_url = os.getenv("ZAP_DEFAULT_TARGET", "https://sspillowy.com").strip() or None
+        triggered_by = (scan_in.triggered_by or "").strip()
+        if triggered_by in ("", "web_hub", "manual_web"):
+            triggered_by = _session_actor(session)
         row = Scan(
             id=str(uuid.uuid4()),
             repository_id=scan_in.repository_id,
             status="RUNNING",
-            triggered_by=scan_in.triggered_by or "web_hub",
+            triggered_by=triggered_by[:120],
             branch=scan_in.branch or repo.branch or "main",
             total_findings=0,
             critical_count=0,
@@ -663,7 +725,7 @@ async def trigger_scan(scan_in: ScanCreate, background_tasks: BackgroundTasks, _
         engines_label = " + ".join(e.replace("owasp_zap", "OWASP-ZAP") for e in engines)
         _append_audit(
             db,
-            scan_in.triggered_by or "web_hub",
+            triggered_by[:120],
             "SCAN_TRIGGERED",
             repo.name,
             f"Escaneo {row.id} encolado · {engines_label}"
@@ -783,7 +845,7 @@ async def check_security_gate(
 async def evaluate_security_gate(
     repository_id: Optional[str] = None,
     repository_url: Optional[str] = None,
-    _auth=Depends(require_hub_write),
+    session=Depends(require_hub_write),
 ):
     """Igual que check; deja auditoría GATE_EVALUATED."""
     _require_db()
@@ -794,7 +856,7 @@ async def evaluate_security_gate(
         target = out.repository_name or "organization"
         _append_audit(
             db,
-            "web_hub",
+            _session_actor(session),
             "GATE_PASSED" if out.allowed else "GATE_BLOCK",
             target,
             out.summary,
@@ -806,7 +868,7 @@ async def evaluate_security_gate(
 
 
 @app.post("/api/v1/security-gates", response_model=SecurityGatePolicy, tags=["Security Gates"])
-async def update_security_gate(policy: SecurityGatePolicy, _auth=Depends(require_hub_write)):
+async def update_security_gate(policy: SecurityGatePolicy, session=Depends(require_hub_write)):
     _require_db()
     db = SessionLocal()
     try:
@@ -819,7 +881,7 @@ async def update_security_gate(policy: SecurityGatePolicy, _auth=Depends(require
         gate.enabled = policy.enabled
         _append_audit(
             db,
-            "web_hub",
+            _session_actor(session),
             "GATE_UPDATED",
             policy.name,
             f"Umbrales: critical≤{policy.max_critical_allowed}, high≤{policy.max_high_allowed}, "
@@ -879,30 +941,11 @@ async def get_iso_compliance(_auth=Depends(require_hub_read)):
     _require_db()
     db = SessionLocal()
     try:
-        open_items = (
-            db.query(Finding)
-            .filter(Finding.status.in_(["OPEN", "IN_REVIEW"]))
-            .all()
-        )
-
-        def count_for(*needles: str) -> int:
-            return sum(1 for f in open_items if any(n in (f.iso_control or "") for n in needles))
-
-        controls = [
-            IsoControl(code="A.8.8", title="Gestión de vulnerabilidades técnicas", status="PARTIAL", related_engine="trivy", open_findings=count_for("A.8.8")),
-            IsoControl(code="A.8.9", title="Gestión de configuración", status="PARTIAL", related_engine="owasp_zap", open_findings=count_for("A.8.9")),
-            IsoControl(code="A.8.28", title="Codificación segura", status="PARTIAL", related_engine="semgrep", open_findings=count_for("A.8.28")),
-            IsoControl(code="A.8.5", title="Autenticación segura", status="GAP", related_engine="gitleaks", open_findings=count_for("A.8.5")),
-            IsoControl(code="A.8.3", title="Protección de la información", status="GAP", related_engine="gitleaks", open_findings=count_for("A.8.3")),
-            IsoControl(code="A.8.25", title="Seguridad en el ciclo de desarrollo", status="COMPLIANT", related_engine=None, open_findings=0),
-            IsoControl(code="A.8.26", title="Requisitos de seguridad de las aplicaciones", status="COMPLIANT", related_engine=None, open_findings=0),
-            IsoControl(code="A.8.32", title="Gestión del cambio", status="COMPLIANT", related_engine=None, open_findings=0),
-            IsoControl(code="A.5.33", title="Protección de registros / evidencia", status="COMPLIANT", related_engine=None, open_findings=0),
-        ]
+        controls = [IsoControl(**c) for c in iso_controls(db)]
         stats = compute_dashboard_stats(db)
         return ComplianceReport(
             standard="ISO/IEC 27001:2022",
-            period="2026-Q3",
+            period=current_period(),
             health_score=stats["overall_health_score"],
             controls=controls,
             generated_at=_now(),

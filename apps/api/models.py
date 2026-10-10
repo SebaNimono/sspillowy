@@ -90,6 +90,10 @@ class Scan(Base):
     engines_ok = Column(Text, nullable=True)
     # JSON: {"clone": {"s": 3.1, "ok": true}, "semgrep": {"s": 41.2, "ok": true}, ...}
     engine_stats = Column(Text, nullable=True)
+    # Commit analizado (HEAD del clon o el que envió el webhook)
+    commit_sha = Column(String, nullable=True)
+    commit_message = Column(Text, nullable=True)
+    commit_author = Column(String, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     completed_at = Column(DateTime, nullable=True)
 
@@ -165,6 +169,8 @@ class AuditEvent(Base):
     target = Column(String, nullable=True)
     detail = Column(Text, nullable=True)
     actor_email = Column(String, nullable=True)
+    # Hallazgo concreto al que se refiere la acción (para su historial)
+    finding_id = Column(String, nullable=True, index=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 

@@ -100,6 +100,23 @@ def _clone_repo(url: str, branch: str, dest: Path, timeout: int = 180) -> None:
         raise RuntimeError(f"git clone falló: {err}.{hint}")
 
 
+def _head_commit(repo_dir: Path) -> tuple[str, str, str] | None:
+    """(sha, autor, mensaje) del HEAD clonado; None si git no responde."""
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(repo_dir), "log", "-1", "--format=%H%x1f%an%x1f%s"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    except Exception:
+        return None
+    parts = (proc.stdout or "").strip().split("\x1f")
+    if proc.returncode != 0 or len(parts) != 3 or len(parts[0]) < 7:
+        return None
+    return parts[0][:64], parts[1][:200], parts[2][:500]
+
+
 def _map_severity(raw: str | None) -> str:
     s = (raw or "WARNING").strip().upper()
     mapping = {
@@ -452,6 +469,10 @@ def run_repo_scan_job(
                 target = clone_dir
                 source_note = f"clone {repo.url}@{scan.branch}"
                 _mark("clone", t0, True)
+                head = _head_commit(clone_dir)
+                if head:
+                    scan.commit_sha, scan.commit_author, scan.commit_message = head
+                    db.commit()
             except Exception as clone_exc:
                 _mark("clone", t0, False)
                 scan.engine_stats = json.dumps(stats)

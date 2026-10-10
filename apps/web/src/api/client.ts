@@ -981,6 +981,166 @@ export async function fetchObservability(range: ObsRange): Promise<Observability
   return request(`/observability?range=${range}`);
 }
 
+/** Hallazgo que otra página pide abrir en Trazabilidad (id de fila o clave de historia). */
+export const TRACE_REF_KEY = 'sspillowy_trace_ref';
+
+export type TraceStatus = 'OPEN' | 'IN_REVIEW' | 'FIXED' | 'FALSE_POSITIVE' | 'ACCEPTED_RISK';
+
+export interface TraceCommit {
+  sha: string;
+  short: string;
+  message: string | null;
+  author: string | null;
+  url: string | null;
+}
+
+export interface TraceIssue {
+  key: string;
+  title: string;
+  engine: string;
+  engine_label: string;
+  severity: string;
+  file_path: string | null;
+  line: number | null;
+  cwe: string | null;
+  repository_id: string;
+  repository_name: string;
+  status: TraceStatus;
+  status_label: string;
+  first_seen: string | null;
+  last_seen: string | null;
+  closed_at: string | null;
+  last_activity: string | null;
+  detections: number;
+  regressions: number;
+  finding_id: string | null;
+  sla: { days: number; due_at: string | null; met: boolean | null; overdue: boolean };
+}
+
+export interface TraceIssueList {
+  total: number;
+  counts: { open: number; fixed: number; decided: number; all: number; overdue: number };
+  items: TraceIssue[];
+  repositories: { id: string; name: string }[];
+}
+
+export type TraceEventType =
+  | 'DETECTED'
+  | 'REAPPEARED'
+  | 'SEEN'
+  | 'SEVERITY_CHANGED'
+  | 'FIXED'
+  | 'STATUS'
+  | 'PILLOW'
+  | 'PILLOW_DECISION'
+  | 'BYPASS_REQUESTED'
+  | 'BYPASS_DECIDED'
+  | 'SECRET'
+  | 'RUNBOOK'
+  | 'SLA';
+
+export interface TraceEvent {
+  at: string | null;
+  type: TraceEventType;
+  title: string;
+  detail: string | null;
+  actor: string | null;
+  actor_label: string | null;
+  person: boolean;
+  tone: 'good' | 'bad' | 'warn' | 'neutral';
+  severity?: string;
+  scan?: { id: string; branch: string | null; triggered_by: string; gate: string | null; commit: TraceCommit | null } | null;
+}
+
+export interface TraceDetail {
+  summary: TraceIssue & {
+    description: string | null;
+    owasp_category?: string | null;
+    introduced_in: TraceCommit | null;
+    fixed_in: TraceCommit | null;
+    file_url: string | null;
+    time_to_fix_days: number | null;
+    open_days: number | null;
+    people: string[];
+    repository_url: string | null;
+  };
+  timeline: TraceEvent[];
+}
+
+export interface TraceIssueFilters {
+  q?: string;
+  repository_id?: string;
+  status?: 'all' | 'open' | 'fixed' | 'decided';
+  severity?: string;
+  engine?: string;
+  person?: string;
+  from?: string;
+  to?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface AuditTrailEvent {
+  id: string;
+  at: string | null;
+  action: string;
+  label: string;
+  category: string;
+  category_label: string;
+  actor: string | null;
+  actor_label: string;
+  person: boolean;
+  target: string | null;
+  detail: string | null;
+  finding_key: string | null;
+}
+
+export interface AuditTrail {
+  total: number;
+  items: AuditTrailEvent[];
+  actors: { actor: string; label: string; count: number; person: boolean }[];
+  categories: { id: string; label: string; count: number }[];
+  repositories: string[];
+}
+
+export interface AuditTrailFilters {
+  q?: string;
+  actor?: string;
+  category?: string;
+  repository?: string;
+  people_only?: boolean;
+  from?: string;
+  to?: string;
+  limit?: number;
+  offset?: number;
+}
+
+function toQuery(params: object): string {
+  const qs = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => {
+    if (v === undefined || v === null || v === '' || v === false) return;
+    qs.set(k, String(v));
+  });
+  const s = qs.toString();
+  return s ? `?${s}` : '';
+}
+
+export async function fetchTraceIssues(filters: TraceIssueFilters): Promise<TraceIssueList> {
+  return request(`/traceability/findings${toQuery(filters)}`);
+}
+
+export async function fetchTraceDetail(ref: string): Promise<TraceDetail> {
+  return request(`/traceability/findings/${encodeURIComponent(ref)}`);
+}
+
+export async function fetchTraceEvidence(ref: string): Promise<Record<string, unknown>> {
+  return request(`/traceability/findings/${encodeURIComponent(ref)}/evidence`);
+}
+
+export async function fetchAuditTrail(filters: AuditTrailFilters): Promise<AuditTrail> {
+  return request(`/traceability/events${toQuery(filters)}`);
+}
+
 export type ComplianceStatus = 'COMPLIANT' | 'PARTIAL' | 'GAP' | 'PENDING' | 'NOT_APPLICABLE';
 
 export interface ComplianceRequirement {

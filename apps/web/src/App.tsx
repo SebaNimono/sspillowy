@@ -20,6 +20,7 @@ import { VelocityPage } from './pages/VelocityPage';
 import { RunbooksPage } from './pages/RunbooksPage';
 import { ExecutivePage } from './pages/ExecutivePage';
 import { ObservabilityPage } from './pages/ObservabilityPage';
+import { TraceabilityPage } from './pages/TraceabilityPage';
 import { PillowAgent } from './components/PillowAgent';
 import { ComingSoonPage } from './pages/ComingSoonPage';
 import { ROADMAP } from './config/roadmap';
@@ -97,6 +98,7 @@ const VALID_TABS = new Set([
   'notifications',
   'reports',
   'observability',
+  'traceability',
   'docs',
   ...Object.keys(ROADMAP),
 ]);
@@ -457,6 +459,8 @@ const AppShell: React.FC = () => {
         return <ExecutivePage {...pageProps} />;
       case 'observability':
         return <ObservabilityPage {...pageProps} />;
+      case 'traceability':
+        return <TraceabilityPage {...pageProps} />;
       default:
         if (ROADMAP[activeTab]) return <ComingSoonPage key={activeTab} module={ROADMAP[activeTab]} {...pageProps} />;
         return <DashboardPage {...pageProps} />;

@@ -71,6 +71,11 @@ const modules = [
     text: 'ISO 27001, SOC 2, NIST, PCI DSS, CIS, OWASP y Ley 21.663 con controles compartidos: se prueba una vez y cuenta para todos.',
   },
   {
+    name: 'Trazabilidad',
+    layer: 'Auditoría',
+    text: 'Cada hallazgo con su historia: commit de origen, quién lo revisó, excepciones y commit de corrección. Exportable como evidencia.',
+  },
+  {
     name: 'Mapa de calor',
     layer: 'Hub',
     text: 'Actividad de hallazgos a 12 semanas, tendencia a 7 días y bitácora. Misma consola, mismo criterio.',

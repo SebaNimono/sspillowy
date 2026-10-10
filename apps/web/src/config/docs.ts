@@ -309,10 +309,22 @@ export const DOC_SECTIONS: DocSection[] = [
       },
       { type: 'goto', tab: 'observability', label: 'Ir a Observabilidad' },
 
-      { type: 'h', text: '16. Módulos en camino' },
+      { type: 'h', text: '16. Trazabilidad · la historia de cada hallazgo' },
+      {
+        type: 'list',
+        items: [
+          'Elige un hallazgo y verás su recorrido completo: el commit donde apareció, cada análisis que lo detectó, quién lo revisó, si hubo una excepción al gate y cuándo se corrigió.',
+          'Busca por repositorio, por persona o por periodo.',
+          'La bitácora de auditoría muestra quién hizo qué y cuándo en toda la plataforma.',
+          'Exporta la historia o la bitácora para entregarlas como evidencia en una auditoría.',
+        ],
+      },
+      { type: 'goto', tab: 'traceability', label: 'Ir a Trazabilidad' },
+
+      { type: 'h', text: '17. Módulos en camino' },
       {
         type: 'p',
-        text: 'Las secciones con la etiqueta "Pronto" están en desarrollo: Trazabilidad e Integraciones. Al abrirlas verás qué harán y qué puedes usar mientras tanto.',
+        text: 'Las secciones con la etiqueta "Pronto" están en desarrollo: por ahora, Integraciones. Al abrirla verás qué hará y qué puedes usar mientras tanto.',
       },
 
       { type: 'h', text: 'Pon a prueba lo aprendido' },
@@ -1148,6 +1160,70 @@ export const DOC_SECTIONS: DocSection[] = [
         text: 'La página se actualiza sola cada minuto. Elige 24 horas para ver el detalle por hora, o 7 y 30 días para ver tendencias.',
       },
       { type: 'goto', tab: 'observability', label: 'Ver Observabilidad' },
+    ],
+  },
+  {
+    id: 'trazabilidad',
+    group: 'Gobernanza',
+    title: 'Trazabilidad',
+    summary: 'La historia completa de cada hallazgo y quién hizo qué, lista para auditorías.',
+    blocks: [
+      {
+        type: 'p',
+        text: 'Cuando un auditor pregunta "¿cuándo apareció esta vulnerabilidad, quién la revisó y cuándo se corrigió?", Trazabilidad responde con fechas, personas y commits. Reúne en una sola línea de tiempo todo lo que pasó con un hallazgo, aunque se haya detectado en decenas de análisis.',
+      },
+      { type: 'h', text: 'Historia de hallazgos' },
+      {
+        type: 'p',
+        text: 'Un hallazgo se reconoce por su regla y su archivo. Si un análisis nuevo lo vuelve a encontrar, se suma a la misma historia; si deja de aparecer, se da por corregido en ese análisis.',
+      },
+      {
+        type: 'table',
+        head: ['Evento', 'Qué significa'],
+        rows: [
+          ['Detectado por primera vez', 'El análisis y el commit donde apareció, y quién lanzó ese análisis.'],
+          ['Siguió presente', 'Los análisis posteriores que lo volvieron a encontrar, agrupados.'],
+          ['Cambió la severidad', 'Una herramienta reclasificó el riesgo.'],
+          ['Estado', 'Una persona lo puso en revisión, lo descartó como falso positivo, aceptó el riesgo o lo dio por corregido.'],
+          ['Pillow lo analizó', 'El veredicto de Pillow y si alguien aceptó o descartó su sugerencia.'],
+          ['Excepción al gate', 'Quién pidió saltarse el gate mientras el hallazgo bloqueaba, y quién lo aprobó o rechazó.'],
+          ['Secretos', 'Los pasos de respuesta: rotar, revocar, limpiar el historial y verificar.'],
+          ['Automatización', 'Las automatizaciones que se dispararon por este hallazgo.'],
+          ['Venció el plazo', 'El día en que se cumplió el plazo de corrección sin resolverse.'],
+          ['Corregido', 'El análisis y el commit donde ya no aparece.'],
+          ['Volvió a aparecer', 'Se había corregido y un análisis posterior lo encontró de nuevo.'],
+        ],
+      },
+      {
+        type: 'list',
+        items: [
+          'Filtra por repositorio, severidad, motor, estado o periodo. "Desde" y "Hasta" muestran los hallazgos que estuvieron abiertos en esas fechas.',
+          'En "Persona" escribe un correo o un usuario de GitHub para ver los hallazgos que esa persona introdujo, analizó o decidió.',
+          'Cada commit enlaza a GitHub o GitLab, y el archivo se abre en la versión exacta donde se detectó.',
+          'Desde Priorización contextual, el botón "Ver historia" abre directamente la historia de un hallazgo.',
+        ],
+      },
+      { type: 'h', text: 'Bitácora de auditoría' },
+      {
+        type: 'p',
+        text: 'La bitácora registra cada acción de la plataforma con su autor y su hora: análisis lanzados, decisiones sobre hallazgos, cambios al gate, excepciones, respuesta a secretos, automatizaciones, cumplimiento y configuración. Filtra por persona, categoría, repositorio o fechas, o marca "Solo personas" para ocultar las acciones automáticas.',
+      },
+      { type: 'h', text: 'Evidencia para auditorías' },
+      {
+        type: 'list',
+        items: [
+          '"Exportar evidencia" descarga la historia completa de un hallazgo con su resumen, commits, personas y línea de tiempo. La descarga queda registrada en la bitácora.',
+          '"CSV" descarga la línea de tiempo de un hallazgo para abrirla en una planilla.',
+          '"Exportar listado" descarga los hallazgos filtrados con sus fechas, estado y cumplimiento del plazo.',
+          'En la bitácora, "Exportar CSV" descarga los eventos filtrados.',
+        ],
+      },
+      {
+        type: 'callout',
+        tone: 'tip',
+        text: 'El commit se registra en cada análisis nuevo. Los análisis anteriores a esta función muestran "sin commit registrado".',
+      },
+      { type: 'goto', tab: 'traceability', label: 'Ver Trazabilidad' },
     ],
   },
 

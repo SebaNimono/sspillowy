@@ -160,7 +160,7 @@ def _item(f: Finding, repo_names: dict[str, str]) -> dict:
     }
 
 
-def _audit(db, action: str, target: str, detail: str, actor: str) -> None:
+def _audit(db, action: str, target: str, detail: str, actor: str, finding_id: str | None = None) -> None:
     db.add(
         AuditEvent(
             id=str(uuid.uuid4()),
@@ -168,6 +168,7 @@ def _audit(db, action: str, target: str, detail: str, actor: str) -> None:
             target=target[:200],
             detail=detail[:1000],
             actor_email=actor,
+            finding_id=finding_id,
             created_at=_now(),
         )
     )
@@ -479,7 +480,7 @@ def fix_intel_decision(finding_id: str, body: DecisionBody, session=Depends(requ
         else:
             f.ai_feedback = "DISMISSED"
             action = "FIX_INTEL_DISMISSED"
-        _audit(db, action, repo.name if repo else f.repository_id, f"{f.ai_verdict} · {f.title}", actor)
+        _audit(db, action, repo.name if repo else f.repository_id, f"{f.ai_verdict} · {f.title}", actor, finding_id=f.id)
         if repo:
             _refresh_repo_counters(db, repo)
         db.commit()

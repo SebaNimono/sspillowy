@@ -22,6 +22,7 @@ export const PILLOW_PAGE_LABEL: Record<string, string> = {
   notifications: 'Notificaciones',
   reports: 'Compliance continuo',
   observability: 'Observabilidad',
+  traceability: 'Trazabilidad',
   docs: 'Documentación',
 };
 
@@ -45,6 +46,11 @@ export const PILLOW_PAGE_SUGGESTIONS: Record<string, string[]> = {
     '¿Está todo funcionando bien?',
     '¿Por qué se incumple este objetivo de servicio?',
     '¿Qué significa el presupuesto de error?',
+  ],
+  traceability: [
+    'Resume la historia de este hallazgo',
+    '¿Qué evidencia le muestro a un auditor?',
+    '¿Quién ha tomado más decisiones esta semana?',
   ],
   runbooks: [
     '¿Qué runbooks me recomiendas para empezar?',

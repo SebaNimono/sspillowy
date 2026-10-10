@@ -17,26 +17,6 @@ export const STAGE_LABEL: Record<RoadmapStage, string> = {
 };
 
 export const ROADMAP: Record<string, RoadmapModule> = {
-  traceability: {
-    id: 'traceability',
-    title: 'Trazabilidad',
-    tagline: 'La historia completa de cada hallazgo, de principio a fin.',
-    description:
-      'Reconstruye el recorrido de un hallazgo: en qué commit apareció, qué análisis lo detectó, quién lo revisó, si hubo una excepción y cuándo se corrigió. Ideal para auditorías.',
-    features: [
-      'Línea de tiempo por hallazgo con cada evento y su autor.',
-      'Relación entre commit, análisis, decisión del gate y bypass.',
-      'Búsqueda por repositorio, persona o periodo.',
-      'Exportación como evidencia de auditoría.',
-    ],
-    howItWorks: [
-      'Une la bitácora de acciones con los análisis y los hallazgos.',
-      'Ordena los eventos en una línea de tiempo.',
-      'Permite descargar el recorrido completo.',
-    ],
-    stage: 'next',
-    meanwhile: { tab: 'reports', label: 'Ver Compliance continuo' },
-  },
   integrations: {
     id: 'integrations',
     title: 'Integraciones',
