@@ -1,4 +1,5 @@
 import os
+import time
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -45,8 +46,8 @@ try:
     engine = create_engine(
         DATABASE_URL,
         pool_pre_ping=True,
-        pool_size=5,
-        max_overflow=5,
+        pool_size=10,
+        max_overflow=10,
         connect_args=connect_args,
     )
 except Exception as exc:
@@ -151,10 +152,18 @@ def init_db() -> bool:
         return False
 
 
+_PING_TTL = 5.0
+_last_ok_ping = 0.0
+
+
 def db_ping() -> bool:
+    global _last_ok_ping
+    if time.monotonic() - _last_ok_ping < _PING_TTL:
+        return True
     try:
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
+        _last_ok_ping = time.monotonic()
         return True
     except Exception:
         return False

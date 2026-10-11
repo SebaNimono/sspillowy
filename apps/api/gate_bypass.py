@@ -113,7 +113,7 @@ def find_active_bypass(db, repository_id: str | None, workspace_id: str | None =
 
 
 @router.get("", response_model=List[BypassResponse])
-async def list_bypasses(
+def list_bypasses(
     status_filter: Optional[str] = Query(default=None, alias="status"),
     ws: WorkspaceCtx = Depends(require_ws),
 ):
@@ -141,7 +141,7 @@ async def list_bypasses(
 
 
 @router.post("", response_model=BypassResponse, status_code=status.HTTP_201_CREATED)
-async def create_bypass(body: BypassCreate, ws: WorkspaceCtx = Depends(require_ws_write)):
+def create_bypass(body: BypassCreate, ws: WorkspaceCtx = Depends(require_ws_write)):
     _require_db()
     email = ws.email
     db = ws.session()
@@ -180,7 +180,7 @@ async def create_bypass(body: BypassCreate, ws: WorkspaceCtx = Depends(require_w
 
 
 @router.post("/{bypass_id}/approve", response_model=BypassResponse)
-async def approve_bypass(bypass_id: str, body: BypassDecision | None = None, ws: WorkspaceCtx = Depends(require_ws)):
+def approve_bypass(bypass_id: str, body: BypassDecision | None = None, ws: WorkspaceCtx = Depends(require_ws)):
     _require_db()
     email = ws.email
     if not ws.can_manage:
@@ -215,7 +215,7 @@ async def approve_bypass(bypass_id: str, body: BypassDecision | None = None, ws:
 
 
 @router.post("/{bypass_id}/reject", response_model=BypassResponse)
-async def reject_bypass(bypass_id: str, body: BypassDecision | None = None, ws: WorkspaceCtx = Depends(require_ws)):
+def reject_bypass(bypass_id: str, body: BypassDecision | None = None, ws: WorkspaceCtx = Depends(require_ws)):
     _require_db()
     email = ws.email
     if not ws.can_manage:

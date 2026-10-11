@@ -12,18 +12,20 @@ import html
 import os
 import re
 import threading
+import time
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Literal, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import event, func, text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from auth_deps import resolve_session
-from database import SessionLocal, db_ping
+from database import SessionLocal
 from models import AuditEvent, Repository, Workspace, WorkspaceMember
 
 ROLES = ("owner", "admin", "member", "viewer")
@@ -143,10 +145,36 @@ def _ensure_membership(db: Session, email: str, name: str) -> list[WorkspaceMemb
         return rows + [m]
 
 
+_CTX_TTL = 15.0
+_ctx_cache: dict[tuple[str, Optional[str]], tuple[float, WorkspaceCtx]] = {}
+_ctx_lock = threading.Lock()
+
+
+def invalidate_workspace_cache() -> None:
+    """Llamar tras cambiar miembros o repositorios de un espacio."""
+    with _ctx_lock:
+        _ctx_cache.clear()
+
+
 def resolve_workspace(session: dict, requested: Optional[str]) -> WorkspaceCtx:
     email = (session.get("email") or "").strip().lower()
     if not email:
         raise HTTPException(status_code=401, detail="Sesión sin correo. Vuelve a iniciar sesión.")
+    key = (email, requested)
+    now = time.monotonic()
+    with _ctx_lock:
+        hit = _ctx_cache.get(key)
+    if hit and hit[0] > now:
+        return replace(hit[1], repo_ids=list(hit[1].repo_ids))
+    ctx = _resolve_workspace(session, email, requested)
+    with _ctx_lock:
+        if len(_ctx_cache) > 5000:
+            _ctx_cache.clear()
+        _ctx_cache[key] = (now + _CTX_TTL, ctx)
+    return replace(ctx, repo_ids=list(ctx.repo_ids))
+
+
+def _resolve_workspace(session: dict, email: str, requested: Optional[str]) -> WorkspaceCtx:
     name = session.get("name") or email
     db = SessionLocal()
     try:
@@ -187,16 +215,20 @@ def require_ws(
     authorization: Annotated[Optional[str], Header()] = None,
     x_workspace_id: Annotated[Optional[str], Header(alias="X-Workspace-Id")] = None,
 ) -> WorkspaceCtx:
-    if not db_ping():
+    try:
+        session = resolve_session(x_session_id, authorization)
+    except SQLAlchemyError:
         raise HTTPException(status_code=503, detail="Base de datos no disponible.")
-    session = resolve_session(x_session_id, authorization)
     if not session:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Sesión requerida. Inicia sesión en el hub.",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    return resolve_workspace(session, (x_workspace_id or "").strip() or None)
+    try:
+        return resolve_workspace(session, (x_workspace_id or "").strip() or None)
+    except SQLAlchemyError:
+        raise HTTPException(status_code=503, detail="Base de datos no disponible.")
 
 
 def require_ws_write(ctx: WorkspaceCtx = Depends(require_ws)) -> WorkspaceCtx:
@@ -441,6 +473,7 @@ def rename_workspace(body: RenameBody, ctx: WorkspaceCtx = Depends(require_ws_ad
         ctx.name = name
         _audit(db, ctx, "WORKSPACE_RENAMED", name, f"Antes: {old}")
         db.commit()
+        invalidate_workspace_cache()
         return _overview(db, ctx)
     finally:
         db.close()
@@ -490,6 +523,7 @@ def invite_member(body: InviteBody, ctx: WorkspaceCtx = Depends(require_ws_admin
                                invited_by=ctx.email, created_at=_now()))
         _audit(db, ctx, "WORKSPACE_MEMBER_INVITED", email, f"Rol: {ROLE_LABEL[body.role]}")
         db.commit()
+        invalidate_workspace_cache()
         threading.Thread(target=_send_invite, args=(email, ctx), daemon=True).start()
         return _overview(db, ctx)
     finally:
@@ -515,6 +549,7 @@ def change_role(member_id: str, body: RoleBody, ctx: WorkspaceCtx = Depends(requ
         m.role = body.role
         _audit(db, ctx, "WORKSPACE_MEMBER_ROLE", m.email, f"{ROLE_LABEL.get(old, old)} → {ROLE_LABEL[body.role]}")
         db.commit()
+        invalidate_workspace_cache()
         return _overview(db, ctx)
     finally:
         db.close()
@@ -536,6 +571,7 @@ def remove_member(member_id: str, ctx: WorkspaceCtx = Depends(require_ws)):
         db.delete(m)
         _audit(db, ctx, "WORKSPACE_MEMBER_LEFT" if leaving else "WORKSPACE_MEMBER_REMOVED", email)
         db.commit()
+        invalidate_workspace_cache()
         if leaving:
             return {"ok": True, "left": True}
         return _overview(db, ctx)

@@ -71,6 +71,7 @@ from workspaces import (  # noqa: E402
     WorkspaceCtx,
     adopt_orphans,
     bootstrap as bootstrap_workspaces,
+    invalidate_workspace_cache,
     platform_admins,
     require_ws,
     require_ws_write,
@@ -446,7 +447,7 @@ def _empty_heatmap(weeks: int = 12) -> HeatmapResponse:
 
 
 @app.get("/health", tags=["Health"])
-async def health_check():
+def health_check():
     db_ok = db_ping()
     backend = "sqlite" if _database.USING_SQLITE else "postgresql"
     return {
@@ -475,7 +476,7 @@ def _repo_ids_param(raw: Optional[str], ws: WorkspaceCtx) -> list[str]:
 
 
 @app.get("/api/v1/stats", response_model=DashboardStats, tags=["Dashboard"])
-async def get_dashboard_stats(
+def get_dashboard_stats(
     repository_ids: Optional[str] = Query(default=None), ws: WorkspaceCtx = Depends(require_ws)
 ):
     db = SessionLocal()
@@ -491,7 +492,7 @@ async def get_dashboard_stats(
 
 
 @app.get("/api/v1/heatmap", response_model=HeatmapResponse, tags=["Dashboard"])
-async def get_heatmap(
+def get_heatmap(
     weeks: int = Query(default=12, ge=4, le=52),
     repository_ids: Optional[str] = Query(default=None),
     ws: WorkspaceCtx = Depends(require_ws),
@@ -509,7 +510,7 @@ async def get_heatmap(
 
 
 @app.get("/api/v1/audit-log", response_model=List[AuditEventResponse], tags=["Audit"])
-async def list_audit_log(
+def list_audit_log(
     limit: int = Query(default=40, ge=1, le=200),
     repository_ids: Optional[str] = Query(default=None),
     ws: WorkspaceCtx = Depends(require_ws),
@@ -528,7 +529,7 @@ async def list_audit_log(
 
 
 @app.get("/api/v1/repositories", response_model=List[RepositoryResponse], tags=["Repositories"])
-async def list_repositories(ws: WorkspaceCtx = Depends(require_ws)):
+def list_repositories(ws: WorkspaceCtx = Depends(require_ws)):
     _require_db()
     db = SessionLocal()
     try:
@@ -549,7 +550,7 @@ async def list_repositories(ws: WorkspaceCtx = Depends(require_ws)):
     status_code=status.HTTP_201_CREATED,
     tags=["Repositories"],
 )
-async def create_repository(repo: RepositoryCreate, ws: WorkspaceCtx = Depends(require_ws_write)):
+def create_repository(repo: RepositoryCreate, ws: WorkspaceCtx = Depends(require_ws_write)):
     _require_db()
     db = ws.session()
     try:
@@ -585,6 +586,7 @@ async def create_repository(repo: RepositoryCreate, ws: WorkspaceCtx = Depends(r
             f"Repositorio {repo.url} registrado en rama {repo.branch}.",
         )
         db.commit()
+        invalidate_workspace_cache()
         db.refresh(row)
         return _repo_out(row)
     finally:
@@ -592,7 +594,7 @@ async def create_repository(repo: RepositoryCreate, ws: WorkspaceCtx = Depends(r
 
 
 @app.get("/api/v1/findings", response_model=List[FindingResponse], tags=["Findings"])
-async def list_findings(
+def list_findings(
     repository_id: Optional[str] = None,
     engine: Optional[EngineType] = None,
     severity: Optional[SeverityLevel] = None,
@@ -629,7 +631,7 @@ async def list_findings(
 
 
 @app.delete("/api/v1/findings", tags=["Findings"])
-async def clear_findings(repository_id: Optional[str] = None, ws: WorkspaceCtx = Depends(require_ws_write)):
+def clear_findings(repository_id: Optional[str] = None, ws: WorkspaceCtx = Depends(require_ws_write)):
     """Vacía la matriz (todos o por repo). Útil para demos / re-escanear limpio."""
     _require_db()
     db = ws.session()
@@ -664,7 +666,7 @@ async def clear_findings(repository_id: Optional[str] = None, ws: WorkspaceCtx =
 
 
 @app.delete("/api/v1/repositories/{repository_id}", tags=["Repositories"])
-async def delete_repository(repository_id: str, ws: WorkspaceCtx = Depends(require_ws_write)):
+def delete_repository(repository_id: str, ws: WorkspaceCtx = Depends(require_ws_write)):
     _require_db()
     db = ws.session()
     try:
@@ -686,13 +688,14 @@ async def delete_repository(repository_id: str, ws: WorkspaceCtx = Depends(requi
             f"Repositorio {repository_id} eliminado con sus scans/hallazgos.",
         )
         db.commit()
+        invalidate_workspace_cache()
         return {"deleted": True, "id": repository_id, "name": name}
     finally:
         db.close()
 
 
 @app.patch("/api/v1/findings/{finding_id}", response_model=FindingResponse, tags=["Findings"])
-async def update_finding_status(
+def update_finding_status(
     finding_id: str, payload: FindingStatusUpdate, ws: WorkspaceCtx = Depends(require_ws_write)
 ):
     _require_db()
@@ -728,7 +731,7 @@ async def update_finding_status(
     status_code=status.HTTP_201_CREATED,
     tags=["Scans"],
 )
-async def trigger_scan(
+def trigger_scan(
     scan_in: ScanCreate, background_tasks: BackgroundTasks, ws: WorkspaceCtx = Depends(require_ws_write)
 ):
     _require_db()
@@ -787,7 +790,7 @@ async def trigger_scan(
 
 
 @app.get("/api/v1/scans", response_model=List[ScanResponse], tags=["Scans"])
-async def list_scans(ws: WorkspaceCtx = Depends(require_ws)):
+def list_scans(ws: WorkspaceCtx = Depends(require_ws)):
     _require_db()
     db = SessionLocal()
     try:
@@ -804,7 +807,7 @@ async def list_scans(ws: WorkspaceCtx = Depends(require_ws)):
 
 
 @app.get("/api/v1/security-gates", response_model=SecurityGatePolicy, tags=["Security Gates"])
-async def get_security_gate(ws: WorkspaceCtx = Depends(require_ws)):
+def get_security_gate(ws: WorkspaceCtx = Depends(require_ws)):
     _require_db()
     db = SessionLocal()
     try:
@@ -884,7 +887,7 @@ def _gate_check_response(
     response_model=GateCheckResponse,
     tags=["Security Gates"],
 )
-async def check_security_gate(
+def check_security_gate(
     repository_id: Optional[str] = None,
     repository_url: Optional[str] = None,
     session=Depends(resolve_session),
@@ -906,7 +909,7 @@ async def check_security_gate(
     response_model=GateCheckResponse,
     tags=["Security Gates"],
 )
-async def evaluate_security_gate(
+def evaluate_security_gate(
     repository_id: Optional[str] = None,
     repository_url: Optional[str] = None,
     ws: WorkspaceCtx = Depends(require_ws_write),
@@ -932,7 +935,7 @@ async def evaluate_security_gate(
 
 
 @app.post("/api/v1/security-gates", response_model=SecurityGatePolicy, tags=["Security Gates"])
-async def update_security_gate(policy: SecurityGatePolicy, ws: WorkspaceCtx = Depends(require_ws)):
+def update_security_gate(policy: SecurityGatePolicy, ws: WorkspaceCtx = Depends(require_ws)):
     _require_db()
     if not ws.can_manage:
         raise HTTPException(
@@ -963,7 +966,7 @@ async def update_security_gate(policy: SecurityGatePolicy, ws: WorkspaceCtx = De
 
 
 @app.get("/api/v1/notifications", response_model=List[NotificationResponse], tags=["Notifications"])
-async def list_notifications(unread_only: bool = False, ws: WorkspaceCtx = Depends(require_ws)):
+def list_notifications(unread_only: bool = False, ws: WorkspaceCtx = Depends(require_ws)):
     _require_db()
     db = SessionLocal()
     try:
@@ -976,7 +979,7 @@ async def list_notifications(unread_only: bool = False, ws: WorkspaceCtx = Depen
 
 
 @app.post("/api/v1/notifications/{notification_id}/read", response_model=NotificationResponse, tags=["Notifications"])
-async def mark_notification_read(notification_id: str, ws: WorkspaceCtx = Depends(require_ws)):
+def mark_notification_read(notification_id: str, ws: WorkspaceCtx = Depends(require_ws)):
     _require_db()
     db = SessionLocal()
     try:
@@ -992,7 +995,7 @@ async def mark_notification_read(notification_id: str, ws: WorkspaceCtx = Depend
 
 
 @app.post("/api/v1/notifications/read-all", tags=["Notifications"])
-async def mark_all_notifications_read(ws: WorkspaceCtx = Depends(require_ws)):
+def mark_all_notifications_read(ws: WorkspaceCtx = Depends(require_ws)):
     _require_db()
     db = SessionLocal()
     try:
@@ -1005,7 +1008,7 @@ async def mark_all_notifications_read(ws: WorkspaceCtx = Depends(require_ws)):
 
 
 @app.get("/api/v1/compliance/iso27001", response_model=ComplianceReport, tags=["Compliance"])
-async def get_iso_compliance(ws: WorkspaceCtx = Depends(require_ws)):
+def get_iso_compliance(ws: WorkspaceCtx = Depends(require_ws)):
     _require_db()
     db = ws.session()
     try:
@@ -1024,7 +1027,7 @@ async def get_iso_compliance(ws: WorkspaceCtx = Depends(require_ws)):
 
 
 @app.post("/api/v1/admin/seed", tags=["Admin"])
-async def run_seed(force: bool = False, ws: WorkspaceCtx = Depends(require_ws)):
+def run_seed(force: bool = False, ws: WorkspaceCtx = Depends(require_ws)):
     """Carga/reaplica datos demo en el espacio activo (solo administradores de la plataforma)."""
     _require_db()
     if ws.email not in platform_admins():

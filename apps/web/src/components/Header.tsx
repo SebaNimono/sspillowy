@@ -45,7 +45,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="top-bar">
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flex: 1, minWidth: 0 }}>
         {sidebarState === 'hidden' && (
           <div
             style={{ position: 'relative' }}
@@ -105,7 +105,7 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flexShrink: 0, whiteSpace: 'nowrap' }}>
         {typeof healthScore === 'number' && (
         <div
           style={{
@@ -240,6 +240,7 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <div
                 style={{
+                  flexShrink: 0,
                   width: '22px',
                   height: '22px',
                   borderRadius: '50%',
@@ -254,7 +255,12 @@ export const Header: React.FC<HeaderProps> = ({
               >
                 {user.name.charAt(0).toUpperCase()}
               </div>
-              <span style={{ color: '#1f2328' }}>{user.name}</span>
+              <span
+                style={{ color: '#1f2328', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                title={user.name}
+              >
+                {user.name}
+              </span>
             </button>
 
             {showProfileMenu && (

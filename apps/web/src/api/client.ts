@@ -304,7 +304,19 @@ function authHeaders(extra?: HeadersInit): Headers {
   return headers;
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+const inflight = new Map<string, Promise<unknown>>();
+
+function request<T>(path: string, init?: RequestInit): Promise<T> {
+  if (init?.method && init.method !== 'GET') return send<T>(path, init);
+  const key = `${getActiveWorkspaceId() || ''}|${path}`;
+  const pending = inflight.get(key);
+  if (pending) return pending as Promise<T>;
+  const p = send<T>(path, init).finally(() => inflight.delete(key));
+  inflight.set(key, p);
+  return p;
+}
+
+async function send<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = authHeaders(init?.headers);
   const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
   if (res.status === 401) {

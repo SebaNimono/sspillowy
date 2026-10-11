@@ -91,7 +91,7 @@ async def forgot_password(body: ForgotPasswordBody):
 
 
 @router.get("/reset-password/validate")
-async def validate_reset_token(token: str = ""):
+def validate_reset_token(token: str = ""):
     token = token.strip()
     if not token:
         raise HTTPException(status_code=400, detail="Token requerido")
@@ -107,7 +107,7 @@ async def validate_reset_token(token: str = ""):
 
 
 @router.post("/reset-password")
-async def reset_password(body: ResetPasswordBody):
+def reset_password(body: ResetPasswordBody):
     if len(body.password) < 8:
         raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 8 caracteres")
 

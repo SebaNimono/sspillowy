@@ -280,7 +280,7 @@ async def list_auth_providers():
 
 
 @router.get("/session/{session_id}")
-async def get_auth_session(session_id: str):
+def get_auth_session(session_id: str):
     session = load_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Sesión OAuth no encontrada o expirada")
@@ -288,7 +288,7 @@ async def get_auth_session(session_id: str):
 
 
 @router.post("/logout")
-async def logout(x_session_id: str | None = Header(default=None, alias="X-Session-Id")):
+def logout(x_session_id: str | None = Header(default=None, alias="X-Session-Id")):
     if x_session_id and x_session_id.strip():
         delete_session(x_session_id.strip())
     return {"ok": True}

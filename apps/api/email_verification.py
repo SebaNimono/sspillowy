@@ -64,7 +64,7 @@ def is_password_user_verified(user: User) -> bool:
 
 
 @router.get("/verify-email")
-async def verify_email(token: str = ""):
+def verify_email(token: str = ""):
     if not token.strip():
         return redirect_oauth_error("verify_missing_token")
 

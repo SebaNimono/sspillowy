@@ -266,7 +266,7 @@ def _repo_names(db, repo_ids: list[str]) -> dict[str, str]:
 
 
 @router.get("", response_model=List[SecretIncidentOut])
-async def list_secret_incidents(
+def list_secret_incidents(
     repository_id: Optional[str] = Query(default=None),
     ws: WorkspaceCtx = Depends(require_ws),
 ):
@@ -298,7 +298,7 @@ _STEP_LABEL = {
 
 
 @router.patch("/{incident_id}", response_model=SecretIncidentOut)
-async def update_secret_incident(
+def update_secret_incident(
     incident_id: str,
     body: SecretIncidentUpdate,
     ws: WorkspaceCtx = Depends(require_ws_write),

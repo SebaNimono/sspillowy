@@ -21,16 +21,24 @@ const ROLE_HELP: Record<WorkspaceRole, string> = {
   viewer: 'Solo consulta: no puede cambiar nada.',
 };
 
+let cachedOverview: WorkspaceOverview | null = null;
+
 export const WorkspaceSwitcher: React.FC<{ collapsed: boolean }> = ({ collapsed }) => {
-  const [data, setData] = useState<WorkspaceOverview | null>(null);
+  const [data, setDataState] = useState<WorkspaceOverview | null>(cachedOverview);
   const [open, setOpen] = useState(false);
   const [managing, setManaging] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
+  const setData = (d: WorkspaceOverview) => {
+    cachedOverview = d;
+    setDataState(d);
+  };
+
   useEffect(() => {
+    if (cachedOverview) return;
     fetchWorkspaces()
       .then(setData)
-      .catch(() => setData(null));
+      .catch(() => undefined);
   }, []);
 
   useEffect(() => {

@@ -165,7 +165,7 @@ async def register(body: RegisterBody):
 
 
 @router.post("/login", response_model=AuthResponse)
-async def login(body: LoginBody):
+def login(body: LoginBody):
     email = _validate_email(body.email)
     db = SessionLocal()
     try:

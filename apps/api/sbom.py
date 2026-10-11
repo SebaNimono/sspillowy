@@ -177,7 +177,7 @@ def _loads(raw: Optional[str]) -> list:
 
 
 @router.get("")
-async def get_sbom(
+def get_sbom(
     repository_id: Optional[str] = Query(default=None),
     ws: WorkspaceCtx = Depends(require_ws),
 ):
@@ -251,7 +251,7 @@ async def get_sbom(
 
 
 @router.get("/{repository_id}/cyclonedx")
-async def export_cyclonedx(repository_id: str, ws: WorkspaceCtx = Depends(require_ws)):
+def export_cyclonedx(repository_id: str, ws: WorkspaceCtx = Depends(require_ws)):
     _require_db()
     ws.require_repo(repository_id)
     db = SessionLocal()

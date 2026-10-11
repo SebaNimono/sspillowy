@@ -379,7 +379,7 @@ async def _call_gemini(
 
 
 @router.get("/quota", response_model=PillowQuotaResponse)
-async def pillow_quota(user_key: str = ""):
+def pillow_quota(user_key: str = ""):
     key = user_key.strip().lower()
     if not key:
         raise HTTPException(status_code=400, detail="user_key requerido (email del usuario).")
@@ -477,13 +477,13 @@ async def pillow_chat(body: PillowChatBody):
 
 
 @router.get("/admin/status", response_model=PillowAdminStatusResponse)
-async def pillow_admin_status(user_key: str = ""):
+def pillow_admin_status(user_key: str = ""):
     key = user_key.strip().lower()
     return PillowAdminStatusResponse(is_admin=bool(key and key in _admin_emails()))
 
 
 @router.get("/admin/usage", response_model=PillowAdminUsageResponse)
-async def pillow_admin_usage(admin_key: str = ""):
+def pillow_admin_usage(admin_key: str = ""):
     _require_admin(admin_key)
     if not db_ping():
         return PillowAdminUsageResponse(usage=[])
@@ -508,7 +508,7 @@ async def pillow_admin_usage(admin_key: str = ""):
 
 
 @router.post("/admin/reset-credits", response_model=PillowResetResponse)
-async def pillow_admin_reset(body: PillowResetBody):
+def pillow_admin_reset(body: PillowResetBody):
     _require_admin(body.admin_key)
     target = body.target_user_key.strip().lower()
 
