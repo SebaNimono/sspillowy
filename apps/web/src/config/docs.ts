@@ -483,7 +483,7 @@ export const DOC_SECTIONS: DocSection[] = [
         type: 'steps',
         items: [
           { title: 'En cola', text: 'El análisis se registra con la rama y las herramientas elegidas.' },
-          { title: 'Descarga del código', text: 'Se obtiene una copia del repositorio. Si la URL es incorrecta o el repositorio es privado sin acceso, el análisis falla en este paso.' },
+          { title: 'Descarga del código', text: 'Se obtiene una copia del repositorio; si es privado, con el token de lectura que guardaste al agregarlo. Si la URL es incorrecta o el token no sirve, el análisis falla en este paso.' },
           { title: 'Análisis', text: 'Cada herramienta revisa el código por separado. Si una falla, las demás continúan.' },
           { title: 'Unificación', text: 'Los resultados se convierten a un formato común: gravedad, archivo, línea, tipo de debilidad (CWE), control ISO y recomendación.' },
           { title: 'Actualización', text: 'Los hallazgos de análisis anteriores se reemplazan por los nuevos, para que no se dupliquen.' },
@@ -927,7 +927,7 @@ export const DOC_SECTIONS: DocSection[] = [
           ['Máximo de críticos', 'Bloquea si hay más críticos pendientes que este número'],
           ['Máximo de altos', 'Bloquea si hay más altos pendientes que este número'],
           ['Bloquear secretos', 'Bloquea si hay cualquier secreto pendiente'],
-          ['Requerir aprobación CISO', 'Solo se puede saltar el bloqueo con un bypass aprobado'],
+          ['Las excepciones necesitan aprobación', 'Si está marcada, un administrador debe aprobar cada excepción; si no, se activa al pedirla'],
         ],
       },
       { type: 'h', text: 'Resultados posibles' },
@@ -944,7 +944,7 @@ export const DOC_SECTIONS: DocSection[] = [
       {
         type: 'callout',
         tone: 'info',
-        text: 'Cuando bloquea, siempre explica el motivo, por ejemplo "Críticas abiertas 3 > máximo 0", para que sepas exactamente qué corregir.',
+        text: 'Cuando bloquea, siempre explica el motivo, por ejemplo "Hay 3 vulnerabilidades críticas abiertas y el máximo permitido es 0", para que sepas exactamente qué corregir.',
       },
       { type: 'goto', tab: 'gates', label: 'Configurar la política' },
     ],
@@ -1328,23 +1328,24 @@ export const DOC_SECTIONS: DocSection[] = [
       {
         type: 'steps',
         items: [
-          { title: 'Copia la URL', text: 'En Repositorios pulsa "Configurar webhook" y copia la URL que aparece.' },
-          { title: 'Abre GitHub', text: 'En tu repositorio: Settings → Webhooks → Add webhook.' },
-          { title: 'Configura', text: 'Pega la URL en "Payload URL", elige "application/json" e ingresa el secreto que te indique tu administrador.' },
-          { title: 'Elige los eventos', text: 'Marca "Pushes" y "Pull requests" y guarda. GitHub hará una prueba de conexión.' },
+          { title: 'Conecta', text: 'En Integraciones → "Análisis automático con GitHub" (o en Repositorios → "Activar análisis automático") pulsa "Conectar". Un propietario o administrador del espacio puede hacerlo.' },
+          { title: 'Copia los datos', text: 'Te mostramos una URL y un secreto exclusivos de tu espacio. El secreto se muestra una sola vez.' },
+          { title: 'Abre GitHub', text: 'En tu repositorio (o en tu organización, para cubrirlos todos): Settings → Webhooks → Add webhook.' },
+          { title: 'Configura', text: 'Pega la URL en "Payload URL", elige "application/json", pega el secreto en "Secret", marca "Pushes" y "Pull requests" y guarda.' },
         ],
       },
       { type: 'h', text: 'Bueno saber' },
       {
         type: 'list',
         items: [
-          'El repositorio debe estar agregado antes en SSPILLOWY.',
+          'El repositorio debe estar agregado antes en este espacio.',
+          'Si pierdes el secreto, genera uno nuevo y reemplázalo en GitHub.',
           'Si haces varios push seguidos, se agrupan en un solo análisis.',
           'Se analizan código, secretos y dependencias.',
           'En GitHub, la pestaña "Recent deliveries" del webhook muestra si cada envío llegó bien.',
         ],
       },
-      { type: 'goto', tab: 'repositories', label: 'Configurar webhook' },
+      { type: 'goto', tab: 'integrations', label: 'Conectar en Integraciones' },
     ],
   },
   {
@@ -1355,7 +1356,15 @@ export const DOC_SECTIONS: DocSection[] = [
     blocks: [
       {
         type: 'p',
-        text: 'Agrega un paso a tu pipeline que consulte el gate. Si la respuesta indica que no está permitido, el paso falla y el merge o despliegue se detiene.',
+        text: 'Agrega un paso a tu pipeline que consulte el gate. Si la respuesta indica que no está permitido, el paso falla y el merge o despliegue se detiene. El pipeline se identifica con la clave de tu espacio.',
+      },
+      {
+        type: 'steps',
+        items: [
+          { title: 'Crea la clave', text: 'En Integraciones → "Security Gate en tu pipeline" pulsa "Crear clave". Se muestra una sola vez.' },
+          { title: 'Guárdala como secreto', text: 'En GitHub: Settings → Secrets and variables → Actions → New repository secret, con el nombre SSPILLOWY_KEY.' },
+          { title: 'Agrega el paso', text: 'Copia el ejemplo de abajo en tu workflow, antes del despliegue.' },
+        ],
       },
       {
         type: 'code',
@@ -1369,11 +1378,10 @@ jobs:
     steps:
       - name: Consultar SSPILLOWY
         run: |
-          RESP=$(curl -s "$API/api/v1/security-gates/check?repository_url=https://github.com/\${{ github.repository }}")
+          RESP=$(curl -s -H "X-SSPILLOWY-Key: \${{ secrets.SSPILLOWY_KEY }}" \\
+            "https://api.sspillowy.com/api/v1/security-gates/check?repository_url=https://github.com/\${{ github.repository }}")
           echo "$RESP" | jq .
-          echo "$RESP" | jq -e '.allowed == true' > /dev/null
-        env:
-          API: \${{ vars.SSPILLOWY_API_URL }}`,
+          echo "$RESP" | jq -e '.allowed == true' > /dev/null`,
       },
       {
         type: 'code',
@@ -1381,7 +1389,7 @@ jobs:
         code: `{
   "allowed": false,
   "decision": "BLOCKED",
-  "reasons": ["Críticas abiertas 3 > máximo 0", "Secretos GitLeaks abiertos: 2 (bloqueo estricto)"],
+  "reasons": ["Hay 3 vulnerabilidades críticas abiertas y el máximo permitido es 0.", "Hay 2 secretos expuestos sin resolver."],
   "open_critical": 3,
   "open_high": 12,
   "open_secrets": 2
@@ -1449,7 +1457,7 @@ jobs:
         type: 'table',
         head: ['Pregunta o problema', 'Respuesta'],
         rows: [
-          ['El análisis falla al empezar', 'Revisa que la URL del repositorio sea correcta. Si es privado, la plataforma necesita permiso de lectura.'],
+          ['El análisis falla al empezar', 'Revisa que la URL del repositorio sea correcta. Si es privado, en Repositorios pulsa el lápiz del repositorio y agrega (o renueva) su token de lectura.'],
           ['Veo muchos hallazgos de la misma librería', 'Son vulnerabilidades distintas (CVE) del mismo paquete. Usa la vista agrupada: normalmente se resuelven todas actualizando a una versión.'],
           ['Corregí algo pero sigue apareciendo', 'Lanza un nuevo análisis (o haz push a la rama si tienes el webhook activo): los resultados anteriores se reemplazan por los nuevos.'],
           ['¿Se pierde lo que decidí al volver a escanear?', 'No. Los falsos positivos, riesgos aceptados y análisis de Pillow se trasladan al nuevo análisis.'],

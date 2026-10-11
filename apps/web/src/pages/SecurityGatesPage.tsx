@@ -1,35 +1,22 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Header } from '../components/Header';
 import { SidebarState } from '../components/Sidebar';
 import { Toast, ToastMessage } from '../components/Toast';
 import { ApiOfflineBanner } from '../components/ApiOfflineBanner';
 import {
   GateBypassRequest,
-  GateCheckResult,
-  Repository,
+  SecurityGateOverview,
   SecurityGatePolicy,
   approveGateBypass,
-  checkSecurityGate,
   createGateBypass,
   evaluateSecurityGate,
-  fetchGateBypasses,
-  fetchRepositories,
-  fetchSecurityGate,
+  fetchSecurityGateOverview,
   rejectGateBypass,
   updateSecurityGate,
 } from '../api/client';
-import { Sliders, Save, ShieldCheck, ShieldAlert, RefreshCw, Unlock } from 'lucide-react';
+import { ArrowRight, Ban, CircleCheck, PauseCircle, RefreshCw, ShieldAlert, Timer } from 'lucide-react';
 import { useI18n } from '../i18n/I18nProvider';
-
-const DEFAULT_POLICY: SecurityGatePolicy = {
-  id: 'default-policy',
-  name: 'Política Estándar DevSecOps SSPILLOWY',
-  max_critical_allowed: 0,
-  max_high_allowed: 2,
-  block_on_secrets: true,
-  require_ciso_approval_for_bypass: true,
-  enabled: true,
-};
+import '../styles/gates.css';
 
 interface PageProps {
   sidebarState: SidebarState;
@@ -41,540 +28,505 @@ interface PageProps {
   onGoToSite?: () => void;
 }
 
-export const SecurityGatesPage: React.FC<PageProps> = ({
-  sidebarState,
-  setSidebarState,
-  user,
-  onLogout,
-  onNavigate,
-  unreadCount,
-  onGoToSite,
-}) => {
+type Decision = 'PASSED' | 'BLOCKED' | 'BYPASSED' | 'DISABLED';
+
+const DECISION: Record<Decision, { title: string; label: string; icon: React.ReactNode }> = {
+  PASSED: {
+    title: 'Los despliegues están permitidos',
+    label: 'Permitido',
+    icon: <CircleCheck size={26} />,
+  },
+  BLOCKED: {
+    title: 'Los despliegues están bloqueados',
+    label: 'Bloqueado',
+    icon: <Ban size={26} />,
+  },
+  BYPASSED: {
+    title: 'Se permite desplegar por una excepción activa',
+    label: 'Con excepción',
+    icon: <Timer size={26} />,
+  },
+  DISABLED: {
+    title: 'El gate está apagado',
+    label: 'Apagado',
+    icon: <PauseCircle size={26} />,
+  },
+};
+
+const BYPASS_STATUS: Record<string, string> = {
+  PENDING: 'Pendiente',
+  APPROVED: 'Aprobada',
+  REJECTED: 'Rechazada',
+  EXPIRED: 'Vencida',
+};
+
+const DURATIONS = [
+  { hours: 4, label: '4 horas' },
+  { hours: 24, label: '1 día' },
+  { hours: 72, label: '3 días' },
+  { hours: 168, label: '7 días' },
+];
+
+const asDecision = (d: string): Decision => (d in DECISION ? (d as Decision) : 'PASSED');
+
+const samePolicy = (a: SecurityGatePolicy, b: SecurityGatePolicy) =>
+  a.enabled === b.enabled &&
+  a.max_critical_allowed === b.max_critical_allowed &&
+  a.max_high_allowed === b.max_high_allowed &&
+  a.block_on_secrets === b.block_on_secrets &&
+  a.require_ciso_approval_for_bypass === b.require_ciso_approval_for_bypass;
+
+let cached: SecurityGateOverview | null = null;
+
+export const SecurityGatesPage: React.FC<PageProps> = ({ onNavigate, ...headerProps }) => {
   const { t } = useI18n();
-  const [policy, setPolicy] = useState<SecurityGatePolicy>(DEFAULT_POLICY);
-  const [check, setCheck] = useState<GateCheckResult | null>(null);
-  const [loadingStatus, setLoadingStatus] = useState(true);
+  const [data, setDataState] = useState<SecurityGateOverview | null>(cached);
+  const [draft, setDraft] = useState<SecurityGatePolicy | null>(cached?.policy ?? null);
   const [apiOffline, setApiOffline] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [evaluating, setEvaluating] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
-  const [bypasses, setBypasses] = useState<GateBypassRequest[]>([]);
-  const [repos, setRepos] = useState<Repository[]>([]);
-  const [bypassReason, setBypassReason] = useState('');
-  const [bypassRepoId, setBypassRepoId] = useState('');
-  const [bypassHours, setBypassHours] = useState(24);
-  const [bypassBusy, setBypassBusy] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [showRequest, setShowRequest] = useState(false);
+  const [reason, setReason] = useState('');
+  const [scope, setScope] = useState('');
+  const [hours, setHours] = useState(24);
+  const requestRef = useRef<HTMLDivElement>(null);
 
-  const loadBypasses = () =>
-    fetchGateBypasses()
-      .then(setBypasses)
-      .catch(() => setBypasses([]));
+  const setData = (d: SecurityGateOverview, resetDraft = false) => {
+    cached = d;
+    setDataState(d);
+    setDraft((cur) => (resetDraft || !cur ? d.policy : cur));
+  };
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoadingStatus(true);
-    Promise.all([
-      fetchSecurityGate(),
-      checkSecurityGate(),
-      fetchGateBypasses().catch(() => [] as GateBypassRequest[]),
-      fetchRepositories().catch(() => [] as Repository[]),
-    ])
-      .then(([pol, result, byps, repoList]) => {
-        if (cancelled) return;
+  const load = (resetDraft = false) =>
+    fetchSecurityGateOverview()
+      .then((d) => {
         setApiOffline(false);
-        if (pol) setPolicy(pol);
-        setCheck(result);
-        setBypasses(byps || []);
-        setRepos(repoList || []);
+        setData(d, resetDraft);
       })
       .catch(() => {
-        if (!cancelled) {
-          setApiOffline(true);
-          setCheck(null);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingStatus(false);
+        if (!cached) setApiOffline(true);
       });
-    return () => {
-      cancelled = true;
-    };
+
+  useEffect(() => {
+    void load(true);
   }, []);
 
-  const handleSave = async () => {
-    if (!policy) return;
+  const notify = (type: ToastMessage['type'], title: string, message: string) =>
+    setToast({ id: Date.now().toString(), type, title, message });
+
+  const errorText = (err: unknown) => (err instanceof Error ? err.message : 'No se pudo completar la acción.');
+
+  const reevaluate = async () => {
+    setRefreshing(true);
+    try {
+      await evaluateSecurityGate();
+      await load();
+    } catch (err) {
+      notify('error', 'No se pudo evaluar', errorText(err));
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const savePolicy = async () => {
+    if (!draft) return;
     setSaving(true);
     try {
-      const saved = await updateSecurityGate(policy);
-      setPolicy(saved);
-      const result = await evaluateSecurityGate();
-      setCheck(result);
-      setToast({
-        id: Date.now().toString(),
-        type: 'success',
-        title: 'Política guardada',
-        message: result.summary,
-      });
+      await updateSecurityGate(draft);
+      await load(true);
+      notify('success', 'Reglas guardadas', 'El estado del gate se recalculó con las nuevas reglas.');
     } catch (err) {
-      setToast({
-        id: Date.now().toString(),
-        type: 'error',
-        title: 'No se pudo guardar',
-        message: err instanceof Error ? err.message : 'Error de API',
-      });
+      notify('error', 'No se pudieron guardar', errorText(err));
     } finally {
       setSaving(false);
     }
   };
 
-  const handleEvaluate = async () => {
-    setEvaluating(true);
-    try {
-      const result = await evaluateSecurityGate();
-      setCheck(result);
-      setToast({
-        id: Date.now().toString(),
-        type: result.allowed ? 'success' : 'error',
-        title: result.decision,
-        message: result.summary,
-      });
-    } catch (err) {
-      setToast({
-        id: Date.now().toString(),
-        type: 'error',
-        title: 'Evaluación fallida',
-        message: err instanceof Error ? err.message : 'Error de API',
-      });
-    } finally {
-      setEvaluating(false);
-    }
-  };
-
-  const handleRequestBypass = async () => {
-    if (bypassReason.trim().length < 8) {
-      setToast({
-        id: Date.now().toString(),
-        type: 'error',
-        title: 'Motivo corto',
-        message: 'Explica al menos 8 caracteres (quién, por qué, hasta cuándo).',
-      });
+  const requestBypass = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (reason.trim().length < 8) {
+      notify('error', 'Falta el motivo', 'Explica en al menos 8 caracteres por qué necesitas la excepción.');
       return;
     }
-    setBypassBusy(true);
+    setBusy(true);
     try {
-      await createGateBypass({
-        reason: bypassReason.trim(),
-        repository_id: bypassRepoId || null,
-        expires_hours: bypassHours,
-      });
-      setBypassReason('');
-      await loadBypasses();
-      setToast({
-        id: Date.now().toString(),
-        type: 'success',
-        title: 'Bypass solicitado',
-        message: 'Queda PENDING hasta aprobación CISO.',
-      });
+      const out = await createGateBypass({ reason: reason.trim(), repository_id: scope || null, expires_hours: hours });
+      setReason('');
+      setShowRequest(false);
+      await load();
+      notify(
+        'success',
+        out.status === 'APPROVED' ? 'Excepción activa' : 'Excepción solicitada',
+        out.status === 'APPROVED'
+          ? 'Se permite desplegar hasta que venza.'
+          : 'Un administrador del espacio debe aprobarla.',
+      );
     } catch (err) {
-      setToast({
-        id: Date.now().toString(),
-        type: 'error',
-        title: 'No se pudo solicitar',
-        message: err instanceof Error ? err.message : 'Error de API',
-      });
+      notify('error', 'No se pudo solicitar', errorText(err));
     } finally {
-      setBypassBusy(false);
+      setBusy(false);
     }
   };
 
-  const handleApprove = async (id: string) => {
-    setBypassBusy(true);
+  const decide = async (b: GateBypassRequest, approve: boolean) => {
+    setBusy(true);
     try {
-      await approveGateBypass(id);
-      await loadBypasses();
-      const result = await evaluateSecurityGate();
-      setCheck(result);
-      setToast({
-        id: Date.now().toString(),
-        type: 'success',
-        title: 'Bypass aprobado',
-        message: result.summary,
-      });
+      await (approve ? approveGateBypass(b.id) : rejectGateBypass(b.id));
+      await load();
+      notify(approve ? 'success' : 'info', approve ? 'Excepción aprobada' : 'Excepción rechazada', b.repository_name || 'Todo el espacio');
     } catch (err) {
-      setToast({
-        id: Date.now().toString(),
-        type: 'error',
-        title: 'Aprobación fallida',
-        message: err instanceof Error ? err.message : 'Error de API',
-      });
+      notify('error', 'No se pudo completar', errorText(err));
     } finally {
-      setBypassBusy(false);
+      setBusy(false);
     }
   };
 
-  const handleReject = async (id: string) => {
-    setBypassBusy(true);
-    try {
-      await rejectGateBypass(id);
-      await loadBypasses();
-      setToast({
-        id: Date.now().toString(),
-        type: 'info',
-        title: 'Bypass rechazado',
-        message: 'La solicitud quedó REJECTED.',
-      });
-    } catch (err) {
-      setToast({
-        id: Date.now().toString(),
-        type: 'error',
-        title: 'Rechazo fallido',
-        message: err instanceof Error ? err.message : 'Error de API',
-      });
-    } finally {
-      setBypassBusy(false);
-    }
+  const openRequest = () => {
+    setShowRequest(true);
+    window.setTimeout(() => requestRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
   };
 
-  const decisionColor =
-    check?.decision === 'BLOCKED'
-      ? '#cf222e'
-      : check?.decision === 'BYPASSED'
-        ? '#8250df'
-        : check?.decision === 'PASSED'
-          ? '#1a7f37'
-          : '#656d76';
+  const check = data?.check;
+  const decision = asDecision(check?.decision || 'PASSED');
+  const info = DECISION[decision];
+  const pending = data?.bypasses.filter((b) => b.status === 'PENDING') ?? [];
+  const history = data?.bypasses.filter((b) => b.status !== 'PENDING').slice(0, 8) ?? [];
+  const readOnly = !data?.can_manage;
+  const dirty = Boolean(data && draft && !samePolicy(data.policy, draft));
+  const blockingReasons = check?.reasons.filter((r) => !r.startsWith('Para continuar')) ?? [];
 
   return (
-    <div>
+    <div className="gt-page">
       <Toast toast={toast} onClose={() => setToast(null)} />
-
       <Header
         title={t('pages.gates.title')}
-        subtitle="Umbrales de despliegue y bypass CISO en el hub"
-        sidebarState={sidebarState}
-        setSidebarState={setSidebarState}
-        user={user}
-        onLogout={onLogout}
+        subtitle="Decide qué problemas de seguridad impiden desplegar"
         onNavigate={onNavigate}
-        unreadCount={unreadCount}
-        onGoToSite={onGoToSite}
+        {...headerProps}
       />
 
       {apiOffline && <ApiOfflineBanner />}
 
-      {loadingStatus && !check && !apiOffline && (
-        <div className="card" style={{ marginBottom: '1rem' }}>
-          <p style={{ color: '#656d76', margin: 0 }}>Evaluando Security Gate…</p>
-        </div>
+      {!data && !apiOffline && (
+        <section className="gt-status is-loading">
+          <div className="gt-skeleton" />
+          <div className="gt-skeleton is-short" />
+        </section>
       )}
 
-      {check && (
-        <div
-          className="card"
-          style={{
-            marginBottom: '1rem',
-            borderTop: `3px solid ${decisionColor}`,
-          }}
-        >
-          <div className="card-header">
-            <div className="card-title">
-              {check.allowed ? (
-                <ShieldCheck size={20} color={check.decision === 'BYPASSED' ? '#8250df' : '#1a7f37'} />
-              ) : (
-                <ShieldAlert size={20} color="#cf222e" />
-              )}
-              <span>
-                Estado actual ·{' '}
-                <span style={{ color: decisionColor, fontWeight: 800 }}>{check.decision}</span>
-              </span>
+      {data && check && (
+        <>
+          <section className={`gt-status is-${decision.toLowerCase()}`}>
+            <div className="gt-status-main">
+              <span className="gt-status-icon">{info.icon}</span>
+              <div>
+                <h2>{info.title}</h2>
+                <ul className="gt-reasons">
+                  {blockingReasons.map((r) => (
+                    <li key={r}>{r}</li>
+                  ))}
+                </ul>
+              </div>
+              <div className="gt-status-actions">
+                {decision === 'BLOCKED' && data.can_write && (
+                  <button type="button" className="btn btn-secondary" onClick={openRequest}>
+                    Pedir excepción
+                  </button>
+                )}
+                <button type="button" className="btn btn-secondary" onClick={reevaluate} disabled={refreshing}>
+                  <RefreshCw size={14} className={refreshing ? 'spin' : undefined} />
+                  {refreshing ? 'Evaluando…' : 'Volver a evaluar'}
+                </button>
+              </div>
             </div>
-            <button className="btn btn-secondary" onClick={handleEvaluate} disabled={evaluating}>
-              <RefreshCw size={14} className={evaluating ? 'spin' : undefined} />
-              <span>{evaluating ? 'Evaluando…' : 'Evaluar ahora'}</span>
-            </button>
-          </div>
-          <p style={{ color: '#656d76', fontSize: '0.9rem', marginBottom: '0.75rem' }}>{check.summary}</p>
-          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
-            <span className="badge badge-critical">
-              Críticas {check.open_critical}/{check.max_critical_allowed}
-            </span>
-            <span className="badge" style={{ background: '#fff8c5', color: '#9a6700', border: '1px solid #d4a72c' }}>
-              High {check.open_high}/{check.max_high_allowed}
-            </span>
-            <span className="badge badge-engine">Secretos {check.open_secrets}</span>
-          </div>
-          {check.reasons?.length > 0 && (
-            <ul style={{ margin: 0, paddingLeft: '1.2rem', color: '#1f2328', fontSize: '0.85rem' }}>
-              {check.reasons.map((r) => (
-                <li key={r}>{r}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
 
-      <div className="card" style={{ marginBottom: '1rem' }}>
-        <div className="card-header">
-          <div className="card-title">
-            <Unlock size={20} color="#8250df" />
-            <span>Bypass CISO (hub)</span>
-          </div>
-        </div>
-        <p style={{ color: '#656d76', fontSize: '0.85rem', marginBottom: '1rem', lineHeight: 1.45 }}>
-          Si el gate está BLOCKED, solicita una excepción temporal con motivo y vencimiento. Queda en
-          audit log. Pulse podrá firmar esto después; el hub ya opera el flujo.
-        </p>
-        <div style={{ display: 'grid', gap: '0.75rem', marginBottom: '1rem' }}>
-          <textarea
-            value={bypassReason}
-            onChange={(e) => setBypassReason(e.target.value)}
-            placeholder="Motivo (ej. hotfix producción, riesgo aceptado por CISO hasta mañana)…"
-            rows={3}
-            style={{
-              width: '100%',
-              padding: '0.65rem',
-              borderRadius: '6px',
-              border: '1px solid #d0d7de',
-              fontSize: '0.85rem',
-              resize: 'vertical',
-            }}
-          />
-          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-            <select
-              value={bypassRepoId}
-              onChange={(e) => setBypassRepoId(e.target.value)}
-              style={{ flex: 1, minWidth: '180px', padding: '0.55rem', borderRadius: '6px', border: '1px solid #d0d7de' }}
-            >
-              <option value="">Toda la organización</option>
-              {repos.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
-            </select>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', color: '#656d76' }}>
-              Horas
-              <input
-                type="number"
-                min={1}
-                max={168}
-                value={bypassHours}
-                onChange={(e) => setBypassHours(parseInt(e.target.value, 10) || 24)}
-                style={{ width: '72px', padding: '0.45rem', borderRadius: '6px', border: '1px solid #d0d7de' }}
+            <div className="gt-metrics">
+              <Metric
+                label="Vulnerabilidades críticas abiertas"
+                value={check.open_critical}
+                limit={`máximo ${check.max_critical_allowed}`}
+                over={check.open_critical > check.max_critical_allowed}
               />
-            </label>
-            <button className="btn btn-primary" onClick={handleRequestBypass} disabled={bypassBusy}>
-              Solicitar bypass
-            </button>
-          </div>
-        </div>
-        {bypasses.length === 0 ? (
-          <p style={{ color: '#656d76', fontSize: '0.85rem', margin: 0 }}>Sin solicitudes aún.</p>
-        ) : (
-          <div className="table-container">
-            <table className="custom-table">
-              <thead>
-                <tr>
-                  <th>Estado</th>
-                  <th>Alcance</th>
-                  <th>Motivo</th>
-                  <th>Solicitó</th>
-                  <th>Expira</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {bypasses.slice(0, 12).map((b) => (
-                  <tr key={b.id}>
-                    <td>
-                      <span className="badge badge-engine">{b.status}</span>
-                    </td>
-                    <td style={{ fontSize: '0.85rem' }}>{b.repository_name || 'Org'}</td>
-                    <td style={{ fontSize: '0.8rem', maxWidth: '220px' }}>{b.reason}</td>
-                    <td style={{ fontSize: '0.75rem', color: '#656d76' }}>{b.requested_by}</td>
-                    <td style={{ fontSize: '0.75rem', color: '#656d76' }}>
-                      {b.expires_at ? new Date(b.expires_at).toLocaleString() : '—'}
-                    </td>
-                    <td>
-                      {b.status === 'PENDING' && (
-                        <div style={{ display: 'flex', gap: '0.35rem' }}>
-                          <button
-                            className="btn btn-primary"
-                            style={{ padding: '0.3rem 0.55rem', fontSize: '0.75rem' }}
-                            disabled={bypassBusy}
-                            onClick={() => handleApprove(b.id)}
-                          >
-                            Aprobar
-                          </button>
-                          <button
-                            className="btn btn-secondary"
-                            style={{ padding: '0.3rem 0.55rem', fontSize: '0.75rem' }}
-                            disabled={bypassBusy}
-                            onClick={() => handleReject(b.id)}
-                          >
-                            Rechazar
-                          </button>
-                        </div>
-                      )}
-                    </td>
+              <Metric
+                label="Vulnerabilidades altas abiertas"
+                value={check.open_high}
+                limit={`máximo ${check.max_high_allowed}`}
+                over={check.open_high > check.max_high_allowed}
+              />
+              <Metric
+                label="Secretos expuestos"
+                value={check.open_secrets}
+                limit={check.block_on_secrets ? 'bloquea si hay alguno' : 'no bloquea'}
+                over={check.block_on_secrets && check.open_secrets > 0}
+              />
+            </div>
+          </section>
+
+          <section className="gt-card">
+            <header>
+              <h3>Estado por repositorio</h3>
+              <span className="gt-muted">El pipeline de cada repositorio recibe esta respuesta</span>
+            </header>
+            {data.repos.length === 0 ? (
+              <div className="gt-empty">
+                Aún no hay repositorios.{' '}
+                <button type="button" className="gt-link" onClick={() => onNavigate?.('repositories')}>
+                  Agregar uno
+                </button>
+              </div>
+            ) : (
+              <table className="gt-table">
+                <thead>
+                  <tr>
+                    <th>Repositorio</th>
+                    <th>Críticas</th>
+                    <th>Altas</th>
+                    <th>Secretos</th>
+                    <th>Estado</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {data.repos.map((r) => (
+                    <tr key={r.id}>
+                      <td className="gt-strong">{r.name}</td>
+                      <td className={r.open_critical > check.max_critical_allowed ? 'gt-over' : undefined}>{r.open_critical}</td>
+                      <td className={r.open_high > check.max_high_allowed ? 'gt-over' : undefined}>{r.open_high}</td>
+                      <td className={check.block_on_secrets && r.open_secrets > 0 ? 'gt-over' : undefined}>{r.open_secrets}</td>
+                      <td>
+                        <span className={`gt-pill is-${r.decision.toLowerCase()}`}>{DECISION[asDecision(r.decision)].label}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </section>
+
+          <div className="gt-columns">
+            {draft && (
+              <section className="gt-card">
+                <header>
+                  <h3>Reglas</h3>
+                  {readOnly && <span className="gt-muted">Solo un administrador puede cambiarlas</span>}
+                </header>
+
+                <label className="gt-rule">
+                  <input
+                    type="checkbox"
+                    checked={draft.enabled}
+                    disabled={readOnly}
+                    onChange={(e) => setDraft({ ...draft, enabled: e.target.checked })}
+                  />
+                  <span>
+                    <strong>Gate activo</strong>
+                    <small>Si lo apagas, ningún despliegue se bloquea.</small>
+                  </span>
+                </label>
+
+                <fieldset className="gt-rules" disabled={readOnly || !draft.enabled}>
+                  <div className="gt-rule">
+                    <span>
+                      <strong>Bloquear con más de</strong>
+                      <small>vulnerabilidades críticas abiertas</small>
+                    </span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={50}
+                      value={draft.max_critical_allowed}
+                      onChange={(e) => setDraft({ ...draft, max_critical_allowed: Math.max(0, parseInt(e.target.value, 10) || 0) })}
+                    />
+                  </div>
+                  <div className="gt-rule">
+                    <span>
+                      <strong>Bloquear con más de</strong>
+                      <small>vulnerabilidades altas abiertas</small>
+                    </span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={draft.max_high_allowed}
+                      onChange={(e) => setDraft({ ...draft, max_high_allowed: Math.max(0, parseInt(e.target.value, 10) || 0) })}
+                    />
+                  </div>
+                  <label className="gt-rule">
+                    <input
+                      type="checkbox"
+                      checked={draft.block_on_secrets}
+                      onChange={(e) => setDraft({ ...draft, block_on_secrets: e.target.checked })}
+                    />
+                    <span>
+                      <strong>Bloquear si hay secretos expuestos</strong>
+                      <small>Contraseñas, claves o tokens encontrados en el código.</small>
+                    </span>
+                  </label>
+                  <label className="gt-rule">
+                    <input
+                      type="checkbox"
+                      checked={draft.require_ciso_approval_for_bypass}
+                      onChange={(e) => setDraft({ ...draft, require_ciso_approval_for_bypass: e.target.checked })}
+                    />
+                    <span>
+                      <strong>Las excepciones necesitan aprobación</strong>
+                      <small>Si lo desmarcas, una excepción se activa en cuanto alguien la pide.</small>
+                    </span>
+                  </label>
+                </fieldset>
+
+                {!readOnly && (
+                  <div className="gt-actions">
+                    <button type="button" className="btn btn-secondary" disabled={!dirty || saving} onClick={() => setDraft(data.policy)}>
+                      Descartar
+                    </button>
+                    <button type="button" className="btn btn-primary" disabled={!dirty || saving} onClick={savePolicy}>
+                      {saving ? 'Guardando…' : 'Guardar reglas'}
+                    </button>
+                  </div>
+                )}
+              </section>
+            )}
+
+            <section className="gt-card" ref={requestRef}>
+              <header>
+                <h3>Excepciones</h3>
+                {data.can_write && !showRequest && (
+                  <button type="button" className="btn btn-secondary" onClick={() => setShowRequest(true)}>
+                    Pedir excepción
+                  </button>
+                )}
+              </header>
+              <p className="gt-muted gt-intro">
+                Permiten desplegar por un tiempo limitado aunque el gate esté bloqueando, por ejemplo para un arreglo urgente.
+              </p>
+
+              {showRequest && (
+                <form className="gt-request" onSubmit={requestBypass}>
+                  <label>
+                    <span>Motivo</span>
+                    <textarea
+                      value={reason}
+                      rows={3}
+                      onChange={(e) => setReason(e.target.value)}
+                      placeholder="Ej.: arreglo urgente en producción; la vulnerabilidad se corrige el lunes."
+                      required
+                    />
+                  </label>
+                  <div className="gt-request-row">
+                    <label>
+                      <span>Para</span>
+                      <select value={scope} onChange={(e) => setScope(e.target.value)}>
+                        <option value="">Todo el espacio</option>
+                        {data.repos.map((r) => (
+                          <option key={r.id} value={r.id}>
+                            {r.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      <span>Durante</span>
+                      <select value={hours} onChange={(e) => setHours(parseInt(e.target.value, 10))}>
+                        {DURATIONS.map((d) => (
+                          <option key={d.hours} value={d.hours}>
+                            {d.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  <div className="gt-actions">
+                    <button type="button" className="btn btn-secondary" onClick={() => setShowRequest(false)} disabled={busy}>
+                      Cancelar
+                    </button>
+                    <button type="submit" className="btn btn-primary" disabled={busy}>
+                      {data.policy.require_ciso_approval_for_bypass ? 'Enviar solicitud' : 'Activar excepción'}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {pending.length > 0 && (
+                <>
+                  <h4 className="gt-subhead">Esperando aprobación</h4>
+                  <ul className="gt-list">
+                    {pending.map((b) => (
+                      <li key={b.id}>
+                        <div>
+                          <strong>{b.repository_name || 'Todo el espacio'}</strong>
+                          <p>{b.reason}</p>
+                          <small>
+                            {b.requested_by} · {new Date(b.created_at).toLocaleString()}
+                          </small>
+                        </div>
+                        {data.can_manage && (
+                          <div className="gt-list-actions">
+                            <button type="button" className="btn btn-primary" disabled={busy} onClick={() => decide(b, true)}>
+                              Aprobar
+                            </button>
+                            <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => decide(b, false)}>
+                              Rechazar
+                            </button>
+                          </div>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+
+              {history.length > 0 && (
+                <>
+                  <h4 className="gt-subhead">Historial</h4>
+                  <ul className="gt-list is-compact">
+                    {history.map((b) => (
+                      <li key={b.id}>
+                        <div>
+                          <strong>{b.repository_name || 'Todo el espacio'}</strong>
+                          <p>{b.reason}</p>
+                          <small>
+                            {b.requested_by}
+                            {b.expires_at && b.status === 'APPROVED' ? ` · vence ${new Date(b.expires_at).toLocaleString()}` : ''}
+                          </small>
+                        </div>
+                        <span className={`gt-pill is-${b.status.toLowerCase()}`}>{BYPASS_STATUS[b.status] || b.status}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+
+              {!showRequest && pending.length === 0 && history.length === 0 && (
+                <div className="gt-empty">No hay excepciones.</div>
+              )}
+            </section>
           </div>
-        )}
-      </div>
 
-      <div className="card">
-        <div className="card-header">
-          <div className="card-title">
-            <Sliders size={20} color="#0969da" />
-            <span>Configuración de Política Activa: {policy.name}</span>
-          </div>
-
-          <button className="btn btn-primary" onClick={handleSave} disabled={saving || apiOffline}>
-            <Save size={16} />
-            <span>{saving ? 'Guardando...' : 'Guardar Cambios'}</span>
-          </button>
-        </div>
-
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '1rem',
-            padding: '0.85rem 1rem',
-            border: '1px solid #d0d7de',
-            borderRadius: '8px',
-            background: policy.enabled ? '#dafbe1' : '#fff',
-          }}
-        >
-          <div>
-            <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#1f2328' }}>Gate habilitado</div>
-            <div style={{ color: '#656d76', fontSize: '0.8rem' }}>
-              Si está apagado: decisión DISABLED, CI puede continuar.
+          <section className="gt-card gt-pipeline">
+            <ShieldAlert size={20} />
+            <div>
+              <strong>Usa este gate en tu pipeline</strong>
+              <p className="gt-muted">
+                Tu pipeline consulta el gate antes de desplegar y se detiene si está bloqueado. Necesita la clave de este
+                espacio.
+              </p>
             </div>
-          </div>
-          <input
-            type="checkbox"
-            checked={policy.enabled}
-            onChange={(e) => setPolicy({ ...policy, enabled: e.target.checked })}
-            style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#1f883d' }}
-          />
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginTop: '1rem' }}>
-          <div
-            style={{
-              background: 'var(--bg-surface)',
-              padding: '1.25rem',
-              border: '1px solid var(--border-default)',
-            }}
-          >
-            <div style={{ fontWeight: 600, fontSize: '0.95rem', marginBottom: '0.35rem', color: '#cf222e' }}>
-              Máximo de Vulnerabilidades Críticas Permitidas
-            </div>
-            <p style={{ color: '#656d76', fontSize: '0.8rem', marginBottom: '1rem', lineHeight: '1.4' }}>
-              Si hay más críticas OPEN/IN_REVIEW que este umbral, el gate bloquea (consola + endpoint CI).
-            </p>
-            <input
-              type="number"
-              min="0"
-              max="10"
-              value={policy.max_critical_allowed}
-              onChange={(e) => setPolicy({ ...policy, max_critical_allowed: parseInt(e.target.value) || 0 })}
-              style={{
-                width: '100px',
-                padding: '0.5rem',
-                borderRadius: '6px',
-                border: '1px solid var(--border-default)',
-                background: '#ffffff',
-                color: '#1f2328',
-                fontWeight: 700,
-                fontSize: '1rem',
-                outline: 'none',
-              }}
-            />
-          </div>
-
-          <div
-            style={{
-              background: 'var(--bg-surface)',
-              padding: '1.25rem',
-              border: '1px solid var(--border-default)',
-            }}
-          >
-            <div style={{ fontWeight: 600, fontSize: '0.95rem', marginBottom: '0.35rem', color: '#9a6700' }}>
-              Máximo de Vulnerabilidades Altas (HIGH) Permitidas
-            </div>
-            <p style={{ color: '#656d76', fontSize: '0.8rem', marginBottom: '1rem', lineHeight: '1.4' }}>
-              Umbral de high abiertas antes de marcar BLOCKED.
-            </p>
-            <input
-              type="number"
-              min="0"
-              max="20"
-              value={policy.max_high_allowed}
-              onChange={(e) => setPolicy({ ...policy, max_high_allowed: parseInt(e.target.value) || 0 })}
-              style={{
-                width: '100px',
-                padding: '0.5rem',
-                borderRadius: '6px',
-                border: '1px solid var(--border-default)',
-                background: '#ffffff',
-                color: '#1f2328',
-                fontWeight: 700,
-                fontSize: '1rem',
-                outline: 'none',
-              }}
-            />
-          </div>
-
-          <div style={{ background: 'var(--bg-surface)', padding: '1.25rem', border: '1px solid var(--border-default)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#1f2328' }}>
-                  Bloqueo Estricto por Fuga de Secretos (GitLeaks)
-                </div>
-                <div style={{ color: '#656d76', fontSize: '0.8rem', marginTop: '0.25rem' }}>
-                  Si hay secretos abiertos de GitLeaks, el gate bloquea aunque no sean CRITICAL.
-                </div>
-              </div>
-              <input
-                type="checkbox"
-                checked={policy.block_on_secrets}
-                onChange={(e) => setPolicy({ ...policy, block_on_secrets: e.target.checked })}
-                style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#1f883d' }}
-              />
-            </div>
-          </div>
-
-          <div style={{ background: 'var(--bg-surface)', padding: '1.25rem', border: '1px solid var(--border-default)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#8250df' }}>
-                  Exigir aprobación CISO para bypass
-                </div>
-                <div style={{ color: '#656d76', fontSize: '0.8rem', marginTop: '0.25rem' }}>
-                  Si está activo, el mensaje de BLOCKED recuerda solicitar bypass (hub o Pulse).
-                </div>
-              </div>
-              <input
-                type="checkbox"
-                checked={policy.require_ciso_approval_for_bypass}
-                onChange={(e) => setPolicy({ ...policy, require_ciso_approval_for_bypass: e.target.checked })}
-                style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#8250df' }}
-              />
-            </div>
-          </div>
-        </div>
-
-        <p style={{ marginTop: '1.25rem', fontSize: '0.8rem', color: '#656d76', lineHeight: 1.45 }}>
-          CI: <code>GET /api/v1/security-gates/check</code>. Si hay bypass APPROVED vigente,{' '}
-          <code>allowed=true</code> con decisión <code>BYPASSED</code>.
-        </p>
-      </div>
+            <button type="button" className="btn btn-secondary" onClick={() => onNavigate?.('integrations')}>
+              Configurar <ArrowRight size={14} />
+            </button>
+          </section>
+        </>
+      )}
     </div>
   );
 };
+
+const Metric: React.FC<{ label: string; value: number; limit: string; over: boolean }> = ({ label, value, limit, over }) => (
+  <div className={`gt-metric ${over ? 'is-over' : ''}`}>
+    <span className="gt-metric-value">{value}</span>
+    <span className="gt-metric-label">{label}</span>
+    <span className="gt-metric-limit">{limit}</span>
+  </div>
+);

@@ -2,10 +2,24 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Header } from '../components/Header';
 import { SidebarState } from '../components/Sidebar';
 import { Toast, ToastMessage } from '../components/Toast';
-import { Repository, Scan, ScanEngine, fetchRepositories, createRepository, triggerScan, fetchScans, deleteRepository, fetchGithubWebhookInfo } from '../api/client';
-import { FolderGit2, Plus, Play, GitBranch, RefreshCw, Trash2, Webhook } from 'lucide-react';
+import {
+  IntegrationsOverview,
+  RepoProvider,
+  Repository,
+  Scan,
+  ScanEngine,
+  deleteRepository,
+  fetchIntegrations,
+  fetchRepositories,
+  fetchScans,
+  triggerScan,
+} from '../api/client';
+import { FolderGit2, Plus, Play, GitBranch, RefreshCw, Trash2, Webhook, Pencil, Lock } from 'lucide-react';
 import { useI18n } from '../i18n/I18nProvider';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { AddRepoModal, EditRepoModal } from '../components/RepoModals';
+import { GithubWebhookPanel } from '../components/ConnectionPanels';
+import { PROVIDER_LABEL, ProviderLogo } from '../components/ProviderLogo';
 
 interface PageProps {
   sidebarState: SidebarState;
@@ -135,45 +149,17 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const [name, setName] = useState('');
-  const [url, setUrl] = useState('');
-  const [branch, setBranch] = useState('main');
-  const [dastUrl, setDastUrl] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  const [editTarget, setEditTarget] = useState<Repository | null>(null);
   const [activeScans, setActiveScans] = useState<Record<string, ActiveScan>>({});
   const activeScansRef = useRef(activeScans);
   activeScansRef.current = activeScans;
-  const [webhookInfo, setWebhookInfo] = useState<{
-    endpoint: string;
-    secret_configured: boolean;
-    engines: string[];
-    instructions: string;
-  } | null>(null);
+  const [integrations, setIntegrations] = useState<IntegrationsOverview | null>(null);
   const [showWebhook, setShowWebhook] = useState(false);
-  const [copied, setCopied] = useState(false);
-
-  const copyEndpoint = async () => {
-    if (!webhookInfo) return;
-    try {
-      await navigator.clipboard.writeText(webhookInfo.endpoint);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1800);
-    } catch {
-      setCopied(false);
-    }
-  };
 
   useEffect(() => {
-    fetchGithubWebhookInfo()
-      .then((info) =>
-        setWebhookInfo({
-          endpoint: info.endpoint,
-          secret_configured: info.secret_configured,
-          engines: info.engines,
-          instructions: info.instructions,
-        }),
-      )
-      .catch(() => setWebhookInfo(null));
+    fetchIntegrations()
+      .then(setIntegrations)
+      .catch(() => setIntegrations(null));
   }, []);
 
   const loadRepos = (quiet = false) => {
@@ -326,37 +312,21 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
       .finally(() => setLoading(false));
   }, []);
 
-  const handleAddRepo = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name || !url) return;
-    setSubmitting(true);
-    try {
-      const newRepo = await createRepository(name, url, branch, dastUrl);
-      setRepos([newRepo, ...repos]);
-      setToast({
-        id: Date.now().toString(),
-        type: 'success',
-        title: 'Repositorio Registrado',
-        message: `El repositorio ${name} ha sido integrado exitosamente.`,
-      });
-      setShowModal(false);
-      setName('');
-      setUrl('');
-      setDastUrl('');
-    } catch (err) {
-      const detail = err instanceof Error ? err.message : 'No se pudo conectar con la API.';
-      const sessionIssue = /401|403|sesi[oó]n|session/i.test(detail);
-      setToast({
-        id: Date.now().toString(),
-        type: 'error',
-        title: 'No se registró el repositorio',
-        message: sessionIssue
-          ? 'Tu sesión expiró o no es válida. Cierra sesión y vuelve a entrar.'
-          : detail,
-      });
-    } finally {
-      setSubmitting(false);
-    }
+  const handleRepoCreated = (newRepo: Repository) => {
+    setRepos((prev) => [newRepo, ...prev]);
+    setShowModal(false);
+    setToast({
+      id: Date.now().toString(),
+      type: 'success',
+      title: 'Repositorio agregado',
+      message: `${newRepo.name} ya está listo para analizarse.`,
+    });
+  };
+
+  const handleRepoSaved = (saved: Repository) => {
+    setRepos((prev) => prev.map((r) => (r.id === saved.id ? saved : r)));
+    setEditTarget(null);
+    setToast({ id: Date.now().toString(), type: 'success', title: 'Cambios guardados', message: saved.name });
   };
 
   const openScanModal = (repo: Repository) => {
@@ -534,22 +504,22 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
           </div>
 
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-            {webhookInfo && (
+            {integrations && (
               <button
                 className="btn btn-secondary"
                 onClick={() => setShowWebhook(true)}
-                title="Escaneo automático en cada push / pull request"
+                title="Analizar solo en cada push o pull request de GitHub"
               >
                 <span
                   style={{
                     width: 8,
                     height: 8,
                     borderRadius: '50%',
-                    background: webhookInfo.secret_configured ? '#1a7f37' : '#bf8700',
+                    background: integrations.github.webhook_connected ? '#1a7f37' : '#8c959f',
                   }}
                 />
                 <Webhook size={15} />
-                <span>{webhookInfo.secret_configured ? 'Webhook activo' : 'Configurar webhook'}</span>
+                <span>{integrations.github.webhook_connected ? 'Análisis automático activo' : 'Activar análisis automático'}</span>
               </button>
             )}
             <button className="btn btn-primary" onClick={() => setShowModal(true)}>
@@ -569,8 +539,8 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
             <FolderGit2 size={32} color="#656d76" />
             <h3>Aún no hay ningún repositorio</h3>
             <p>
-              Conecta tu primer repositorio de GitHub o GitLab pegando su URL. Después podrás lanzar un análisis y ver
-              aquí su estado de salud.
+              Agrega tu primer repositorio de GitHub, GitLab, Bitbucket o Azure DevOps, público o privado. Después podrás
+              lanzar un análisis y ver aquí su estado de salud.
             </p>
             <button className="btn btn-primary" onClick={() => setShowModal(true)}>
               <Plus size={16} />
@@ -615,7 +585,17 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
                         )}
                       </td>
                       <td>
-                        <div style={{ fontWeight: 600, color: '#1f2328', fontSize: '0.9rem' }}>{repo.name}</div>
+                        <div className="rp-repo-name">
+                          <span title={PROVIDER_LABEL[(repo.provider || 'other') as RepoProvider]} style={{ display: 'inline-flex' }}>
+                            <ProviderLogo provider={(repo.provider || 'other') as RepoProvider} size={16} />
+                          </span>
+                          {repo.name}
+                          {repo.has_access_token && (
+                            <span className="rp-tag" title="Repositorio privado con token de lectura guardado">
+                              <Lock size={10} /> Privado
+                            </span>
+                          )}
+                        </div>
                         <div style={{ fontSize: '0.75rem', color: '#656d76', fontFamily: 'var(--font-mono)' }}>{repo.url}</div>
                       </td>
                       <td>
@@ -665,6 +645,15 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
                                 <span>{t('repos.runScan')}</span>
                               </>
                             )}
+                          </button>
+                          <button
+                            className="btn btn-secondary"
+                            style={{ padding: '0.4rem 0.55rem', fontSize: '0.8rem' }}
+                            disabled={scanning}
+                            title="Editar repositorio"
+                            onClick={() => setEditTarget(repo)}
+                          >
+                            <Pencil size={14} />
                           </button>
                           <button
                             className="btn btn-secondary"
@@ -808,53 +797,20 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
         onConfirm={handleDeleteRepo}
       />
 
-      {showWebhook && webhookInfo && (
+      {showWebhook && integrations && (
         <div className="modal-overlay" onClick={() => setShowWebhook(false)}>
-          <div className="modal-content" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-              <h2 style={{ fontSize: '1.2rem', color: '#1f2328', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Webhook size={20} color={webhookInfo.secret_configured ? '#1a7f37' : '#bf8700'} />
-                Webhook de GitHub
-              </h2>
-              <span className={`badge ${webhookInfo.secret_configured ? 'badge-low' : 'badge-medium'}`}>
-                {webhookInfo.secret_configured ? 'Secreto configurado' : 'Falta GITHUB_WEBHOOK_SECRET'}
-              </span>
+          <div className="modal-content rp-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="rp-head">
+              <ProviderLogo provider="github" size={24} />
+              <h2 className="rp-title">Análisis automático con GitHub</h2>
             </div>
-            <p style={{ fontSize: '0.85rem', color: '#656d76', marginBottom: '1rem', lineHeight: 1.5 }}>
-              Escanea automáticamente un repo en cada push o pull request. El repo debe estar registrado aquí con la misma URL.
+            <p className="rp-sub">
+              Cada push o pull request de un repositorio de GitHub agregado en este espacio se analiza solo.
             </p>
-
-            <ol style={{ fontSize: '0.85rem', color: '#1f2328', lineHeight: 1.6, paddingLeft: '1.2rem', marginBottom: '1rem' }}>
-              <li>En GitHub: <strong>Settings → Webhooks → Add webhook</strong>.</li>
-              <li>
-                <strong>Payload URL</strong>:
-                <div style={{ display: 'flex', gap: '0.4rem', margin: '0.35rem 0 0.5rem' }}>
-                  <code
-                    style={{
-                      flex: 1,
-                      fontSize: '0.78rem',
-                      background: '#f6f8fa',
-                      padding: '0.5rem 0.65rem',
-                      borderRadius: '6px',
-                      border: '1px solid #d0d7de',
-                      wordBreak: 'break-all',
-                    }}
-                  >
-                    {webhookInfo.endpoint}
-                  </code>
-                  <button type="button" className="btn btn-secondary" onClick={copyEndpoint}>
-                    {copied ? 'Copiado' : 'Copiar'}
-                  </button>
-                </div>
-              </li>
-              <li><strong>Content type</strong>: application/json</li>
-              <li><strong>Secret</strong>: el valor de GITHUB_WEBHOOK_SECRET en Railway.</li>
-              <li><strong>Eventos</strong>: Pushes y Pull requests.</li>
-            </ol>
-
-            <p style={{ fontSize: '0.75rem', color: '#656d76' }}>Motores al recibir el evento: {webhookInfo.engines.join(' + ')}</p>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.25rem' }}>
+            <div className="ig-card" style={{ border: 'none', padding: 0, background: 'transparent' }}>
+              <GithubWebhookPanel data={integrations} onChange={setIntegrations} />
+            </div>
+            <div className="rp-footer">
               <button className="btn btn-secondary" onClick={() => setShowWebhook(false)}>
                 {t('findings.close')}
               </button>
@@ -863,117 +819,10 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
         </div>
       )}
 
-      {showModal && (
-        <div className="modal-overlay">
-          <div className="modal-content">
-            <h2 style={{ fontSize: '1.2rem', marginBottom: '0.35rem', color: '#1f2328', fontWeight: 700 }}>
-              {t('repos.registerTitle')}
-            </h2>
-            <p style={{ fontSize: '0.8rem', color: '#656d76', marginBottom: '1rem' }}>
-              {t('repos.registerHint')}
-            </p>
+      {editTarget && <EditRepoModal repo={editTarget} onClose={() => setEditTarget(null)} onSaved={handleRepoSaved} />}
 
-            <form onSubmit={handleAddRepo}>
-              <div style={{ marginBottom: '1rem' }}>
-                <label style={{ display: 'block', fontSize: '0.85rem', color: '#656d76', marginBottom: '0.35rem', fontWeight: 600 }}>
-                  {t('repos.nameLabel')}
-                </label>
-                <input
-                  type="text"
-                  placeholder="ej. sspillowy-backend-service"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                  style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    borderRadius: '6px',
-                    border: '1px solid var(--border-default)',
-                    background: '#ffffff',
-                    color: '#1f2328',
-                    outline: 'none',
-                  }}
-                />
-              </div>
+      {showModal && <AddRepoModal onClose={() => setShowModal(false)} onCreated={handleRepoCreated} />}
 
-              <div style={{ marginBottom: '1rem' }}>
-                <label style={{ display: 'block', fontSize: '0.85rem', color: '#656d76', marginBottom: '0.35rem', fontWeight: 600 }}>
-                  {t('repos.urlLabel')}
-                </label>
-                <input
-                  type="text"
-                  placeholder="https://github.com/mi-org/mi-repo"
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  required
-                  style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    borderRadius: '6px',
-                    border: '1px solid var(--border-default)',
-                    background: '#ffffff',
-                    color: '#1f2328',
-                    outline: 'none',
-                  }}
-                />
-              </div>
-
-              <div style={{ marginBottom: '1rem' }}>
-                <label style={{ display: 'block', fontSize: '0.85rem', color: '#656d76', marginBottom: '0.35rem', fontWeight: 600 }}>
-                  {t('repos.branchLabel')}
-                </label>
-                <input
-                  type="text"
-                  value={branch}
-                  onChange={(e) => setBranch(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    borderRadius: '6px',
-                    border: '1px solid var(--border-default)',
-                    background: '#ffffff',
-                    color: '#1f2328',
-                    outline: 'none',
-                  }}
-                />
-              </div>
-
-              <div style={{ marginBottom: '1.5rem' }}>
-                <label style={{ display: 'block', fontSize: '0.85rem', color: '#656d76', marginBottom: '0.35rem', fontWeight: 600 }}>
-                  {t('repos.dastUrlLabel')} <span style={{ fontWeight: 400 }}>({t('repos.optional')})</span>
-                </label>
-                <input
-                  type="url"
-                  placeholder="https://sspillowy.com"
-                  value={dastUrl}
-                  onChange={(e) => setDastUrl(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    borderRadius: '6px',
-                    border: '1px solid var(--border-default)',
-                    background: '#ffffff',
-                    color: '#1f2328',
-                    outline: 'none',
-                  }}
-                />
-                <p style={{ fontSize: '0.75rem', color: '#656d76', marginTop: '0.35rem' }}>
-                  {t('repos.dastUrlHint')}
-                </p>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>
-                  {t('repos.cancel')}
-                </button>
-                <button type="submit" className="btn btn-primary" disabled={submitting}>
-                  {submitting ? t('common.loading') : t('repos.save')}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

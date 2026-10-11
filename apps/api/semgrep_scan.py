@@ -43,29 +43,21 @@ def _normalize_clone_url(url: str) -> str:
     return u
 
 
-def _clone_repo(url: str, branch: str, dest: Path, timeout: int = 180) -> None:
-    clone_url = _normalize_clone_url(url)
-    token = os.getenv("GITHUB_TOKEN", "").strip() or os.getenv("GH_TOKEN", "").strip()
-    env = os.environ.copy()
-    # Sin TTY en Railway: git no debe pedir usuario/contraseña interactivo
-    # (error típico: "could not read Username for 'https://github.com': No such device")
-    env["GIT_TERMINAL_PROMPT"] = "0"
-    env["GCM_INTERACTIVE"] = "never"
-    env.pop("GIT_ASKPASS", None)
-    env.pop("SSH_ASKPASS", None)
+def _clone_repo(
+    url: str, branch: str, dest: Path, timeout: int = 180, token: str | None = None, provider: str | None = None
+) -> None:
+    from repo_access import GIT_SAFE, authed_url, git_env
 
-    # Auth opcional para repos privados o anti rate-limit de GitHub
-    if token and "github.com" in clone_url and "://" in clone_url:
-        # Evitar doble inyección si la URL ya trae credenciales
-        if "@github.com" not in clone_url.split("://", 1)[-1]:
-            clone_url = clone_url.replace("https://", f"https://x-access-token:{token}@", 1)
-            clone_url = clone_url.replace("http://", f"http://x-access-token:{token}@", 1)
+    clone_url = _normalize_clone_url(url)
+    # Sin TTY en Railway: git no debe pedir usuario/contraseña interactivo
+    env = git_env()
+    if token and clone_url.startswith("https://"):
+        clone_url = authed_url(clone_url, token, provider)
 
     def _run(branch_name: str) -> subprocess.CompletedProcess[str]:
         cmd = [
             "git",
-            "-c",
-            "credential.helper=",
+            *GIT_SAFE,
             "-c",
             "advice.detachedHead=false",
             "clone",
@@ -89,15 +81,18 @@ def _clone_repo(url: str, branch: str, dest: Path, timeout: int = 180) -> None:
         proc = _run("main")
 
     if proc.returncode != 0:
-        err = (proc.stderr or proc.stdout or "clone failed").strip()[:500]
+        err = (proc.stderr or proc.stdout or "clone failed").strip()
+        if token:
+            err = err.replace(token, "***")
+        err = err[:500]
         hint = ""
         low = err.lower()
-        if "could not read username" in low or "authentication failed" in low or "auth" in low:
+        if "could not read username" in low or "authentication failed" in low or "not found" in low or "403" in low:
             hint = (
-                " GitHub pidió autenticación (repo privado o rate-limit anónimo). "
-                "En Railway configura GITHUB_TOKEN (classic con repo read, o fine-grained Contents: Read)."
+                " No tenemos permiso para leer el repositorio. Si es privado, agrega o renueva su token de lectura "
+                "en Repositorios → Editar."
             )
-        raise RuntimeError(f"git clone falló: {err}.{hint}")
+        raise RuntimeError(f"No se pudo descargar el repositorio: {err}.{hint}")
 
 
 def _head_commit(repo_dir: Path) -> tuple[str, str, str] | None:
@@ -474,7 +469,10 @@ def run_repo_scan_job(
             _set_progress(db, scan, "cloning", f"Clonando {repo.url}…")
             t0 = time.monotonic()
             try:
-                _clone_repo(repo.url, scan.branch or repo.branch or "main", clone_dir)
+                from repo_access import credentials_for
+
+                token, provider = credentials_for(repo)
+                _clone_repo(repo.url, scan.branch or repo.branch or "main", clone_dir, token=token, provider=provider)
                 target = clone_dir
                 source_note = f"clone {repo.url}@{scan.branch}"
                 _mark("clone", t0, True)

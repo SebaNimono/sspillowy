@@ -64,12 +64,22 @@ class RepositoryBase(BaseModel):
     dast_url: Optional[str] = None
 
 class RepositoryCreate(RepositoryBase):
-    pass
+    provider: Optional[str] = None
+    access_token: Optional[str] = None
+
+class RepositoryUpdate(BaseModel):
+    name: Optional[str] = None
+    branch: Optional[str] = None
+    dast_url: Optional[str] = None
+    # None = sin cambios; "" = quitar el token guardado.
+    access_token: Optional[str] = None
 
 class RepositoryResponse(RepositoryBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
+    provider: Optional[str] = None
+    has_access_token: bool = False
     is_active: bool = True
     health_score: int = 100
     open_criticals: int = 0

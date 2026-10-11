@@ -125,7 +125,13 @@ section:first-of-type > .ig-section {
 }
 
 .ig-card header strong {
+  flex: 1;
+  min-width: 0;
   font-size: 0.98rem;
+}
+
+.ig-card header svg {
+  flex: 0 0 auto;
 }
 
 .ig-card > p {
@@ -189,6 +195,34 @@ section:first-of-type > .ig-section {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.ig-copy.is-block {
+  align-items: flex-start;
+}
+
+.ig-copy pre {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  line-height: 1.5;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.ig-steps .ig-copy {
+  margin: 0.3rem 0 0.4rem;
+}
+
+.ig-steps strong,
+.ig-steps code {
+  color: var(--fg-default);
+}
+
+.ig-facts li svg {
+  vertical-align: -2px;
 }
 
 .ig-icon-btn {

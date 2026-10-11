@@ -32,7 +32,7 @@ class GateEvaluation:
         if self.decision == "DISABLED":
             return "Gate deshabilitado · se permite continuar."
         if self.decision == "BYPASSED":
-            return "BYPASSED · excepción CISO activa · " + "; ".join(self.reasons[:2])
+            return "BYPASSED · excepción activa · " + "; ".join(self.reasons[:2])
         if self.allowed:
             return (
                 f"PASSED · crit={self.open_critical}/{self.max_critical_allowed} · "
@@ -74,6 +74,41 @@ def _count_open(
     return int(q.scalar() or 0)
 
 
+def open_counts_by_repo(db, repo_ids: list[str]) -> dict[str, dict[str, int]]:
+    """{repo_id: {critical, high, secrets}} con una sola consulta agrupada."""
+    out: dict[str, dict[str, int]] = {rid: {"critical": 0, "high": 0, "secrets": 0} for rid in repo_ids}
+    if not repo_ids:
+        return out
+    rows = (
+        db.query(Finding.repository_id, func.upper(Finding.severity), func.lower(Finding.engine), func.count(Finding.id))
+        .filter(Finding.status.in_(OPEN_STATUSES), Finding.repository_id.in_(repo_ids))
+        .group_by(Finding.repository_id, func.upper(Finding.severity), func.lower(Finding.engine))
+        .all()
+    )
+    for rid, sev, engine, n in rows:
+        c = out.setdefault(rid, {"critical": 0, "high": 0, "secrets": 0})
+        if sev == "CRITICAL":
+            c["critical"] += n
+        elif sev == "HIGH":
+            c["high"] += n
+        if engine == "gitleaks":
+            c["secrets"] += n
+    return out
+
+
+def repo_decision(gate: SecurityGate, counts: dict[str, int], bypassed: bool) -> str:
+    if not gate.enabled:
+        return "DISABLED"
+    blocked = (
+        counts["critical"] > int(gate.max_critical_allowed or 0)
+        or counts["high"] > int(gate.max_high_allowed or 0)
+        or (bool(gate.block_on_secrets) and counts["secrets"] > 0)
+    )
+    if not blocked:
+        return "PASSED"
+    return "BYPASSED" if bypassed else "BLOCKED"
+
+
 def evaluate_gate(
     db,
     gate: SecurityGate,
@@ -109,16 +144,16 @@ def evaluate_gate(
     )
 
     if not gate.enabled:
-        result.reasons = ["Política deshabilitada · no se notifica a Pulse ni se bloquea CI."]
+        result.reasons = ["El gate está apagado: no se bloquea ningún despliegue."]
         return result
 
     reasons: list[str] = []
     if open_critical > max_c:
-        reasons.append(f"Críticas abiertas {open_critical} > máximo {max_c}")
+        reasons.append(f"Hay {open_critical} vulnerabilidades críticas abiertas y el máximo permitido es {max_c}.")
     if open_high > max_h:
-        reasons.append(f"High abiertas {open_high} > máximo {max_h}")
+        reasons.append(f"Hay {open_high} vulnerabilidades altas abiertas y el máximo permitido es {max_h}.")
     if block_secrets and open_secrets > 0:
-        reasons.append(f"Secretos GitLeaks abiertos: {open_secrets} (bloqueo estricto)")
+        reasons.append(f"Hay {open_secrets} secretos expuestos sin resolver.")
 
     if reasons:
         # ¿Hay bypass CISO aprobado y vigente?
@@ -135,7 +170,7 @@ def evaluate_gate(
             result.allowed = True
             result.bypass_id = active.id
             result.reasons = [
-                f"Excepción CISO activa hasta {exp}",
+                f"Excepción activa hasta {exp}",
                 f"Solicitado por {active.requested_by}",
                 f"Motivo: {active.reason[:240]}",
                 *reasons,
@@ -145,13 +180,12 @@ def evaluate_gate(
         result.decision = "BLOCKED"
         result.allowed = False
         result.reasons = reasons
-        if ciso:
-            result.reasons.append(
-                "Para continuar: solicita bypass CISO en Security Gates (hub) o vía Pulse cuando esté conectado."
-            )
+        result.reasons.append(
+            "Para continuar: corrige los hallazgos o pide una excepción temporal en Security Gates."
+        )
     else:
         result.decision = "PASSED"
         result.allowed = True
-        result.reasons = ["Umbrales dentro de política."]
+        result.reasons = ["Todo está dentro de las reglas del gate."]
 
     return result

@@ -1,10 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Check, Copy, ExternalLink, Search, Send, Unplug } from 'lucide-react';
+import { ExternalLink, Search, Send, Unplug } from 'lucide-react';
 import { Header } from '../components/Header';
 import { SidebarState } from '../components/Sidebar';
+import { CiKeyPanel, CopyField, GithubWebhookPanel } from '../components/ConnectionPanels';
+import { ProviderLogo } from '../components/ProviderLogo';
 import {
   ChatKind,
   IntegrationsOverview,
+  RepoProvider,
   connectChatIntegration,
   disconnectChatIntegration,
   fetchIntegrations,
@@ -45,6 +48,7 @@ type Category = (typeof CATEGORIES)[number];
 interface Entry {
   id: string;
   name: string;
+  logo?: RepoProvider;
   category: Category;
   status: Status;
   description: string;
@@ -77,28 +81,6 @@ const Badge: React.FC<{ status: Status }> = ({ status }) => (
   <span className={`ig-badge is-${status}`}>{STATUS_LABEL[status]}</span>
 );
 
-const CopyField: React.FC<{ value: string }> = ({ value }) => {
-  const [copied, setCopied] = useState(false);
-  return (
-    <div className="ig-copy">
-      <code>{value}</code>
-      <button
-        type="button"
-        className="ig-icon-btn"
-        onClick={() => {
-          void navigator.clipboard.writeText(value).then(() => {
-            setCopied(true);
-            window.setTimeout(() => setCopied(false), 1500);
-          });
-        }}
-        aria-label="Copiar"
-      >
-        {copied ? <Check size={14} /> : <Copy size={14} />}
-      </button>
-    </div>
-  );
-};
-
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 function buildEntries(
@@ -111,84 +93,75 @@ function buildEntries(
       {label}
     </button>
   );
+  const repoEntry = (
+    id: 'gitlab' | 'bitbucket' | 'azure',
+    name: string,
+    description: string,
+    keywords: string,
+  ): Entry => ({
+    id,
+    name,
+    logo: id,
+    category: 'Repositorios',
+    status: data[id].repos ? 'on' : 'ready',
+    description,
+    keywords,
+    body: (
+      <>
+        <ul className="ig-facts">
+          <li>{plural(data[id].repos, 'repositorio agregado', 'repositorios agregados')}</li>
+        </ul>
+        <div className="ig-actions">{go('repositories', 'Agregar repositorio')}</div>
+      </>
+    ),
+  });
+
   const entries: Entry[] = [
     {
       id: 'github',
       name: 'GitHub',
+      logo: 'github',
       category: 'Repositorios',
       status: data.github.repos ? 'on' : 'ready',
-      description: 'Analiza repositorios de GitHub con solo pegar su URL. Con el webhook, cada push o pull request se analiza solo.',
-      keywords: 'git webhook push pull request',
+      description: 'Agrega repositorios públicos o privados de GitHub y analízalos cuando quieras.',
+      keywords: 'git repositorio privado token',
       body: (
         <>
           <ul className="ig-facts">
-            <li>{plural(data.github.repos, 'repositorio conectado', 'repositorios conectados')}</li>
-            <li>Análisis automático por webhook: {data.github.webhook_ready ? 'disponible' : 'no habilitado en el servidor'}</li>
+            <li>{plural(data.github.repos, 'repositorio agregado', 'repositorios agregados')}</li>
           </ul>
-          {data.github.webhook_ready && (
-            <>
-              <small className="ig-label">URL del webhook</small>
-              <CopyField value={data.github.webhook_url} />
-            </>
-          )}
-          <div className="ig-actions">
-            {go('repositories', 'Conectar repositorio', true)}
-            {go('docs', 'Guía del webhook')}
-          </div>
+          <div className="ig-actions">{go('repositories', 'Agregar repositorio', true)}</div>
         </>
       ),
     },
     {
-      id: 'gitlab',
-      name: 'GitLab',
+      id: 'github-webhook',
+      name: 'Análisis automático con GitHub',
+      logo: 'github',
       category: 'Repositorios',
-      status: data.gitlab.repos ? 'on' : 'ready',
-      description: 'Analiza proyectos de GitLab igual que los de GitHub: pega la URL del repositorio y lanza el análisis.',
-      keywords: 'git',
-      body: (
-        <>
-          <ul className="ig-facts">
-            <li>{plural(data.gitlab.repos, 'repositorio conectado', 'repositorios conectados')}</li>
-          </ul>
-          <div className="ig-actions">{go('repositories', 'Conectar repositorio')}</div>
-        </>
-      ),
+      status: data.github.webhook_connected ? 'on' : 'ready',
+      description: 'Cada push o pull request de tus repositorios de GitHub se analiza solo, sin entrar a SSPILLOWY.',
+      keywords: 'webhook push pull request automatico',
+      body: <GithubWebhookPanel data={data} onChange={setData} />,
     },
-    {
-      id: 'bitbucket',
-      name: 'Bitbucket',
-      category: 'Repositorios',
-      status: 'soon',
-      description: 'Conectar repositorios de Bitbucket Cloud y analizarlos en cada push.',
-      keywords: 'git atlassian',
-    },
-    {
-      id: 'azure-devops',
-      name: 'Azure DevOps',
-      category: 'Repositorios',
-      status: 'soon',
-      description: 'Repositorios y pipelines de Azure DevOps con el mismo Security Gate.',
-      keywords: 'git microsoft pipelines',
-    },
+    repoEntry('gitlab', 'GitLab', 'Agrega proyectos de GitLab.com o de tu propio servidor GitLab, públicos o privados.', 'git self-hosted'),
+    repoEntry('bitbucket', 'Bitbucket', 'Agrega repositorios de Bitbucket Cloud, públicos o privados.', 'git atlassian'),
+    repoEntry('azure', 'Azure DevOps', 'Agrega repositorios de Azure Repos usando un token personal de acceso.', 'git microsoft repos'),
     {
       id: 'cicd',
-      name: 'Security Gate en CI/CD',
+      name: 'Security Gate en tu pipeline',
       category: 'CI/CD',
-      status: data.cicd.repos && data.cicd.gate_enabled ? 'on' : 'ready',
+      status: data.cicd.key_ready ? 'on' : 'ready',
       description:
         'Tu pipeline (GitHub Actions, GitLab CI, Jenkins…) consulta el gate antes de desplegar y se detiene si hay problemas graves sin resolver.',
-      keywords: 'github actions gitlab ci jenkins pipeline despliegue gate',
+      keywords: 'github actions gitlab ci jenkins pipeline despliegue gate clave',
       body: (
         <>
           <ul className="ig-facts">
             <li>Gate del espacio: {data.cicd.gate_enabled ? 'activo' : 'desactivado'}</li>
           </ul>
-          <small className="ig-label">Consulta desde tu pipeline</small>
-          <CopyField value={`${data.cicd.check_url}?repository_url=<URL de tu repositorio>`} />
-          <div className="ig-actions">
-            {go('gates', 'Configurar gate')}
-            {go('docs', 'Ver ejemplo de pipeline')}
-          </div>
+          <CiKeyPanel data={data} onChange={setData} />
+          <div className="ig-actions">{go('gates', 'Configurar reglas del gate')}</div>
         </>
       ),
     },
@@ -406,6 +379,7 @@ export const IntegrationsPage: React.FC<IntegrationsPageProps> = ({ onNavigate, 
                       .map((e) => (
                         <article key={e.id} className={`ig-card ${e.status === 'soon' ? 'is-muted' : ''}`}>
                           <header>
+                            {e.logo && <ProviderLogo provider={e.logo} size={20} />}
                             <strong>{e.name}</strong>
                             <Badge status={e.status} />
                           </header>

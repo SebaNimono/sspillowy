@@ -154,12 +154,17 @@ def create_bypass(body: BypassCreate, ws: WorkspaceCtx = Depends(require_ws_writ
                 raise HTTPException(status_code=404, detail="Repositorio no encontrado")
             repo_name = repo.name
 
+        from gate_eval import gate_for
+
+        auto = not gate_for(db, ws.id).require_ciso_approval_for_bypass
         row = GateBypassRequest(
             id=str(uuid.uuid4()),
             repository_id=body.repository_id,
             reason=body.reason.strip(),
-            status="PENDING",
+            status="APPROVED" if auto else "PENDING",
             requested_by=email,
+            decided_by=email if auto else None,
+            decided_at=_now() if auto else None,
             expires_at=_now() + timedelta(hours=body.expires_hours),
             created_at=_now(),
         )
@@ -168,9 +173,10 @@ def create_bypass(body: BypassCreate, ws: WorkspaceCtx = Depends(require_ws_writ
         _append_audit(
             db,
             email,
-            "GATE_BYPASS_REQUESTED",
+            "GATE_BYPASS_APPROVED" if auto else "GATE_BYPASS_REQUESTED",
             target,
-            f"Motivo: {body.reason.strip()[:400]} · expira en {body.expires_hours}h",
+            f"Motivo: {body.reason.strip()[:400]} · expira en {body.expires_hours}h"
+            + (" · sin aprobación previa (política del espacio)" if auto else ""),
         )
         db.commit()
         db.refresh(row)

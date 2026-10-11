@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
+import secrets
 import uuid
 from datetime import datetime, timezone
 from typing import Literal, Optional
@@ -14,12 +16,16 @@ from pydantic import BaseModel
 
 from database import SessionLocal
 from models import AuditEvent, Repository, SecurityGate, WorkspaceIntegration
-from workspaces import WorkspaceCtx, admin_recipients, platform_admins, require_ws, require_ws_admin
+from repo_access import decrypt, encrypt
+from workspaces import WorkspaceCtx, admin_recipients, legacy_workspace_id, platform_admins, require_ws, require_ws_admin
 
 router = APIRouter(prefix="/api/v1/integrations", tags=["Integraciones"])
 
 ChatKind = Literal["slack", "teams"]
 CHAT_NAME = {"slack": "Slack", "teams": "Microsoft Teams"}
+GITHUB_HOOK = "github_webhook"
+CI_KEY = "ci_key"
+CI_KEY_PREFIX = "sspk_"
 _TEAMS_HOSTS = (".webhook.office.com", ".logic.azure.com", ".powerplatform.com")
 
 
@@ -99,7 +105,11 @@ def notify_chat(workspace_id: Optional[str], title: str, lines: list[str]) -> in
     try:
         rows = (
             db.query(WorkspaceIntegration)
-            .filter(WorkspaceIntegration.workspace_id == workspace_id, WorkspaceIntegration.enabled.is_(True))
+            .filter(
+                WorkspaceIntegration.workspace_id == workspace_id,
+                WorkspaceIntegration.kind.in_(list(CHAT_NAME)),
+                WorkspaceIntegration.enabled.is_(True),
+            )
             .all()
         )
         sent = 0
@@ -131,10 +141,14 @@ def _overview(db, ctx: WorkspaceCtx) -> dict:
     repos = db.query(Repository.url).filter(Repository.workspace_id == ctx.id).all()
     urls = [(u or "").lower() for (u,) in repos]
     gate = db.get(SecurityGate, ctx.id)
-    chats = {
-        r.kind: r
-        for r in db.query(WorkspaceIntegration).filter(WorkspaceIntegration.workspace_id == ctx.id).all()
-    }
+    rows = {r.kind: r for r in db.query(WorkspaceIntegration).filter(WorkspaceIntegration.workspace_id == ctx.id).all()}
+    chats = {k: v for k, v in rows.items() if k in CHAT_NAME}
+    hook, key = rows.get(GITHUB_HOOK), rows.get(CI_KEY)
+    legacy_hook = (
+        hook is None
+        and bool(os.getenv("GITHUB_WEBHOOK_SECRET", "").strip())
+        and ctx.id == legacy_workspace_id(db)
+    )
     platform = None
     if ctx.email in platform_admins():
         platform = {
@@ -146,14 +160,22 @@ def _overview(db, ctx: WorkspaceCtx) -> dict:
         "can_manage": ctx.can_manage,
         "github": {
             "repos": sum(1 for u in urls if "github.com" in u),
-            "webhook_ready": bool(os.getenv("GITHUB_WEBHOOK_SECRET", "").strip()),
-            "webhook_url": f"{_api_base()}/api/v1/webhooks/github",
+            "webhook_connected": bool(hook) or legacy_hook,
+            "webhook_url": webhook_url(ctx.id) if not legacy_hook else f"{_api_base()}/api/v1/webhooks/github",
+            "webhook_since": _iso(hook.updated_at) if hook else None,
+            "webhook_last_event": _iso(hook.last_ok_at) if hook else None,
         },
         "gitlab": {"repos": sum(1 for u in urls if "gitlab" in u)},
+        "bitbucket": {"repos": sum(1 for u in urls if "bitbucket.org" in u)},
+        "azure": {"repos": sum(1 for u in urls if "dev.azure.com" in u or "visualstudio.com" in u)},
         "cicd": {
             "check_url": f"{_api_base()}/api/v1/security-gates/check",
             "gate_enabled": bool(gate and gate.enabled),
             "repos": len(urls),
+            "key_ready": bool(key),
+            "key_by": key.updated_by if key else None,
+            "key_since": _iso(key.updated_at) if key else None,
+            "key_last_used": _iso(key.last_ok_at) if key else None,
         },
         "email": {"ready": mailer_configured(), "recipients": admin_recipients(db, ctx.id)},
         "chat": {
@@ -173,6 +195,120 @@ def _overview(db, ctx: WorkspaceCtx) -> dict:
         },
         "platform": platform,
     }
+
+
+def webhook_url(workspace_id: str) -> str:
+    return f"{_api_base()}/api/v1/webhooks/github/{workspace_id}"
+
+
+def webhook_secret(workspace_id: str) -> Optional[str]:
+    db = SessionLocal()
+    try:
+        row = db.get(WorkspaceIntegration, (workspace_id, GITHUB_HOOK))
+        return decrypt(row.url) if row and row.enabled else None
+    finally:
+        db.close()
+
+
+def mark_webhook_event(workspace_id: str) -> None:
+    db = SessionLocal()
+    try:
+        row = db.get(WorkspaceIntegration, (workspace_id, GITHUB_HOOK))
+        if row:
+            row.last_ok_at = _now()
+            db.commit()
+    finally:
+        db.close()
+
+
+def _hash_key(key: str) -> str:
+    return hashlib.sha256(key.encode()).hexdigest()
+
+
+def workspace_for_ci_key(key: str) -> Optional[str]:
+    """Espacio dueño de la clave del pipeline, o None si no existe."""
+    key = (key or "").strip()
+    if not key.startswith(CI_KEY_PREFIX):
+        return None
+    db = SessionLocal()
+    try:
+        row = (
+            db.query(WorkspaceIntegration)
+            .filter(WorkspaceIntegration.kind == CI_KEY, WorkspaceIntegration.url == _hash_key(key))
+            .first()
+        )
+        if row is None:
+            return None
+        row.last_ok_at = _now()
+        db.commit()
+        return row.workspace_id
+    finally:
+        db.close()
+
+
+def _store(db, ctx: WorkspaceCtx, kind: str, value: str) -> None:
+    row = db.get(WorkspaceIntegration, (ctx.id, kind))
+    if row is None:
+        row = WorkspaceIntegration(workspace_id=ctx.id, kind=kind)
+        db.add(row)
+    row.url, row.enabled, row.last_error, row.last_ok_at = value, True, None, None
+    row.updated_by, row.updated_at = ctx.email, _now()
+
+
+@router.post("/github/webhook")
+def create_github_webhook(ctx: WorkspaceCtx = Depends(require_ws_admin)):
+    """Genera (o renueva) el secreto del webhook de GitHub del espacio. Se muestra una sola vez."""
+    secret = secrets.token_hex(24)
+    db = SessionLocal()
+    try:
+        _store(db, ctx, GITHUB_HOOK, encrypt(secret))
+        _audit(db, ctx, "INTEGRATION_CONNECTED", "Webhook de GitHub")
+        db.commit()
+        return {"url": webhook_url(ctx.id), "secret": secret, "overview": _overview(db, ctx)}
+    finally:
+        db.close()
+
+
+@router.delete("/github/webhook")
+def delete_github_webhook(ctx: WorkspaceCtx = Depends(require_ws_admin)):
+    db = SessionLocal()
+    try:
+        row = db.get(WorkspaceIntegration, (ctx.id, GITHUB_HOOK))
+        if row is not None:
+            db.delete(row)
+            _audit(db, ctx, "INTEGRATION_REMOVED", "Webhook de GitHub")
+            db.commit()
+        return _overview(db, ctx)
+    finally:
+        db.close()
+
+
+@router.post("/cicd/key")
+def create_ci_key(ctx: WorkspaceCtx = Depends(require_ws_admin)):
+    """Genera (o renueva) la clave que usa el pipeline para consultar el gate. Se muestra una sola vez."""
+    key = CI_KEY_PREFIX + secrets.token_urlsafe(32)
+    db = SessionLocal()
+    try:
+        _store(db, ctx, CI_KEY, _hash_key(key))
+        _audit(db, ctx, "INTEGRATION_CONNECTED", "Clave del pipeline")
+        db.commit()
+        return {"key": key, "overview": _overview(db, ctx)}
+    finally:
+        db.close()
+
+
+@router.delete("/cicd/key")
+def delete_ci_key(ctx: WorkspaceCtx = Depends(require_ws_admin)):
+    db = SessionLocal()
+    try:
+        row = db.get(WorkspaceIntegration, (ctx.id, CI_KEY))
+        if row is not None:
+            db.delete(row)
+            _audit(db, ctx, "INTEGRATION_REMOVED", "Clave del pipeline")
+            db.commit()
+        return _overview(db, ctx)
+    finally:
+        db.close()
 
 
 @router.get("")

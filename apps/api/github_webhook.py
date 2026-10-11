@@ -11,7 +11,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Request, status
-from pydantic import BaseModel
+from starlette.concurrency import run_in_threadpool
 
 from database import SessionLocal, db_ping
 from models import AuditEvent, Repository, Scan
@@ -97,8 +97,13 @@ def _append_audit(db, actor: str, action: str, target: str, detail: str) -> None
     )
 
 
-def _find_repo(db, *, html_url: str | None, clone_url: str | None, full_name: str | None) -> Repository | None:
-    rows = db.query(Repository).filter(Repository.is_active.is_(True)).all()
+def _find_repo(
+    db, *, html_url: str | None, clone_url: str | None, full_name: str | None, workspace_id: str | None = None
+) -> Repository | None:
+    q = db.query(Repository).filter(Repository.is_active.is_(True))
+    if workspace_id:
+        q = q.filter(Repository.workspace_id == workspace_id)
+    rows = q.all()
     for repo in rows:
         if _urls_match(repo.url, html_url or "", clone_url or "", full_name or ""):
             return repo
@@ -120,32 +125,6 @@ def _has_recent_running(db, repository_id: str) -> bool:
     return existing is not None
 
 
-class WebhookInfo(BaseModel):
-    endpoint: str
-    events: list[str]
-    secret_configured: bool
-    engines: list[str]
-    instructions: str
-
-
-@router.get("/github/info", response_model=WebhookInfo)
-async def github_webhook_info():
-    public = (os.getenv("API_PUBLIC_URL") or "https://api.sspillowy.com").rstrip("/")
-    secret_ok = bool(os.getenv("GITHUB_WEBHOOK_SECRET", "").strip())
-    return WebhookInfo(
-        endpoint=f"{public}/api/v1/webhooks/github",
-        events=["ping", "push", "pull_request"],
-        secret_configured=secret_ok,
-        engines=_webhook_engines(),
-        instructions=(
-            "En GitHub → Settings → Webhooks → Add webhook. "
-            f"Payload URL: {public}/api/v1/webhooks/github · Content type: application/json · "
-            "Secret = GITHUB_WEBHOOK_SECRET de Railway · Events: push + Pull requests. "
-            "El repo debe estar registrado en SSPILLOWY con la misma URL."
-        ),
-    )
-
-
 @router.post("/github")
 async def github_webhook(
     request: Request,
@@ -154,16 +133,60 @@ async def github_webhook(
     x_github_event: str | None = Header(default=None, alias="X-GitHub-Event"),
     x_github_delivery: str | None = Header(default=None, alias="X-GitHub-Delivery"),
 ):
+    """Webhook original de la plataforma: firma con el secreto del servidor y solo su espacio."""
     secret = os.getenv("GITHUB_WEBHOOK_SECRET", "").strip()
     if not secret:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="GITHUB_WEBHOOK_SECRET no configurado en Railway.",
-        )
-
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Webhook no disponible.")
     body = await request.body()
     if not _verify_signature(body, x_hub_signature_256, secret):
         raise HTTPException(status_code=401, detail="Firma webhook inválida.")
+    workspace_id = await run_in_threadpool(_platform_workspace)
+    return await run_in_threadpool(
+        _handle_event, body, background_tasks, x_github_event, x_github_delivery, workspace_id
+    )
+
+
+@router.post("/github/{workspace_id}")
+async def github_webhook_for_workspace(
+    workspace_id: str,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    x_hub_signature_256: str | None = Header(default=None, alias="X-Hub-Signature-256"),
+    x_github_event: str | None = Header(default=None, alias="X-GitHub-Event"),
+    x_github_delivery: str | None = Header(default=None, alias="X-GitHub-Delivery"),
+):
+    """Webhook de un espacio: firma con el secreto que generó ese espacio en Integraciones."""
+    from integrations import mark_webhook_event, webhook_secret
+
+    secret = await run_in_threadpool(webhook_secret, workspace_id)
+    if not secret:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Webhook no conectado.")
+    body = await request.body()
+    if not _verify_signature(body, x_hub_signature_256, secret):
+        raise HTTPException(status_code=401, detail="Firma webhook inválida.")
+    await run_in_threadpool(mark_webhook_event, workspace_id)
+    return await run_in_threadpool(
+        _handle_event, body, background_tasks, x_github_event, x_github_delivery, workspace_id
+    )
+
+
+def _platform_workspace() -> str:
+    from workspaces import legacy_workspace_id
+
+    db = SessionLocal()
+    try:
+        return legacy_workspace_id(db)
+    finally:
+        db.close()
+
+
+def _handle_event(
+    body: bytes,
+    background_tasks: BackgroundTasks,
+    x_github_event: str | None,
+    x_github_delivery: str | None,
+    workspace_id: str,
+):
 
     try:
         payload = json.loads(body.decode("utf-8") or "{}")
@@ -226,14 +249,17 @@ async def github_webhook(
 
     db = SessionLocal()
     try:
-        repo = _find_repo(db, html_url=html_url, clone_url=clone_url, full_name=full_name)
+        repo = _find_repo(
+            db, html_url=html_url, clone_url=clone_url, full_name=full_name, workspace_id=workspace_id
+        )
         if not repo:
+            bind_session(db, workspace_id)
             _append_audit(
                 db,
                 "github_webhook",
                 "WEBHOOK_REPO_UNKNOWN",
                 full_name or html_url or "unknown",
-                "Repo de GitHub no registrado en SSPILLOWY. Regístrelo en Repositorios.",
+                "GitHub avisó de un cambio en un repositorio que no está agregado en este espacio.",
             )
             db.commit()
             return {

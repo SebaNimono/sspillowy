@@ -29,6 +29,7 @@ from packages.core_models import (  # noqa: E402
     FindingStatusUpdate,
     RepositoryResponse,
     RepositoryCreate,
+    RepositoryUpdate,
     ScanCreate,
     ScanResponse,
     SecurityGatePolicy,
@@ -67,7 +68,9 @@ from obs_metrics import MetricsMiddleware  # noqa: E402
 from observability import metrics_router, start_flusher  # noqa: E402
 from observability import router as observability_router  # noqa: E402
 from traceability import router as traceability_router  # noqa: E402
-from integrations import router as integrations_router  # noqa: E402
+from integrations import router as integrations_router, workspace_for_ci_key  # noqa: E402
+from repo_access import access_message, clean_url, detect_provider, encrypt, probe_access  # noqa: E402
+from repo_access import router as repo_access_router  # noqa: E402
 from workspaces import (  # noqa: E402
     WorkspaceCtx,
     adopt_orphans,
@@ -171,6 +174,7 @@ app.include_router(observability_router)
 app.include_router(traceability_router)
 app.include_router(workspaces_router)
 app.include_router(integrations_router)
+app.include_router(repo_access_router)
 app.include_router(metrics_router)
 
 # Estado de lectura de notificaciones por usuario ("email:id"; efímero por instancia)
@@ -554,9 +558,15 @@ def list_repositories(ws: WorkspaceCtx = Depends(require_ws)):
 )
 def create_repository(repo: RepositoryCreate, ws: WorkspaceCtx = Depends(require_ws_write)):
     _require_db()
+    url, provider = clean_url(repo.url, repo.provider)
+    token = (repo.access_token or "").strip() or None
+    if token:
+        res = probe_access(url, token, provider)
+        if not res.ok:
+            raise HTTPException(status_code=422, detail=access_message(res, provider))
     db = ws.session()
     try:
-        existing = db.query(Repository).filter(Repository.url == repo.url).first()
+        existing = db.query(Repository).filter(Repository.url.in_([url, f"{url}.git", repo.url.strip()])).first()
         if existing:
             if existing.workspace_id == ws.id:
                 raise HTTPException(status_code=409, detail="Ya existe un repositorio con esa URL.")
@@ -567,10 +577,12 @@ def create_repository(repo: RepositoryCreate, ws: WorkspaceCtx = Depends(require
         row = Repository(
             id=str(uuid.uuid4()),
             workspace_id=ws.id,
-            name=repo.name,
-            url=repo.url,
-            branch=repo.branch or "main",
+            name=repo.name.strip(),
+            url=url,
+            branch=(repo.branch or "").strip() or "main",
             dast_url=(repo.dast_url or "").strip() or None,
+            provider=provider,
+            access_token_enc=encrypt(token) if token else None,
             is_active=True,
             health_score=100,
             open_criticals=0,
@@ -584,13 +596,52 @@ def create_repository(repo: RepositoryCreate, ws: WorkspaceCtx = Depends(require
             db,
             ws.actor,
             "REPO_REGISTERED",
-            repo.name,
-            f"Repositorio {repo.url} registrado en rama {repo.branch}.",
+            row.name,
+            f"Repositorio {url} registrado en rama {row.branch}" + (" con token de lectura." if token else "."),
         )
         db.commit()
         invalidate_workspace_cache()
         db.refresh(row)
         return _repo_out(row)
+    finally:
+        db.close()
+
+
+@app.patch("/api/v1/repositories/{repository_id}", response_model=RepositoryResponse, tags=["Repositories"])
+def update_repository(repository_id: str, body: RepositoryUpdate, ws: WorkspaceCtx = Depends(require_ws_write)):
+    _require_db()
+    db = ws.session()
+    try:
+        repo = db.get(Repository, repository_id)
+        if not repo or repo.workspace_id != ws.id:
+            raise HTTPException(status_code=404, detail="Repositorio no encontrado")
+        changes = []
+        if body.name is not None and body.name.strip() and body.name.strip() != repo.name:
+            repo.name = body.name.strip()
+            changes.append("nombre")
+        if body.branch is not None and body.branch.strip() and body.branch.strip() != repo.branch:
+            repo.branch = body.branch.strip()
+            changes.append("rama")
+        if body.dast_url is not None and (body.dast_url.strip() or None) != repo.dast_url:
+            repo.dast_url = body.dast_url.strip() or None
+            changes.append("URL de la aplicación")
+        if body.access_token is not None:
+            token = body.access_token.strip()
+            if token:
+                provider = repo.provider or detect_provider(repo.url)
+                res = probe_access(repo.url, token, provider)
+                if not res.ok:
+                    raise HTTPException(status_code=422, detail=access_message(res, provider))
+                repo.access_token_enc = encrypt(token)
+                changes.append("token de lectura")
+            elif repo.access_token_enc:
+                repo.access_token_enc = None
+                changes.append("token de lectura retirado")
+        if changes:
+            _append_audit(db, ws.actor, "REPO_UPDATED", repo.name, "Cambios: " + ", ".join(changes) + ".")
+        db.commit()
+        db.refresh(repo)
+        return _repo_out(repo)
     finally:
         db.close()
 
@@ -818,7 +869,9 @@ def get_security_gate(ws: WorkspaceCtx = Depends(require_ws)):
         db.close()
 
 
-def _resolve_repository_id(db, repository_id: Optional[str], repository_url: Optional[str]) -> Optional[str]:
+def _resolve_repository_id(
+    db, repository_id: Optional[str], repository_url: Optional[str], workspace_id: Optional[str] = None
+) -> Optional[str]:
     if repository_id:
         return repository_id
     if not repository_url:
@@ -830,13 +883,14 @@ def _resolve_repository_id(db, repository_id: Optional[str], repository_url: Opt
         html_url=repository_url,
         clone_url=repository_url if repository_url.endswith(".git") else f"{repository_url.rstrip('/')}.git",
         full_name=None,
+        workspace_id=workspace_id,
     )
     # También probar full_name owner/repo
     if not repo and "github.com/" in repository_url.lower():
         full = repository_url.lower().split("github.com/", 1)[-1].strip("/")
         if full.endswith(".git"):
             full = full[: -len(".git")]
-        repo = _find_repo(db, html_url=None, clone_url=None, full_name=full)
+        repo = _find_repo(db, html_url=None, clone_url=None, full_name=full, workspace_id=workspace_id)
     if not repo:
         raise HTTPException(
             status_code=404,
@@ -846,20 +900,24 @@ def _resolve_repository_id(db, repository_id: Optional[str], repository_url: Opt
 
 
 def _gate_check_response(
-    db, *, repository_id: str | None, ws: WorkspaceCtx | None = None
+    db, *, repository_id: str | None, ws: WorkspaceCtx | None = None, workspace_id: str | None = None
 ) -> GateCheckResponse:
-    """Con repositorio: política del espacio de ese repo. Sin repositorio: todo el espacio activo."""
+    """Con repositorio: política del espacio de ese repo. Sin repositorio: todo el espacio."""
+    scope = ws.id if ws is not None else workspace_id
     repo_name = None
     if repository_id:
         repo = db.get(Repository, repository_id)
-        if not repo or (ws is not None and repo.workspace_id != ws.id):
+        if not repo or (scope is not None and repo.workspace_id != scope):
             raise HTTPException(status_code=404, detail="Repositorio no encontrado")
         repo_name = repo.name
         gate = gate_for(db, repo.workspace_id)
         ev = evaluate_gate(db, gate, repository_id=repository_id, workspace_id=repo.workspace_id)
-    elif ws is not None:
-        gate = gate_for(db, ws.id)
-        ev = evaluate_gate(db, gate, repo_ids=ws.repo_ids, workspace_id=ws.id)
+    elif scope is not None:
+        repo_ids = ws.repo_ids if ws is not None else [
+            rid for (rid,) in db.query(Repository.id).filter(Repository.workspace_id == scope).all()
+        ]
+        gate = gate_for(db, scope)
+        ev = evaluate_gate(db, gate, repo_ids=repo_ids, workspace_id=scope)
     else:
         raise HTTPException(
             status_code=400,
@@ -894,14 +952,108 @@ def check_security_gate(
     repository_url: Optional[str] = None,
     session=Depends(resolve_session),
     x_workspace_id: Optional[str] = Header(default=None, alias="X-Workspace-Id"),
+    x_sspillowy_key: Optional[str] = Header(default=None, alias="X-SSPILLOWY-Key"),
 ):
-    """Evalúa la política ahora (espacio o un repo). Para consola y CI: mirar `allowed`."""
+    """Evalúa la política ahora (espacio o un repo). Para consola y CI: mirar `allowed`.
+
+    Desde un pipeline se identifica el espacio con su clave (cabecera X-SSPILLOWY-Key).
+    """
     _require_db()
-    ws = resolve_workspace(session, (x_workspace_id or "").strip() or None) if session else None
+    ws = None
+    key_ws: Optional[str] = None
+    if x_sspillowy_key:
+        key_ws = workspace_for_ci_key(x_sspillowy_key)
+        if not key_ws:
+            raise HTTPException(status_code=401, detail="La clave del pipeline no es válida o fue renovada.")
+    elif session:
+        ws = resolve_workspace(session, (x_workspace_id or "").strip() or None)
     db = SessionLocal()
     try:
-        rid = _resolve_repository_id(db, repository_id, repository_url)
-        return _gate_check_response(db, repository_id=rid, ws=ws)
+        if ws is None and key_ws is None:
+            # Sin sesión ni clave: solo el espacio de la plataforma, para no romper su pipeline existente.
+            from workspaces import legacy_workspace_id
+
+            if not repository_url and not repository_id:
+                raise HTTPException(status_code=401, detail="Falta la clave del pipeline (cabecera X-SSPILLOWY-Key).")
+            key_ws = legacy_workspace_id(db)
+            try:
+                rid = _resolve_repository_id(db, repository_id, repository_url, workspace_id=key_ws)
+            except HTTPException:
+                raise HTTPException(
+                    status_code=401,
+                    detail="Falta la clave del pipeline (cabecera X-SSPILLOWY-Key). Créala en Integraciones → CI/CD.",
+                )
+            return _gate_check_response(db, repository_id=rid, workspace_id=key_ws)
+        scope = ws.id if ws is not None else key_ws
+        rid = _resolve_repository_id(db, repository_id, repository_url, workspace_id=scope)
+        return _gate_check_response(db, repository_id=rid, ws=ws, workspace_id=key_ws)
+    finally:
+        db.close()
+
+
+@app.get("/api/v1/security-gates/overview", tags=["Security Gates"])
+def security_gate_overview(ws: WorkspaceCtx = Depends(require_ws)):
+    """Todo lo que necesita la pantalla del gate en una sola llamada."""
+    from gate_bypass import _out as bypass_out, expire_stale_bypasses
+    from gate_eval import open_counts_by_repo, repo_decision
+    from models import GateBypassRequest
+
+    _require_db()
+    db = ws.session()
+    try:
+        expire_stale_bypasses(db)
+        db.commit()
+        gate = gate_for(db, ws.id)
+        check = _gate_check_response(db, repository_id=None, ws=ws)
+        repos = (
+            db.query(Repository.id, Repository.name)
+            .filter(Repository.workspace_id == ws.id)
+            .order_by(Repository.name.asc())
+            .all()
+        )
+        names = {rid: name for rid, name in repos}
+        rows = (
+            db.query(GateBypassRequest)
+            .filter(GateBypassRequest.workspace_id == ws.id)
+            .order_by(GateBypassRequest.created_at.desc())
+            .limit(50)
+            .all()
+        )
+        now = _now()
+
+        def _active(b) -> bool:
+            if b.status != "APPROVED":
+                return False
+            exp = b.expires_at
+            if exp is not None and exp.tzinfo is None:
+                exp = exp.replace(tzinfo=timezone.utc)
+            return exp is None or exp >= now
+
+        active = [b for b in rows if _active(b)]
+        org_bypass = any(b.repository_id is None for b in active)
+        bypassed_repos = {b.repository_id for b in active if b.repository_id}
+        counts = open_counts_by_repo(db, list(names))
+        per_repo = [
+            {
+                "id": rid,
+                "name": names[rid],
+                "open_critical": counts[rid]["critical"],
+                "open_high": counts[rid]["high"],
+                "open_secrets": counts[rid]["secrets"],
+                "decision": repo_decision(gate, counts[rid], org_bypass or rid in bypassed_repos),
+            }
+            for rid in names
+        ]
+        order = {"BLOCKED": 0, "BYPASSED": 1, "PASSED": 2, "DISABLED": 3}
+        per_repo.sort(key=lambda r: (order.get(r["decision"], 9), r["name"].lower()))
+        return {
+            "policy": _gate_out(gate),
+            "check": check,
+            "repos": per_repo,
+            "bypasses": [bypass_out(b, names.get(b.repository_id)) for b in rows],
+            "can_manage": ws.can_manage,
+            "can_write": ws.can_write,
+        }
     finally:
         db.close()
 
@@ -920,7 +1072,7 @@ def evaluate_security_gate(
     _require_db()
     db = ws.session()
     try:
-        rid = _resolve_repository_id(db, repository_id, repository_url)
+        rid = _resolve_repository_id(db, repository_id, repository_url, workspace_id=ws.id)
         out = _gate_check_response(db, repository_id=rid, ws=ws)
         target = out.repository_name or "organization"
         _append_audit(

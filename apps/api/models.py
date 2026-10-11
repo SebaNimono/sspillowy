@@ -89,6 +89,13 @@ class Repository(Base):
     owner_user_id = Column(String, ForeignKey("users.id"), nullable=True, index=True)
     # URL HTTP(S) para DAST (OWASP ZAP baseline). Opcional.
     dast_url = Column(String, nullable=True)
+    provider = Column(String, nullable=True)
+    # Token de solo lectura para repositorios privados, cifrado (repo_access.encrypt).
+    access_token_enc = Column(Text, nullable=True)
+
+    @property
+    def has_access_token(self) -> bool:
+        return bool(self.access_token_enc)
 
     scans = relationship("Scan", back_populates="repository", cascade="all, delete-orphan")
     findings = relationship("Finding", back_populates="repository", cascade="all, delete-orphan")
@@ -351,7 +358,8 @@ class ComplianceFrameworkSetting(Base):
 
 
 class WorkspaceIntegration(Base):
-    """Canales de chat conectados a un espacio (Slack, Teams) para recibir alertas."""
+    """Conexiones del espacio: canales de chat (slack, teams) con su URL, secreto del webhook de GitHub
+    (github_webhook, cifrado) y clave del pipeline (ci_key, solo su hash)."""
 
     __tablename__ = "ws_integrations"
 

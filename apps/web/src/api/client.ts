@@ -4,6 +4,8 @@ export interface Repository {
   url: string;
   branch: string;
   dast_url?: string | null;
+  provider?: RepoProvider | null;
+  has_access_token?: boolean;
   is_active: boolean;
   health_score: number;
   open_criticals: number;
@@ -343,21 +345,56 @@ export async function fetchRepositories(): Promise<Repository[]> {
   return request('/repositories');
 }
 
-export async function createRepository(
-  name: string,
-  url: string,
-  branch: string,
-  dastUrl?: string,
-): Promise<Repository> {
+export type RepoProvider = 'github' | 'gitlab' | 'bitbucket' | 'azure' | 'other';
+
+export async function createRepository(input: {
+  name: string;
+  url: string;
+  branch: string;
+  dastUrl?: string;
+  provider?: RepoProvider;
+  accessToken?: string;
+}): Promise<Repository> {
   return request('/repositories', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      name,
-      url,
-      branch,
-      dast_url: dastUrl?.trim() || null,
+      name: input.name,
+      url: input.url,
+      branch: input.branch,
+      dast_url: input.dastUrl?.trim() || null,
+      provider: input.provider ?? null,
+      access_token: input.accessToken?.trim() || null,
     }),
+  });
+}
+
+export async function updateRepository(
+  repositoryId: string,
+  changes: { name?: string; branch?: string; dast_url?: string; access_token?: string },
+): Promise<Repository> {
+  return request(`/repositories/${repositoryId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(changes),
+  });
+}
+
+export interface RepoAccessResult {
+  ok: boolean;
+  reason: 'ok' | 'needs_token' | 'bad_token' | 'not_found' | 'unreachable';
+  message: string;
+  url: string;
+  provider: RepoProvider;
+  default_branch: string | null;
+  suggested_name: string;
+}
+
+export async function checkRepoAccess(url: string, provider: RepoProvider, accessToken?: string): Promise<RepoAccessResult> {
+  return request('/repositories/check-access', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url, provider, access_token: accessToken?.trim() || null }),
   });
 }
 
@@ -411,14 +448,26 @@ export async function fetchScans(): Promise<Scan[]> {
   return request('/scans');
 }
 
-export async function fetchGithubWebhookInfo(): Promise<{
-  endpoint: string;
-  events: string[];
-  secret_configured: boolean;
-  engines: string[];
-  instructions: string;
-}> {
-  return request('/webhooks/github/info');
+export interface GateRepoStatus {
+  id: string;
+  name: string;
+  open_critical: number;
+  open_high: number;
+  open_secrets: number;
+  decision: 'PASSED' | 'BLOCKED' | 'BYPASSED' | 'DISABLED';
+}
+
+export interface SecurityGateOverview {
+  policy: SecurityGatePolicy;
+  check: GateCheckResult;
+  repos: GateRepoStatus[];
+  bypasses: GateBypassRequest[];
+  can_manage: boolean;
+  can_write: boolean;
+}
+
+export async function fetchSecurityGateOverview(): Promise<SecurityGateOverview> {
+  return request('/security-gates/overview');
 }
 
 export async function fetchSecurityGate(): Promise<SecurityGatePolicy> {
@@ -1038,9 +1087,25 @@ export interface ChatIntegration {
 
 export interface IntegrationsOverview {
   can_manage: boolean;
-  github: { repos: number; webhook_ready: boolean; webhook_url: string };
+  github: {
+    repos: number;
+    webhook_connected: boolean;
+    webhook_url: string;
+    webhook_since: string | null;
+    webhook_last_event: string | null;
+  };
   gitlab: { repos: number };
-  cicd: { check_url: string; gate_enabled: boolean; repos: number };
+  bitbucket: { repos: number };
+  azure: { repos: number };
+  cicd: {
+    check_url: string;
+    gate_enabled: boolean;
+    repos: number;
+    key_ready: boolean;
+    key_by: string | null;
+    key_since: string | null;
+    key_last_used: string | null;
+  };
   email: { ready: boolean; recipients: string[] };
   chat: Record<ChatKind, ChatIntegration>;
   platform: { prometheus: boolean; metrics_url: string; grafana_url: string | null } | null;
@@ -1064,6 +1129,22 @@ export async function disconnectChatIntegration(kind: ChatKind): Promise<Integra
 
 export async function testChatIntegration(kind: ChatKind): Promise<IntegrationsOverview> {
   return request(`/integrations/${kind}/test`, { method: 'POST' });
+}
+
+export async function createGithubWebhook(): Promise<{ url: string; secret: string; overview: IntegrationsOverview }> {
+  return request('/integrations/github/webhook', { method: 'POST' });
+}
+
+export async function deleteGithubWebhook(): Promise<IntegrationsOverview> {
+  return request('/integrations/github/webhook', { method: 'DELETE' });
+}
+
+export async function createCiKey(): Promise<{ key: string; overview: IntegrationsOverview }> {
+  return request('/integrations/cicd/key', { method: 'POST' });
+}
+
+export async function deleteCiKey(): Promise<IntegrationsOverview> {
+  return request('/integrations/cicd/key', { method: 'DELETE' });
 }
 
 /** Hallazgo que otra página pide abrir en Trazabilidad (id de fila o clave de historia). */
