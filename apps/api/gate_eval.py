@@ -41,10 +41,32 @@ class GateEvaluation:
         return "BLOCKED · " + "; ".join(self.reasons)
 
 
-def _count_open(db, *, severity: str | None = None, engine: str | None = None, repository_id: str | None = None) -> int:
+def gate_for(db, workspace_id: str | None) -> SecurityGate:
+    """Política del espacio (una por espacio, con el id del espacio)."""
+    gate_id = workspace_id or "default-policy"
+    gate = db.get(SecurityGate, gate_id)
+    if gate:
+        return gate
+    gate = SecurityGate(id=gate_id)
+    db.add(gate)
+    db.commit()
+    db.refresh(gate)
+    return gate
+
+
+def _count_open(
+    db,
+    *,
+    severity: str | None = None,
+    engine: str | None = None,
+    repository_id: str | None = None,
+    repo_ids: list[str] | None = None,
+) -> int:
     q = db.query(func.count(Finding.id)).filter(Finding.status.in_(OPEN_STATUSES))
     if repository_id:
         q = q.filter(Finding.repository_id == repository_id)
+    elif repo_ids is not None:
+        q = q.filter(Finding.repository_id.in_(repo_ids or ["__none__"]))
     if severity:
         q = q.filter(func.upper(Finding.severity) == severity.upper())
     if engine:
@@ -57,17 +79,20 @@ def evaluate_gate(
     gate: SecurityGate,
     *,
     repository_id: str | None = None,
+    repo_ids: list[str] | None = None,
+    workspace_id: str | None = None,
 ) -> GateEvaluation:
-    """Evalúa la política activa sobre hallazgos OPEN/IN_REVIEW (repo o org)."""
+    """Evalúa la política sobre hallazgos OPEN/IN_REVIEW de un repo o de los repos del espacio (repo_ids)."""
     max_c = int(gate.max_critical_allowed or 0)
     max_h = int(gate.max_high_allowed or 0)
     block_secrets = bool(gate.block_on_secrets)
     ciso = bool(gate.require_ciso_approval_for_bypass)
 
     # Conteos SQL (rápido) — no cargar todos los hallazgos a memoria
-    open_critical = _count_open(db, severity="CRITICAL", repository_id=repository_id)
-    open_high = _count_open(db, severity="HIGH", repository_id=repository_id)
-    open_secrets = _count_open(db, engine="gitleaks", repository_id=repository_id)
+    scope = {"repository_id": repository_id, "repo_ids": repo_ids}
+    open_critical = _count_open(db, severity="CRITICAL", **scope)
+    open_high = _count_open(db, severity="HIGH", **scope)
+    open_secrets = _count_open(db, engine="gitleaks", **scope)
 
     result = GateEvaluation(
         decision="DISABLED",
@@ -100,7 +125,7 @@ def evaluate_gate(
         try:
             from gate_bypass import find_active_bypass
 
-            active = find_active_bypass(db, repository_id)
+            active = find_active_bypass(db, repository_id, workspace_id or gate.id)
         except Exception:
             active = None
 

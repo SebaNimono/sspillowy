@@ -18,9 +18,9 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
 
-from auth_deps import require_hub_read
 from database import SessionLocal, db_ping
 from models import Finding, GateBypassRequest, Repository, Scan
+from workspaces import WorkspaceCtx, require_ws
 
 router = APIRouter(prefix="/api/v1/velocity", tags=["Security Velocity"])
 
@@ -241,8 +241,11 @@ def compute_velocity(
         ]
         return _round(statistics.median(mins)) if mins else None
 
-    bypass_q = db.query(GateBypassRequest).filter(GateBypassRequest.created_at >= start)
-    bypasses = [b for b in bypass_q.all() if not ids or b.repository_id is None or b.repository_id in ids]
+    ws_ids = {r.workspace_id for r in repos if r.workspace_id}
+    bypass_q = db.query(GateBypassRequest).filter(
+        GateBypassRequest.created_at >= start, GateBypassRequest.workspace_id.in_(ws_ids or {"__none__"})
+    )
+    bypasses = [b for b in bypass_q.all() if b.repository_id is None or b.repository_id in ids]
 
     weeks = max(4, math.ceil(range_days / 7))
     series = []
@@ -374,13 +377,15 @@ def compute_velocity(
 def velocity(
     range_days: int = Query(default=30),
     repository_ids: Optional[str] = Query(default=None),
-    _auth=Depends(require_hub_read),
+    ws: WorkspaceCtx = Depends(require_ws),
 ):
     if range_days not in (7, 30, 90, 180):
         raise HTTPException(status_code=400, detail="El periodo debe ser 7, 30, 90 o 180 días.")
     if not db_ping():
         raise HTTPException(status_code=503, detail="Base de datos no disponible")
-    ids = [x.strip() for x in (repository_ids or "").split(",") if x.strip()] or None
+    ids = [x.strip() for x in (repository_ids or "").split(",") if x.strip()]
+    ids = [i for i in ids if ws.has_repo(i)] if ids else ws.repo_ids
+    ids = ids or ["__none__"]
     db = SessionLocal()
     try:
         return compute_velocity(db, range_days=range_days, repo_ids=ids)

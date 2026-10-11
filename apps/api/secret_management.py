@@ -15,10 +15,10 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from auth_deps import require_hub_read, require_hub_write
-from database import SessionLocal, db_ping
+from database import db_ping
 from models import AuditEvent, Finding, Repository, SecretIncident
 from semgrep_scan import ACTIVE_STATUSES, _refresh_repo_counters
+from workspaces import WorkspaceCtx, require_ws, require_ws_write
 
 router = APIRouter(prefix="/api/v1/secrets", tags=["Secret Management"])
 
@@ -122,11 +122,12 @@ def _set_findings_status(db, findings: list[Finding], status: str) -> int:
     return changed
 
 
-def sync_secret_incidents(db, repository_id: str | None = None) -> None:
-    """Crea/actualiza incidentes a partir de los hallazgos de GitLeaks vigentes."""
-    q = db.query(Finding).filter(Finding.engine == "gitleaks", Finding.status != "SUPERSEDED")
-    if repository_id:
-        q = q.filter(Finding.repository_id == repository_id)
+def sync_secret_incidents(db, repo_ids: str | list[str]) -> None:
+    """Crea/actualiza incidentes a partir de los hallazgos de GitLeaks vigentes de esos repositorios."""
+    ids = [repo_ids] if isinstance(repo_ids, str) else list(repo_ids)
+    q = db.query(Finding).filter(
+        Finding.engine == "gitleaks", Finding.status != "SUPERSEDED", Finding.repository_id.in_(ids or ["__none__"])
+    )
     findings = q.all()
     if not findings:
         return
@@ -260,24 +261,29 @@ def _out(db, inc: SecretIncident, repo_names: dict[str, str]) -> SecretIncidentO
     )
 
 
-def _repo_names(db) -> dict[str, str]:
-    return {r.id: r.name for r in db.query(Repository.id, Repository.name).all()}
+def _repo_names(db, repo_ids: list[str]) -> dict[str, str]:
+    return {r.id: r.name for r in db.query(Repository.id, Repository.name).filter(Repository.id.in_(repo_ids)).all()}
 
 
 @router.get("", response_model=List[SecretIncidentOut])
 async def list_secret_incidents(
     repository_id: Optional[str] = Query(default=None),
-    _auth=Depends(require_hub_read),
+    ws: WorkspaceCtx = Depends(require_ws),
 ):
     _require_db()
-    db = SessionLocal()
+    if repository_id:
+        ws.require_repo(repository_id)
+    scope = [repository_id] if repository_id else ws.scope_ids
+    db = ws.session()
     try:
-        sync_secret_incidents(db, repository_id)
+        sync_secret_incidents(db, scope)
         db.commit()
-        q = db.query(SecretIncident).order_by(SecretIncident.first_seen_at.desc())
-        if repository_id:
-            q = q.filter(SecretIncident.repository_id == repository_id)
-        names = _repo_names(db)
+        q = (
+            db.query(SecretIncident)
+            .filter(SecretIncident.repository_id.in_(scope))
+            .order_by(SecretIncident.first_seen_at.desc())
+        )
+        names = _repo_names(db, scope)
         return [_out(db, inc, names) for inc in q.all()]
     finally:
         db.close()
@@ -295,14 +301,14 @@ _STEP_LABEL = {
 async def update_secret_incident(
     incident_id: str,
     body: SecretIncidentUpdate,
-    session=Depends(require_hub_write),
+    ws: WorkspaceCtx = Depends(require_ws_write),
 ):
     _require_db()
-    actor = ((session or {}).get("email") or "web_hub").strip().lower()
-    db = SessionLocal()
+    actor = ws.actor
+    db = ws.session()
     try:
         inc = db.get(SecretIncident, incident_id)
-        if not inc:
+        if not inc or not ws.has_repo(inc.repository_id):
             raise HTTPException(status_code=404, detail="Incidente no encontrado")
         repo = db.get(Repository, inc.repository_id)
         target = repo.name if repo else inc.repository_id
@@ -383,6 +389,6 @@ async def update_secret_incident(
         inc.updated_at = now
         db.commit()
         db.refresh(inc)
-        return _out(db, inc, _repo_names(db))
+        return _out(db, inc, _repo_names(db, [inc.repository_id]))
     finally:
         db.close()

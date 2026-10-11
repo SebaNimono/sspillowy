@@ -23,6 +23,7 @@ import {
   X,
 } from 'lucide-react';
 import { useI18n } from '../i18n/I18nProvider';
+import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 
 export type SidebarState = 'expanded' | 'collapsed' | 'hidden';
 
@@ -155,6 +156,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <div className="brand-sub">{t('nav.brandSub')}</div>
             </div>
           </div>
+          <WorkspaceSwitcher collapsed={false} />
         </>
       ) : (
         <div

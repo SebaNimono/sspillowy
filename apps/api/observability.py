@@ -22,9 +22,9 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 
 import obs_metrics
-from auth_deps import require_hub_read
 from database import SessionLocal, db_ping
 from models import AuditEvent, Finding, ObsBucket, RunbookExecution, Scan, SecretIncident
+from workspaces import WorkspaceCtx, require_ws
 from obs_metrics import LAT_BOUNDS
 
 router = APIRouter(prefix="/api/v1/observability", tags=["Observabilidad"])
@@ -244,8 +244,12 @@ def _db_latency() -> float | None:
     return round((time.perf_counter() - t0) * 1000, 1) if ok else None
 
 
-def compute_observability(db, range_key: str = "24h", now: datetime | None = None) -> dict:
+def compute_observability(
+    db, range_key: str = "24h", now: datetime | None = None, *, workspace_id: str, repo_ids: list[str]
+) -> dict:
+    """La salud de la API, el correo y Pillow es de toda la plataforma; análisis e incidentes, solo del espacio."""
     now = now or _now()
+    repo_ids = repo_ids or ["__none__"]
     span, step = RANGES.get(range_key, RANGES["24h"])
     since = now - span
     buckets = _load_buckets(db, since)
@@ -263,12 +267,12 @@ def compute_observability(db, range_key: str = "24h", now: datetime | None = Non
     for b in pillow:
         _merge(pillow_agg, b)
 
-    scans = db.query(Scan).filter(Scan.created_at >= _naive(since)).all()
+    scans = db.query(Scan).filter(Scan.created_at >= _naive(since), Scan.repository_id.in_(repo_ids)).all()
     finished = [s for s in scans if s.status in ("COMPLETED", "FAILED")]
     completed = [s for s in finished if s.status == "COMPLETED"]
     durations = [m for m in (_scan_minutes(s) for s in completed) if m is not None]
     stale_minutes = int(os.getenv("STALE_SCAN_MINUTES", "20"))
-    running = db.query(Scan).filter(Scan.status == "RUNNING").all()
+    running = db.query(Scan).filter(Scan.status == "RUNNING", Scan.repository_id.in_(repo_ids)).all()
     stuck = [s for s in running if _aware(s.created_at) < now - timedelta(minutes=stale_minutes)]
 
     # Motores
@@ -437,7 +441,11 @@ def compute_observability(db, range_key: str = "24h", now: datetime | None = Non
     incidents = []
     for e in (
         db.query(AuditEvent)
-        .filter(AuditEvent.action.in_(list(INCIDENT_ACTIONS)), AuditEvent.created_at >= _naive(since))
+        .filter(
+            AuditEvent.action.in_(list(INCIDENT_ACTIONS)),
+            AuditEvent.created_at >= _naive(since),
+            AuditEvent.workspace_id == workspace_id,
+        )
         .order_by(AuditEvent.created_at.desc())
         .limit(40)
         .all()
@@ -447,7 +455,11 @@ def compute_observability(db, range_key: str = "24h", now: datetime | None = Non
                           "target": e.target, "detail": (e.detail or "")[:300]})
     for x in (
         db.query(RunbookExecution)
-        .filter(RunbookExecution.status == "FAILED", RunbookExecution.created_at >= _naive(since))
+        .filter(
+            RunbookExecution.status == "FAILED",
+            RunbookExecution.created_at >= _naive(since),
+            RunbookExecution.workspace_id == workspace_id,
+        )
         .order_by(RunbookExecution.created_at.desc())
         .limit(20)
         .all()
@@ -499,12 +511,12 @@ def compute_observability(db, range_key: str = "24h", now: datetime | None = Non
 
 
 @router.get("")
-def observability_overview(range: str = Query(default="24h"), _auth=Depends(require_hub_read)):
+def observability_overview(range: str = Query(default="24h"), ws: WorkspaceCtx = Depends(require_ws)):
     if range not in RANGES:
         raise HTTPException(status_code=400, detail="Rango no válido. Usa 24h, 7d o 30d.")
     db = SessionLocal()
     try:
-        return compute_observability(db, range)
+        return compute_observability(db, range, workspace_id=ws.id, repo_ids=ws.repo_ids)
     finally:
         db.close()
 

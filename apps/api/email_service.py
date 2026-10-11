@@ -173,6 +173,7 @@ def alert_recipients() -> list[str]:
 
 def send_security_alert(
     *,
+    recipients: list[str],
     repo_name: str,
     decision: str,
     summary: str,
@@ -180,10 +181,9 @@ def send_security_alert(
     open_secrets: int = 0,
     frontend_url: str | None = None,
 ) -> int:
-    """Alerta GATE_BLOCK / secretos. Devuelve cuántos correos se enviaron."""
-    recipients = alert_recipients()
+    """Alerta GATE_BLOCK / secretos a los responsables del espacio. Devuelve cuántos correos se enviaron."""
     if not recipients:
-        print("[sspillowy] SECURITY_ALERT_EMAILS vacío — no se envía alerta de gate.")
+        print("[sspillowy] el espacio no tiene responsables — no se envía alerta de gate.")
         return 0
 
     hub = (frontend_url or os.getenv("FRONTEND_URL", "https://sspillowy.com")).rstrip("/")

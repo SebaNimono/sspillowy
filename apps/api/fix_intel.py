@@ -15,11 +15,11 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from auth_deps import require_hub_read, require_hub_write
 from database import SessionLocal, db_ping
 from models import AuditEvent, Finding, Repository
 from pillow_agent import PILLOW_DAILY_CREDITS, _consume_credit, _get_quota, call_gemini
 from semgrep_scan import ACTIVE_STATUSES, _refresh_repo_counters
+from workspaces import WorkspaceCtx, require_ws, require_ws_write
 
 router = APIRouter(prefix="/api/v1/fix-intel", tags=["Fix Intelligence"])
 
@@ -234,23 +234,26 @@ def carry_forward_triage(db, *, repo_id: str, scan_id: str) -> int:
 def fix_intel_queue(
     repository_id: Optional[str] = Query(default=None),
     limit: int = Query(default=400, ge=1, le=1000),
-    _auth=Depends(require_hub_read),
+    ws: WorkspaceCtx = Depends(require_ws),
 ):
     _require_db()
+    if repository_id:
+        ws.require_repo(repository_id)
     db = SessionLocal()
     try:
-        repos = db.query(Repository).all()
+        repos = db.query(Repository).filter(Repository.workspace_id == ws.id).all()
         repo_names = {r.id: r.name for r in repos}
-        q = db.query(Finding).filter(Finding.status.in_(list(ACTIVE_STATUSES)))
-        if repository_id:
-            q = q.filter(Finding.repository_id == repository_id)
+        q = db.query(Finding).filter(
+            Finding.status.in_(list(ACTIVE_STATUSES)),
+            Finding.repository_id.in_([repository_id] if repository_id else ws.scope_ids),
+        )
         rows = q.all()
         items = sorted((_item(f, repo_names) for f in rows), key=lambda i: (-i["score"], i["title"]))
 
         triaged = [i for i in items if i["ai_verdict"]]
         decided = (
             db.query(Finding.ai_feedback)
-            .filter(Finding.ai_feedback.in_(["ACCEPTED", "DISMISSED"]))
+            .filter(Finding.ai_feedback.in_(["ACCEPTED", "DISMISSED"]), Finding.repository_id.in_(ws.scope_ids))
             .all()
         )
         accepted = sum(1 for (fb,) in decided if fb == "ACCEPTED")
@@ -353,14 +356,12 @@ class TriageBody(BaseModel):
 
 
 @router.post("/triage")
-async def fix_intel_triage(body: TriageBody, session=Depends(require_hub_write)):
+async def fix_intel_triage(body: TriageBody, ws: WorkspaceCtx = Depends(require_ws_write)):
     _require_db()
-    actor = ((session or {}).get("email") or "").strip().lower()
-    if not actor:
-        raise HTTPException(status_code=401, detail="Inicia sesión para analizar con Pillow.")
+    actor = ws.actor
     ids = list(dict.fromkeys(body.finding_ids))
 
-    db = SessionLocal()
+    db = ws.session()
     try:
         _used, remaining = _get_quota(db, actor)
         if remaining <= 0:
@@ -368,7 +369,7 @@ async def fix_intel_triage(body: TriageBody, session=Depends(require_hub_write))
                 status_code=429,
                 detail=f"Límite diario de Pillow alcanzado ({PILLOW_DAILY_CREDITS} consultas). Vuelve mañana.",
             )
-        findings = db.query(Finding).filter(Finding.id.in_(ids)).all()
+        findings = db.query(Finding).filter(Finding.id.in_(ids), Finding.repository_id.in_(ws.scope_ids)).all()
         if not findings:
             raise HTTPException(status_code=404, detail="Hallazgos no encontrados.")
         repos = {r.id: r for r in db.query(Repository).filter(Repository.id.in_({f.repository_id for f in findings}))}
@@ -460,13 +461,13 @@ class DecisionBody(BaseModel):
 
 
 @router.post("/{finding_id}/decision")
-def fix_intel_decision(finding_id: str, body: DecisionBody, session=Depends(require_hub_write)):
+def fix_intel_decision(finding_id: str, body: DecisionBody, ws: WorkspaceCtx = Depends(require_ws_write)):
     _require_db()
-    actor = ((session or {}).get("email") or "web_hub").strip().lower()
-    db = SessionLocal()
+    actor = ws.actor
+    db = ws.session()
     try:
         f = db.get(Finding, finding_id)
-        if not f:
+        if not f or not ws.has_repo(f.repository_id):
             raise HTTPException(status_code=404, detail="Hallazgo no encontrado.")
         if not f.ai_verdict:
             raise HTTPException(status_code=400, detail="Este hallazgo aún no tiene sugerencia de Pillow.")

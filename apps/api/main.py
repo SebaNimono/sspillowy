@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from dotenv import load_dotenv
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, status
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import joinedload
 
@@ -42,7 +42,7 @@ from packages.core_models import (  # noqa: E402
     IsoControl,
 )
 
-from auth_deps import hub_auth_mode, require_hub_read, require_hub_write  # noqa: E402
+from auth_deps import hub_auth_mode, resolve_session  # noqa: E402
 from github_oauth import router as github_auth_router  # noqa: E402
 from github_webhook import router as github_webhook_router  # noqa: E402
 from gitlab_oauth import router as gitlab_auth_router  # noqa: E402
@@ -67,6 +67,16 @@ from obs_metrics import MetricsMiddleware  # noqa: E402
 from observability import metrics_router, start_flusher  # noqa: E402
 from observability import router as observability_router  # noqa: E402
 from traceability import router as traceability_router  # noqa: E402
+from workspaces import (  # noqa: E402
+    WorkspaceCtx,
+    adopt_orphans,
+    bootstrap as bootstrap_workspaces,
+    platform_admins,
+    require_ws,
+    require_ws_write,
+    resolve_workspace,
+    router as workspaces_router,
+)
 from database import init_db, db_ping, SessionLocal  # noqa: E402
 import database as _database  # noqa: E402
 from email_service import mailer_status  # noqa: E402
@@ -86,7 +96,7 @@ from models import (  # noqa: E402
     SecretIncident,
     SecurityGate,
 )
-from gate_eval import evaluate_gate  # noqa: E402
+from gate_eval import evaluate_gate, gate_for  # noqa: E402
 from semgrep_scan import run_repo_scan_job, semgrep_available  # noqa: E402
 from gitleaks_scan import gitleaks_available  # noqa: E402
 from trivy_scan import trivy_available  # noqa: E402
@@ -121,6 +131,10 @@ async def on_startup():
         print(f"[sspillowy] seed/cleanup skipped: {exc}")
     finally:
         db.close()
+    try:
+        bootstrap_workspaces()
+    except Exception as exc:
+        print(f"[sspillowy] workspace bootstrap failed: {exc}")
 
 
 app.add_middleware(
@@ -153,9 +167,10 @@ app.include_router(executive_router)
 app.include_router(compliance_router)
 app.include_router(observability_router)
 app.include_router(traceability_router)
+app.include_router(workspaces_router)
 app.include_router(metrics_router)
 
-# Estado de lectura de notificaciones (efímero por instancia; hallazgos sí son persistentes)
+# Estado de lectura de notificaciones por usuario ("email:id"; efímero por instancia)
 _READ_NOTIFICATION_IDS: set[str] = set()
 
 
@@ -177,12 +192,14 @@ def _expire_stale_running_scans(db) -> int:
     for scan in rows:
         scan.status = "FAILED"
         scan.completed_at = _now()
+        repo = db.get(Repository, scan.repository_id)
         _append_audit(
             db,
             "scan-worker",
             "SCAN_STALE_EXPIRED",
             scan.id,
             f"Escaneo RUNNING expirado (> {minutes} min). Marcado FAILED.",
+            workspace_id=repo.workspace_id if repo else None,
         )
     db.commit()
     return len(rows)
@@ -193,7 +210,15 @@ def _require_db():
         raise HTTPException(status_code=503, detail="Base de datos no disponible.")
 
 
-def _append_audit(db, actor: str, action: str, target: str, detail: str, finding_id: str | None = None) -> None:
+def _append_audit(
+    db,
+    actor: str,
+    action: str,
+    target: str,
+    detail: str,
+    finding_id: str | None = None,
+    workspace_id: str | None = None,
+) -> None:
     db.add(
         AuditEvent(
             id=str(uuid.uuid4()),
@@ -202,13 +227,10 @@ def _append_audit(db, actor: str, action: str, target: str, detail: str, finding
             detail=detail,
             actor_email=actor,
             finding_id=finding_id,
+            workspace_id=workspace_id,
             created_at=_now(),
         )
     )
-
-
-def _session_actor(session) -> str:
-    return ((session or {}).get("email") or "web_hub").strip().lower()
 
 
 def _refresh_repo_counters(db, repo: Repository) -> None:
@@ -273,17 +295,6 @@ def _scan_out(scan: Scan) -> ScanResponse:
     return ScanResponse.model_validate(scan)
 
 
-def _ensure_default_gate(db) -> SecurityGate:
-    gate = db.get(SecurityGate, "default-policy")
-    if gate:
-        return gate
-    gate = SecurityGate(id="default-policy")
-    db.add(gate)
-    db.commit()
-    db.refresh(gate)
-    return gate
-
-
 def _gate_out(gate: SecurityGate) -> SecurityGatePolicy:
     return SecurityGatePolicy(
         id=gate.id,
@@ -296,12 +307,17 @@ def _gate_out(gate: SecurityGate) -> SecurityGatePolicy:
     )
 
 
-def _build_notifications(db) -> list[dict]:
-    """Notificaciones derivadas de findings abiertos + scans recientes (datos reales)."""
+def _build_notifications(db, ws: WorkspaceCtx) -> list[dict]:
+    """Notificaciones derivadas de findings abiertos + scans recientes del espacio."""
     items: list[dict] = []
+    in_scope = ws.scope_ids
+
+    def is_read(nid: str) -> bool:
+        return f"{ws.email}:{nid}" in _READ_NOTIFICATION_IDS
 
     criticals = (
         db.query(Finding)
+        .filter(Finding.repository_id.in_(in_scope))
         .filter(Finding.status.in_(["OPEN", "IN_REVIEW"]), Finding.severity == "CRITICAL")
         .order_by(Finding.created_at.desc())
         .limit(10)
@@ -318,13 +334,14 @@ def _build_notifications(db) -> list[dict]:
                 "message": (f.ai_summary or f.description)[:240],
                 "repository_id": f.repository_id,
                 "finding_id": f.id,
-                "read": f"notif-finding-{f.id}" in _READ_NOTIFICATION_IDS,
+                "read": is_read(f"notif-finding-{f.id}"),
                 "created_at": f.created_at or _now(),
             }
         )
 
     highs = (
         db.query(Finding)
+        .filter(Finding.repository_id.in_(in_scope))
         .filter(Finding.status.in_(["OPEN", "IN_REVIEW"]), Finding.severity == "HIGH")
         .order_by(Finding.created_at.desc())
         .limit(5)
@@ -340,12 +357,14 @@ def _build_notifications(db) -> list[dict]:
                 "message": (f.ai_summary or f.description)[:240],
                 "repository_id": f.repository_id,
                 "finding_id": f.id,
-                "read": f"notif-finding-{f.id}" in _READ_NOTIFICATION_IDS,
+                "read": is_read(f"notif-finding-{f.id}"),
                 "created_at": f.created_at or _now(),
             }
         )
 
-    recent_scans = db.query(Scan).order_by(Scan.created_at.desc()).limit(5).all()
+    recent_scans = (
+        db.query(Scan).filter(Scan.repository_id.in_(in_scope)).order_by(Scan.created_at.desc()).limit(5).all()
+    )
     for s in recent_scans:
         repo = db.get(Repository, s.repository_id)
         name = repo.name if repo else s.repository_id
@@ -364,15 +383,15 @@ def _build_notifications(db) -> list[dict]:
                 "message": msg,
                 "repository_id": s.repository_id,
                 "finding_id": None,
-                "read": f"notif-scan-{s.id}" in _READ_NOTIFICATION_IDS,
+                "read": is_read(f"notif-scan-{s.id}"),
                 "created_at": s.completed_at or s.created_at or _now(),
             }
         )
 
-    gate = _ensure_default_gate(db)
-    # Notificación GATE_BLOCK si la org entera falla el gate
-    org_ev = evaluate_gate(db, gate, repository_id=None)
-    if org_ev.decision == "BLOCKED":
+    gate = gate_for(db, ws.id)
+    # Notificación GATE_BLOCK si el espacio entero falla el gate
+    org_ev = evaluate_gate(db, gate, repo_ids=ws.repo_ids, workspace_id=ws.id)
+    if ws.repo_ids and org_ev.decision == "BLOCKED":
         items.insert(
             0,
             {
@@ -383,7 +402,7 @@ def _build_notifications(db) -> list[dict]:
                 "message": org_ev.summary()[:240],
                 "repository_id": None,
                 "finding_id": None,
-                "read": "notif-gate-block" in _READ_NOTIFICATION_IDS,
+                "read": is_read("notif-gate-block"),
                 "created_at": _now(),
             },
         )
@@ -446,20 +465,24 @@ async def health_check():
     }
 
 
-def _repo_ids_param(raw: Optional[str]) -> list[str] | None:
+def _repo_ids_param(raw: Optional[str], ws: WorkspaceCtx) -> list[str]:
+    """Repos pedidos dentro del espacio; sin filtro = todos los del espacio (nunca vacío)."""
     ids = [p.strip() for p in (raw or "").split(",") if p.strip()]
-    return ids or None
+    if ids:
+        ids = [i for i in ids if ws.has_repo(i)]
+        return ids or ["__none__"]
+    return ws.scope_ids
 
 
 @app.get("/api/v1/stats", response_model=DashboardStats, tags=["Dashboard"])
 async def get_dashboard_stats(
-    repository_ids: Optional[str] = Query(default=None), _auth=Depends(require_hub_read)
+    repository_ids: Optional[str] = Query(default=None), ws: WorkspaceCtx = Depends(require_ws)
 ):
     db = SessionLocal()
     try:
-        if not db_ping():
+        if not db_ping() or not ws.repo_ids:
             return _empty_dashboard_stats()
-        return DashboardStats(**compute_dashboard_stats(db, _repo_ids_param(repository_ids)))
+        return DashboardStats(**compute_dashboard_stats(db, _repo_ids_param(repository_ids, ws)))
     except Exception as exc:
         print(f"[sspillowy] dashboard stats error: {exc}")
         return _empty_dashboard_stats()
@@ -471,13 +494,13 @@ async def get_dashboard_stats(
 async def get_heatmap(
     weeks: int = Query(default=12, ge=4, le=52),
     repository_ids: Optional[str] = Query(default=None),
-    _auth=Depends(require_hub_read),
+    ws: WorkspaceCtx = Depends(require_ws),
 ):
     db = SessionLocal()
     try:
-        if not db_ping():
+        if not db_ping() or not ws.repo_ids:
             return _empty_heatmap(weeks)
-        return HeatmapResponse(**compute_heatmap(db, weeks=weeks, repo_ids=_repo_ids_param(repository_ids)))
+        return HeatmapResponse(**compute_heatmap(db, weeks=weeks, repo_ids=_repo_ids_param(repository_ids, ws)))
     except Exception as exc:
         print(f"[sspillowy] heatmap error: {exc}")
         return _empty_heatmap(weeks)
@@ -489,13 +512,14 @@ async def get_heatmap(
 async def list_audit_log(
     limit: int = Query(default=40, ge=1, le=200),
     repository_ids: Optional[str] = Query(default=None),
-    _auth=Depends(require_hub_read),
+    ws: WorkspaceCtx = Depends(require_ws),
 ):
     db = SessionLocal()
     try:
         if not db_ping():
             return []
-        return list_audit_events(db, limit=limit, repo_ids=_repo_ids_param(repository_ids))
+        explicit = _repo_ids_param(repository_ids, ws) if repository_ids else None
+        return list_audit_events(db, limit=limit, repo_ids=explicit, workspace_id=ws.id)
     except Exception as exc:
         print(f"[sspillowy] audit log error: {exc}")
         return []
@@ -504,11 +528,16 @@ async def list_audit_log(
 
 
 @app.get("/api/v1/repositories", response_model=List[RepositoryResponse], tags=["Repositories"])
-async def list_repositories(_auth=Depends(require_hub_read)):
+async def list_repositories(ws: WorkspaceCtx = Depends(require_ws)):
     _require_db()
     db = SessionLocal()
     try:
-        rows = db.query(Repository).order_by(Repository.created_at.desc()).all()
+        rows = (
+            db.query(Repository)
+            .filter(Repository.workspace_id == ws.id)
+            .order_by(Repository.created_at.desc())
+            .all()
+        )
         return [_repo_out(r) for r in rows]
     finally:
         db.close()
@@ -520,15 +549,21 @@ async def list_repositories(_auth=Depends(require_hub_read)):
     status_code=status.HTTP_201_CREATED,
     tags=["Repositories"],
 )
-async def create_repository(repo: RepositoryCreate, session=Depends(require_hub_write)):
+async def create_repository(repo: RepositoryCreate, ws: WorkspaceCtx = Depends(require_ws_write)):
     _require_db()
-    db = SessionLocal()
+    db = ws.session()
     try:
         existing = db.query(Repository).filter(Repository.url == repo.url).first()
         if existing:
-            raise HTTPException(status_code=409, detail="Ya existe un repositorio con esa URL.")
+            if existing.workspace_id == ws.id:
+                raise HTTPException(status_code=409, detail="Ya existe un repositorio con esa URL.")
+            raise HTTPException(
+                status_code=409,
+                detail="Ese repositorio ya está conectado en otro espacio. Pide a su administrador que te invite.",
+            )
         row = Repository(
             id=str(uuid.uuid4()),
+            workspace_id=ws.id,
             name=repo.name,
             url=repo.url,
             branch=repo.branch or "main",
@@ -544,7 +579,7 @@ async def create_repository(repo: RepositoryCreate, session=Depends(require_hub_
         db.add(row)
         _append_audit(
             db,
-            _session_actor(session),
+            ws.actor,
             "REPO_REGISTERED",
             repo.name,
             f"Repositorio {repo.url} registrado en rama {repo.branch}.",
@@ -562,14 +597,17 @@ async def list_findings(
     engine: Optional[EngineType] = None,
     severity: Optional[SeverityLevel] = None,
     finding_status: Optional[FindingStatus] = Query(default=None, alias="status"),
-    _auth=Depends(require_hub_read),
+    ws: WorkspaceCtx = Depends(require_ws),
 ):
     _require_db()
     db = SessionLocal()
     try:
         q = db.query(Finding)
         if repository_id:
+            ws.require_repo(repository_id)
             q = q.filter(Finding.repository_id == repository_id)
+        else:
+            q = q.filter(Finding.repository_id.in_(ws.scope_ids))
         if engine:
             q = q.filter(Finding.engine == engine.value)
         if severity:
@@ -584,23 +622,26 @@ async def list_findings(
             .order_by(Finding.created_at.desc())
             .all()
         )
-        first_seen = first_seen_map(db, [repository_id] if repository_id else None)
+        first_seen = first_seen_map(db, [repository_id] if repository_id else ws.scope_ids)
         return [_finding_out(f, first_seen) for f in rows]
     finally:
         db.close()
 
 
 @app.delete("/api/v1/findings", tags=["Findings"])
-async def clear_findings(repository_id: Optional[str] = None, session=Depends(require_hub_write)):
+async def clear_findings(repository_id: Optional[str] = None, ws: WorkspaceCtx = Depends(require_ws_write)):
     """Vacía la matriz (todos o por repo). Útil para demos / re-escanear limpio."""
     _require_db()
-    db = SessionLocal()
+    db = ws.session()
     try:
         q = db.query(Finding)
         if repository_id:
+            ws.require_repo(repository_id)
             q = q.filter(Finding.repository_id == repository_id)
+        else:
+            q = q.filter(Finding.repository_id.in_(ws.scope_ids))
         deleted = q.delete(synchronize_session=False)
-        repos = db.query(Repository).all()
+        repos = db.query(Repository).filter(Repository.workspace_id == ws.id).all()
         if repository_id:
             repos = [r for r in repos if r.id == repository_id]
         for repo in repos:
@@ -611,7 +652,7 @@ async def clear_findings(repository_id: Optional[str] = None, session=Depends(re
         repo_label = repos[0].name if repository_id and repos else (repository_id or "all")
         _append_audit(
             db,
-            _session_actor(session),
+            ws.actor,
             "FINDINGS_CLEARED",
             repo_label,
             f"Matriz vaciada ({deleted} hallazgos eliminados).",
@@ -623,12 +664,12 @@ async def clear_findings(repository_id: Optional[str] = None, session=Depends(re
 
 
 @app.delete("/api/v1/repositories/{repository_id}", tags=["Repositories"])
-async def delete_repository(repository_id: str, session=Depends(require_hub_write)):
+async def delete_repository(repository_id: str, ws: WorkspaceCtx = Depends(require_ws_write)):
     _require_db()
-    db = SessionLocal()
+    db = ws.session()
     try:
         repo = db.get(Repository, repository_id)
-        if not repo:
+        if not repo or repo.workspace_id != ws.id:
             raise HTTPException(status_code=404, detail="Repositorio no encontrado")
         name = repo.name
         # Borrar hallazgos y scans primero por si cascade no está en DB remota
@@ -639,7 +680,7 @@ async def delete_repository(repository_id: str, session=Depends(require_hub_writ
         db.delete(repo)
         _append_audit(
             db,
-            _session_actor(session),
+            ws.actor,
             "REPO_DELETED",
             name,
             f"Repositorio {repository_id} eliminado con sus scans/hallazgos.",
@@ -651,12 +692,14 @@ async def delete_repository(repository_id: str, session=Depends(require_hub_writ
 
 
 @app.patch("/api/v1/findings/{finding_id}", response_model=FindingResponse, tags=["Findings"])
-async def update_finding_status(finding_id: str, payload: FindingStatusUpdate, session=Depends(require_hub_write)):
+async def update_finding_status(
+    finding_id: str, payload: FindingStatusUpdate, ws: WorkspaceCtx = Depends(require_ws_write)
+):
     _require_db()
-    db = SessionLocal()
+    db = ws.session()
     try:
         finding = db.get(Finding, finding_id)
-        if not finding:
+        if not finding or not ws.has_repo(finding.repository_id):
             raise HTTPException(status_code=404, detail="Hallazgo no encontrado")
         previous = finding.status
         finding.status = payload.status.value
@@ -664,7 +707,7 @@ async def update_finding_status(finding_id: str, payload: FindingStatusUpdate, s
         repo = db.get(Repository, finding.repository_id)
         _append_audit(
             db,
-            _session_actor(session),
+            ws.actor,
             f"FINDING_{payload.status.value}",
             repo.name if repo else finding.repository_id,
             f"{finding.title} ({previous} → {payload.status.value})" + (f". {note}" if note else ""),
@@ -685,12 +728,14 @@ async def update_finding_status(finding_id: str, payload: FindingStatusUpdate, s
     status_code=status.HTTP_201_CREATED,
     tags=["Scans"],
 )
-async def trigger_scan(scan_in: ScanCreate, background_tasks: BackgroundTasks, session=Depends(require_hub_write)):
+async def trigger_scan(
+    scan_in: ScanCreate, background_tasks: BackgroundTasks, ws: WorkspaceCtx = Depends(require_ws_write)
+):
     _require_db()
-    db = SessionLocal()
+    db = ws.session()
     try:
         repo = db.get(Repository, scan_in.repository_id)
-        if not repo:
+        if not repo or repo.workspace_id != ws.id:
             raise HTTPException(status_code=404, detail="Repositorio no encontrado")
         allowed = {"semgrep", "gitleaks", "trivy", "owasp_zap"}
         engines = [e.lower().strip() for e in (scan_in.engines or []) if e]
@@ -703,7 +748,7 @@ async def trigger_scan(scan_in: ScanCreate, background_tasks: BackgroundTasks, s
             target_url = os.getenv("ZAP_DEFAULT_TARGET", "https://sspillowy.com").strip() or None
         triggered_by = (scan_in.triggered_by or "").strip()
         if triggered_by in ("", "web_hub", "manual_web"):
-            triggered_by = _session_actor(session)
+            triggered_by = ws.actor
         row = Scan(
             id=str(uuid.uuid4()),
             repository_id=scan_in.repository_id,
@@ -742,23 +787,28 @@ async def trigger_scan(scan_in: ScanCreate, background_tasks: BackgroundTasks, s
 
 
 @app.get("/api/v1/scans", response_model=List[ScanResponse], tags=["Scans"])
-async def list_scans(_auth=Depends(require_hub_read)):
+async def list_scans(ws: WorkspaceCtx = Depends(require_ws)):
     _require_db()
     db = SessionLocal()
     try:
         _expire_stale_running_scans(db)
-        rows = db.query(Scan).order_by(Scan.created_at.desc()).all()
+        rows = (
+            db.query(Scan)
+            .filter(Scan.repository_id.in_(ws.scope_ids))
+            .order_by(Scan.created_at.desc())
+            .all()
+        )
         return [_scan_out(s) for s in rows]
     finally:
         db.close()
 
 
 @app.get("/api/v1/security-gates", response_model=SecurityGatePolicy, tags=["Security Gates"])
-async def get_security_gate(_auth=Depends(require_hub_read)):
+async def get_security_gate(ws: WorkspaceCtx = Depends(require_ws)):
     _require_db()
     db = SessionLocal()
     try:
-        return _gate_out(_ensure_default_gate(db))
+        return _gate_out(gate_for(db, ws.id))
     finally:
         db.close()
 
@@ -790,15 +840,26 @@ def _resolve_repository_id(db, repository_id: Optional[str], repository_url: Opt
     return repo.id
 
 
-def _gate_check_response(db, *, repository_id: str | None) -> GateCheckResponse:
-    gate = _ensure_default_gate(db)
+def _gate_check_response(
+    db, *, repository_id: str | None, ws: WorkspaceCtx | None = None
+) -> GateCheckResponse:
+    """Con repositorio: política del espacio de ese repo. Sin repositorio: todo el espacio activo."""
     repo_name = None
     if repository_id:
         repo = db.get(Repository, repository_id)
-        if not repo:
+        if not repo or (ws is not None and repo.workspace_id != ws.id):
             raise HTTPException(status_code=404, detail="Repositorio no encontrado")
         repo_name = repo.name
-    ev = evaluate_gate(db, gate, repository_id=repository_id)
+        gate = gate_for(db, repo.workspace_id)
+        ev = evaluate_gate(db, gate, repository_id=repository_id, workspace_id=repo.workspace_id)
+    elif ws is not None:
+        gate = gate_for(db, ws.id)
+        ev = evaluate_gate(db, gate, repo_ids=ws.repo_ids, workspace_id=ws.id)
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Indica repository_url o repository_id, o inicia sesión para evaluar tu espacio.",
+        )
     return GateCheckResponse(
         allowed=ev.allowed,
         decision=ev.decision,
@@ -826,13 +887,16 @@ def _gate_check_response(db, *, repository_id: str | None) -> GateCheckResponse:
 async def check_security_gate(
     repository_id: Optional[str] = None,
     repository_url: Optional[str] = None,
+    session=Depends(resolve_session),
+    x_workspace_id: Optional[str] = Header(default=None, alias="X-Workspace-Id"),
 ):
-    """Evalúa la política ahora (org o un repo). Para consola y CI: mirar `allowed`."""
+    """Evalúa la política ahora (espacio o un repo). Para consola y CI: mirar `allowed`."""
     _require_db()
+    ws = resolve_workspace(session, (x_workspace_id or "").strip() or None) if session else None
     db = SessionLocal()
     try:
         rid = _resolve_repository_id(db, repository_id, repository_url)
-        return _gate_check_response(db, repository_id=rid)
+        return _gate_check_response(db, repository_id=rid, ws=ws)
     finally:
         db.close()
 
@@ -845,18 +909,18 @@ async def check_security_gate(
 async def evaluate_security_gate(
     repository_id: Optional[str] = None,
     repository_url: Optional[str] = None,
-    session=Depends(require_hub_write),
+    ws: WorkspaceCtx = Depends(require_ws_write),
 ):
     """Igual que check; deja auditoría GATE_EVALUATED."""
     _require_db()
-    db = SessionLocal()
+    db = ws.session()
     try:
         rid = _resolve_repository_id(db, repository_id, repository_url)
-        out = _gate_check_response(db, repository_id=rid)
+        out = _gate_check_response(db, repository_id=rid, ws=ws)
         target = out.repository_name or "organization"
         _append_audit(
             db,
-            _session_actor(session),
+            ws.actor,
             "GATE_PASSED" if out.allowed else "GATE_BLOCK",
             target,
             out.summary,
@@ -868,11 +932,15 @@ async def evaluate_security_gate(
 
 
 @app.post("/api/v1/security-gates", response_model=SecurityGatePolicy, tags=["Security Gates"])
-async def update_security_gate(policy: SecurityGatePolicy, session=Depends(require_hub_write)):
+async def update_security_gate(policy: SecurityGatePolicy, ws: WorkspaceCtx = Depends(require_ws)):
     _require_db()
-    db = SessionLocal()
+    if not ws.can_manage:
+        raise HTTPException(
+            status_code=403, detail="Solo el propietario o un administrador del espacio puede cambiar la política."
+        )
+    db = ws.session()
     try:
-        gate = _ensure_default_gate(db)
+        gate = gate_for(db, ws.id)
         gate.name = policy.name
         gate.max_critical_allowed = policy.max_critical_allowed
         gate.max_high_allowed = policy.max_high_allowed
@@ -881,7 +949,7 @@ async def update_security_gate(policy: SecurityGatePolicy, session=Depends(requi
         gate.enabled = policy.enabled
         _append_audit(
             db,
-            _session_actor(session),
+            ws.actor,
             "GATE_UPDATED",
             policy.name,
             f"Umbrales: critical≤{policy.max_critical_allowed}, high≤{policy.max_high_allowed}, "
@@ -895,11 +963,11 @@ async def update_security_gate(policy: SecurityGatePolicy, session=Depends(requi
 
 
 @app.get("/api/v1/notifications", response_model=List[NotificationResponse], tags=["Notifications"])
-async def list_notifications(unread_only: bool = False, _auth=Depends(require_hub_read)):
+async def list_notifications(unread_only: bool = False, ws: WorkspaceCtx = Depends(require_ws)):
     _require_db()
     db = SessionLocal()
     try:
-        items = _build_notifications(db)
+        items = _build_notifications(db, ws)
         if unread_only:
             items = [n for n in items if not n["read"]]
         return items
@@ -908,15 +976,15 @@ async def list_notifications(unread_only: bool = False, _auth=Depends(require_hu
 
 
 @app.post("/api/v1/notifications/{notification_id}/read", response_model=NotificationResponse, tags=["Notifications"])
-async def mark_notification_read(notification_id: str, _auth=Depends(require_hub_write)):
+async def mark_notification_read(notification_id: str, ws: WorkspaceCtx = Depends(require_ws)):
     _require_db()
     db = SessionLocal()
     try:
-        items = _build_notifications(db)
+        items = _build_notifications(db, ws)
         notification = next((n for n in items if n["id"] == notification_id), None)
         if not notification:
             raise HTTPException(status_code=404, detail="Notificación no encontrada")
-        _READ_NOTIFICATION_IDS.add(notification_id)
+        _READ_NOTIFICATION_IDS.add(f"{ws.email}:{notification_id}")
         notification["read"] = True
         return notification
     finally:
@@ -924,29 +992,29 @@ async def mark_notification_read(notification_id: str, _auth=Depends(require_hub
 
 
 @app.post("/api/v1/notifications/read-all", tags=["Notifications"])
-async def mark_all_notifications_read(_auth=Depends(require_hub_write)):
+async def mark_all_notifications_read(ws: WorkspaceCtx = Depends(require_ws)):
     _require_db()
     db = SessionLocal()
     try:
-        items = _build_notifications(db)
+        items = _build_notifications(db, ws)
         for n in items:
-            _READ_NOTIFICATION_IDS.add(n["id"])
+            _READ_NOTIFICATION_IDS.add(f"{ws.email}:{n['id']}")
         return {"updated": len(items)}
     finally:
         db.close()
 
 
 @app.get("/api/v1/compliance/iso27001", response_model=ComplianceReport, tags=["Compliance"])
-async def get_iso_compliance(_auth=Depends(require_hub_read)):
+async def get_iso_compliance(ws: WorkspaceCtx = Depends(require_ws)):
     _require_db()
-    db = SessionLocal()
+    db = ws.session()
     try:
-        controls = [IsoControl(**c) for c in iso_controls(db)]
-        stats = compute_dashboard_stats(db)
+        controls = [IsoControl(**c) for c in iso_controls(db, workspace_id=ws.id)]
+        stats = compute_dashboard_stats(db, ws.scope_ids)
         return ComplianceReport(
             standard="ISO/IEC 27001:2022",
             period=current_period(),
-            health_score=stats["overall_health_score"],
+            health_score=stats["overall_health_score"] if ws.repo_ids else 0,
             controls=controls,
             generated_at=_now(),
             evidence_pack_ready=True,
@@ -956,13 +1024,20 @@ async def get_iso_compliance(_auth=Depends(require_hub_read)):
 
 
 @app.post("/api/v1/admin/seed", tags=["Admin"])
-async def run_seed(force: bool = False, _auth=Depends(require_hub_write)):
-    """Carga/reaplica datos demo reales en Postgres (útil en Railway/Supabase)."""
+async def run_seed(force: bool = False, ws: WorkspaceCtx = Depends(require_ws)):
+    """Carga/reaplica datos demo en el espacio activo (solo administradores de la plataforma)."""
     _require_db()
+    if ws.email not in platform_admins():
+        raise HTTPException(status_code=403, detail="Solo los administradores de la plataforma pueden cargar datos demo.")
     try:
         from seed_data import seed
 
         stats = seed(force=force)
+        db = SessionLocal()
+        try:
+            adopt_orphans(db, ws.id)
+        finally:
+            db.close()
         return {"ok": True, "message": "Seed aplicado.", **stats}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Seed falló: {exc}") from exc

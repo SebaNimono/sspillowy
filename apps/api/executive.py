@@ -12,11 +12,11 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from auth_deps import require_hub_read
 from compliance import current_period, evaluate
-from database import SessionLocal, db_ping
+from database import db_ping
 from models import Finding, GateBypassRequest, Repository, RunbookExecution, Scan, SecretIncident
 from velocity import SLA_DAYS, Run, build_runs, compute_velocity, first_seen_map, fingerprint
+from workspaces import WorkspaceCtx, require_ws
 
 router = APIRouter(prefix="/api/v1/executive", tags=["Resumen ejecutivo"])
 
@@ -121,11 +121,18 @@ def _plural(n: int, one: str, many: str) -> str:
     return f"{n} {one if n == 1 else many}"
 
 
-def compute_executive(db, *, range_days: int = 30, repo_ids: list[str] | None = None, now: datetime | None = None) -> dict:
+def compute_executive(
+    db,
+    *,
+    workspace_id: str,
+    range_days: int = 30,
+    repo_ids: list[str] | None = None,
+    now: datetime | None = None,
+) -> dict:
     now = now or datetime.now(timezone.utc)
     start = now - timedelta(days=range_days)
 
-    repo_q = db.query(Repository).filter(Repository.is_active.is_(True))
+    repo_q = db.query(Repository).filter(Repository.is_active.is_(True), Repository.workspace_id == workspace_id)
     if repo_ids:
         repo_q = repo_q.filter(Repository.id.in_(repo_ids))
     repos = repo_q.all()
@@ -211,7 +218,9 @@ def compute_executive(db, *, range_days: int = 30, repo_ids: list[str] | None = 
     decisions = []
     pending = [
         b
-        for b in db.query(GateBypassRequest).filter(GateBypassRequest.status == "PENDING").all()
+        for b in db.query(GateBypassRequest)
+        .filter(GateBypassRequest.status == "PENDING", GateBypassRequest.workspace_id == workspace_id)
+        .all()
         if not repo_ids or b.repository_id is None or b.repository_id in ids
     ]
     if pending:
@@ -292,7 +301,11 @@ def compute_executive(db, *, range_days: int = 30, repo_ids: list[str] | None = 
     )
     automations = (
         db.query(RunbookExecution)
-        .filter(RunbookExecution.created_at >= start, RunbookExecution.status != "SIMULATED")
+        .filter(
+            RunbookExecution.created_at >= start,
+            RunbookExecution.status != "SIMULATED",
+            RunbookExecution.workspace_id == workspace_id,
+        )
         .all()
     )
     automations = [a for a in automations if not repo_ids or a.repository_id in ids]
@@ -372,7 +385,7 @@ def compute_executive(db, *, range_days: int = 30, repo_ids: list[str] | None = 
         )
     repo_rows.sort(key=lambda r: (r["score"], -r["critical"]))
 
-    ev = evaluate(db, now)
+    ev = evaluate(db, workspace_id, now)
     active = [f for f in ev["frameworks"] if f["enabled"]]
     blocking = []
     for ctl in ev["controls"]:
@@ -427,15 +440,15 @@ def compute_executive(db, *, range_days: int = 30, repo_ids: list[str] | None = 
 def executive_summary(
     range_days: int = Query(default=30),
     repository_ids: Optional[str] = Query(default=None),
-    _auth=Depends(require_hub_read),
+    ws: WorkspaceCtx = Depends(require_ws),
 ):
     if range_days not in RANGES:
         raise HTTPException(status_code=400, detail="El periodo debe ser 30, 90, 180 o 365 días.")
     if not db_ping():
         raise HTTPException(status_code=503, detail="Base de datos no disponible")
     ids = [x.strip() for x in (repository_ids or "").split(",") if x.strip()] or None
-    db = SessionLocal()
+    db = ws.session()
     try:
-        return compute_executive(db, range_days=range_days, repo_ids=ids)
+        return compute_executive(db, workspace_id=ws.id, range_days=range_days, repo_ids=ids)
     finally:
         db.close()

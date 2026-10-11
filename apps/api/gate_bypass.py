@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
@@ -10,30 +9,15 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
-from auth_deps import require_hub_read, require_hub_write
-from database import SessionLocal, db_ping
+from database import db_ping
 from models import AuditEvent, GateBypassRequest, Repository
+from workspaces import WorkspaceCtx, require_ws, require_ws_write
 
 router = APIRouter(prefix="/api/v1/security-gates/bypasses", tags=["Security Gates"])
 
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
-
-
-def _admin_emails() -> set[str]:
-    raw = os.getenv("PILLOW_ADMIN_EMAILS", "") + "," + os.getenv("SECURITY_ALERT_EMAILS", "")
-    return {e.strip().lower() for e in raw.split(",") if e.strip()}
-
-
-def _can_approve(email: str | None) -> bool:
-    if not email:
-        return False
-    admins = _admin_emails()
-    # Sin lista de admins: cualquier sesión autenticada puede aprobar (demo hub)
-    if not admins:
-        return True
-    return email.strip().lower() in admins
 
 
 class BypassCreate(BaseModel):
@@ -107,14 +91,15 @@ def expire_stale_bypasses(db) -> int:
     return len(rows)
 
 
-def find_active_bypass(db, repository_id: str | None) -> GateBypassRequest | None:
-    """Bypass APPROVED vigente: del repo o a nivel org (repository_id NULL)."""
+def find_active_bypass(db, repository_id: str | None, workspace_id: str | None = None) -> GateBypassRequest | None:
+    """Bypass APPROVED vigente del espacio: del repo o para todo el espacio (repository_id NULL)."""
     expire_stale_bypasses(db)
     now = _now()
     q = (
         db.query(GateBypassRequest)
         .filter(GateBypassRequest.status == "APPROVED")
         .filter((GateBypassRequest.expires_at.is_(None)) | (GateBypassRequest.expires_at >= now))
+        .filter(GateBypassRequest.workspace_id == (workspace_id or "__none__"))
         .order_by(GateBypassRequest.created_at.desc())
     )
     rows = q.all()
@@ -130,14 +115,18 @@ def find_active_bypass(db, repository_id: str | None) -> GateBypassRequest | Non
 @router.get("", response_model=List[BypassResponse])
 async def list_bypasses(
     status_filter: Optional[str] = Query(default=None, alias="status"),
-    _auth=Depends(require_hub_read),
+    ws: WorkspaceCtx = Depends(require_ws),
 ):
     _require_db()
-    db = SessionLocal()
+    db = ws.session()
     try:
         expire_stale_bypasses(db)
         db.commit()
-        q = db.query(GateBypassRequest).order_by(GateBypassRequest.created_at.desc())
+        q = (
+            db.query(GateBypassRequest)
+            .filter(GateBypassRequest.workspace_id == ws.id)
+            .order_by(GateBypassRequest.created_at.desc())
+        )
         if status_filter:
             q = q.filter(GateBypassRequest.status == status_filter.upper())
         rows = q.limit(50).all()
@@ -152,13 +141,14 @@ async def list_bypasses(
 
 
 @router.post("", response_model=BypassResponse, status_code=status.HTTP_201_CREATED)
-async def create_bypass(body: BypassCreate, session=Depends(require_hub_write)):
+async def create_bypass(body: BypassCreate, ws: WorkspaceCtx = Depends(require_ws_write)):
     _require_db()
-    email = (session.get("email") or "unknown").strip().lower()
-    db = SessionLocal()
+    email = ws.email
+    db = ws.session()
     try:
         repo_name = None
         if body.repository_id:
+            ws.require_repo(body.repository_id)
             repo = db.get(Repository, body.repository_id)
             if not repo:
                 raise HTTPException(status_code=404, detail="Repositorio no encontrado")
@@ -190,15 +180,15 @@ async def create_bypass(body: BypassCreate, session=Depends(require_hub_write)):
 
 
 @router.post("/{bypass_id}/approve", response_model=BypassResponse)
-async def approve_bypass(bypass_id: str, body: BypassDecision | None = None, session=Depends(require_hub_write)):
+async def approve_bypass(bypass_id: str, body: BypassDecision | None = None, ws: WorkspaceCtx = Depends(require_ws)):
     _require_db()
-    email = (session.get("email") or "").strip().lower()
-    if not _can_approve(email):
-        raise HTTPException(status_code=403, detail="Solo administradores CISO pueden aprobar bypass.")
-    db = SessionLocal()
+    email = ws.email
+    if not ws.can_manage:
+        raise HTTPException(status_code=403, detail="Solo el propietario o un administrador del espacio puede aprobar excepciones.")
+    db = ws.session()
     try:
         row = db.get(GateBypassRequest, bypass_id)
-        if not row:
+        if not row or row.workspace_id != ws.id:
             raise HTTPException(status_code=404, detail="Solicitud no encontrada")
         if row.status != "PENDING":
             raise HTTPException(status_code=409, detail=f"Estado actual: {row.status}")
@@ -225,15 +215,15 @@ async def approve_bypass(bypass_id: str, body: BypassDecision | None = None, ses
 
 
 @router.post("/{bypass_id}/reject", response_model=BypassResponse)
-async def reject_bypass(bypass_id: str, body: BypassDecision | None = None, session=Depends(require_hub_write)):
+async def reject_bypass(bypass_id: str, body: BypassDecision | None = None, ws: WorkspaceCtx = Depends(require_ws)):
     _require_db()
-    email = (session.get("email") or "").strip().lower()
-    if not _can_approve(email):
-        raise HTTPException(status_code=403, detail="Solo administradores CISO pueden rechazar bypass.")
-    db = SessionLocal()
+    email = ws.email
+    if not ws.can_manage:
+        raise HTTPException(status_code=403, detail="Solo el propietario o un administrador del espacio puede rechazar excepciones.")
+    db = ws.session()
     try:
         row = db.get(GateBypassRequest, bypass_id)
-        if not row:
+        if not row or row.workspace_id != ws.id:
             raise HTTPException(status_code=404, detail="Solicitud no encontrada")
         if row.status != "PENDING":
             raise HTTPException(status_code=409, detail=f"Estado actual: {row.status}")

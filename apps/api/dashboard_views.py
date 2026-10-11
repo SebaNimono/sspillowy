@@ -13,9 +13,9 @@ from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from auth_deps import require_hub_read, require_hub_write
 from database import SessionLocal, db_ping
 from models import AuditEvent, DashboardView, Repository
+from workspaces import WorkspaceCtx, require_ws, require_ws_write
 
 router = APIRouter(prefix="/api/v1/dashboards", tags=["Dashboards"])
 
@@ -35,10 +35,6 @@ def _iso(dt: datetime | None) -> str | None:
 def _require_db() -> None:
     if not db_ping():
         raise HTTPException(status_code=503, detail="Base de datos no disponible")
-
-
-def _email(session: Optional[dict]) -> str:
-    return ((session or {}).get("email") or "").strip().lower()
 
 
 def _load(raw: str | None, fallback: Any) -> Any:
@@ -89,41 +85,46 @@ def _audit(db, action: str, target: str, actor: str) -> None:
     )
 
 
-def _repo_names(db) -> dict[str, str]:
-    return {rid: name for rid, name in db.query(Repository.id, Repository.name).all()}
+def _repo_names(db, ws: WorkspaceCtx) -> dict[str, str]:
+    rows = db.query(Repository.id, Repository.name).filter(Repository.workspace_id == ws.id).all()
+    return {rid: name for rid, name in rows}
 
 
 def _visible(view: DashboardView, email: str) -> bool:
     return bool(view.shared) or not view.owner_email or view.owner_email == email
 
 
-def _get_view(db, view_id: str, email: str) -> DashboardView:
+def _get_view(db, view_id: str, ws: WorkspaceCtx) -> DashboardView:
     view = db.get(DashboardView, view_id)
-    if not view or not _visible(view, email):
+    if not view or view.workspace_id != ws.id or not _visible(view, ws.email):
         raise HTTPException(status_code=404, detail="Dashboard no encontrado.")
     return view
 
 
 @router.get("")
-def list_dashboards(session=Depends(require_hub_read)):
+def list_dashboards(ws: WorkspaceCtx = Depends(require_ws)):
     _require_db()
-    email = _email(session)
+    email = ws.email
     db = SessionLocal()
     try:
-        names = _repo_names(db)
-        rows = db.query(DashboardView).order_by(DashboardView.updated_at.desc()).all()
+        names = _repo_names(db, ws)
+        rows = (
+            db.query(DashboardView)
+            .filter(DashboardView.workspace_id == ws.id)
+            .order_by(DashboardView.updated_at.desc())
+            .all()
+        )
         return [_out(v, email, names) for v in rows if _visible(v, email)]
     finally:
         db.close()
 
 
 @router.get("/{view_id}")
-def get_dashboard(view_id: str, session=Depends(require_hub_read)):
+def get_dashboard(view_id: str, ws: WorkspaceCtx = Depends(require_ws)):
     _require_db()
-    email = _email(session)
     db = SessionLocal()
     try:
-        return _out(_get_view(db, view_id, email), email, _repo_names(db))
+        return _out(_get_view(db, view_id, ws), ws.email, _repo_names(db, ws))
     finally:
         db.close()
 
@@ -154,23 +155,23 @@ def _check_range(value: int) -> int:
     return value
 
 
-def _clean_repo_ids(db, ids: list[str]) -> list[str]:
-    known = _repo_names(db)
+def _clean_repo_ids(db, ws: WorkspaceCtx, ids: list[str]) -> list[str]:
+    known = _repo_names(db, ws)
     return [r for r in dict.fromkeys(ids) if r in known]
 
 
 @router.post("", status_code=201)
-def create_dashboard(body: DashboardBody, session=Depends(require_hub_write)):
+def create_dashboard(body: DashboardBody, ws: WorkspaceCtx = Depends(require_ws_write)):
     _require_db()
-    email = _email(session)
-    db = SessionLocal()
+    email = ws.email
+    db = ws.session()
     try:
         now = _now()
         view = DashboardView(
             id=str(uuid.uuid4()),
             name=body.name.strip(),
             description=body.description.strip(),
-            repository_ids=json.dumps(_clean_repo_ids(db, body.repository_ids)),
+            repository_ids=json.dumps(_clean_repo_ids(db, ws, body.repository_ids)),
             range_days=_check_range(body.range_days),
             config=json.dumps(body.config) if body.config else None,
             pillow_widgets=json.dumps(body.pillow_widgets or []),
@@ -183,18 +184,18 @@ def create_dashboard(body: DashboardBody, session=Depends(require_hub_write)):
         db.add(view)
         _audit(db, "DASHBOARD_CREATED", view.name, email)
         db.commit()
-        return _out(view, email, _repo_names(db))
+        return _out(view, email, _repo_names(db, ws))
     finally:
         db.close()
 
 
 @router.patch("/{view_id}")
-def update_dashboard(view_id: str, body: DashboardPatch, session=Depends(require_hub_write)):
+def update_dashboard(view_id: str, body: DashboardPatch, ws: WorkspaceCtx = Depends(require_ws_write)):
     _require_db()
-    email = _email(session)
-    db = SessionLocal()
+    email = ws.email
+    db = ws.session()
     try:
-        view = _get_view(db, view_id, email)
+        view = _get_view(db, view_id, ws)
         layout_only = body.model_dump(exclude_none=True).keys() <= {"pillow_widgets", "config", "range_days"}
         if not _can_edit(view, email) and not (view.shared and layout_only):
             raise HTTPException(status_code=403, detail="Solo quien creó este dashboard puede cambiar su nombre o alcance.")
@@ -203,7 +204,7 @@ def update_dashboard(view_id: str, body: DashboardPatch, session=Depends(require
         if body.description is not None:
             view.description = body.description.strip()
         if body.repository_ids is not None:
-            view.repository_ids = json.dumps(_clean_repo_ids(db, body.repository_ids))
+            view.repository_ids = json.dumps(_clean_repo_ids(db, ws, body.repository_ids))
         if body.range_days is not None:
             view.range_days = _check_range(body.range_days)
         if body.config is not None:
@@ -214,20 +215,18 @@ def update_dashboard(view_id: str, body: DashboardPatch, session=Depends(require
             view.shared = body.shared
         view.updated_at = _now()
         db.commit()
-        return _out(view, email, _repo_names(db))
+        return _out(view, email, _repo_names(db, ws))
     finally:
         db.close()
 
 
 @router.post("/{view_id}/star")
-def toggle_star(view_id: str, session=Depends(require_hub_write)):
+def toggle_star(view_id: str, ws: WorkspaceCtx = Depends(require_ws)):
     _require_db()
-    email = _email(session)
-    if not email:
-        raise HTTPException(status_code=401, detail="Inicia sesión para marcar favoritos.")
-    db = SessionLocal()
+    email = ws.email
+    db = ws.session()
     try:
-        view = _get_view(db, view_id, email)
+        view = _get_view(db, view_id, ws)
         starred = _load(view.starred_by, [])
         if email in starred:
             starred.remove(email)
@@ -235,18 +234,18 @@ def toggle_star(view_id: str, session=Depends(require_hub_write)):
             starred.append(email)
         view.starred_by = json.dumps(starred)
         db.commit()
-        return _out(view, email, _repo_names(db))
+        return _out(view, email, _repo_names(db, ws))
     finally:
         db.close()
 
 
 @router.post("/{view_id}/duplicate", status_code=201)
-def duplicate_dashboard(view_id: str, session=Depends(require_hub_write)):
+def duplicate_dashboard(view_id: str, ws: WorkspaceCtx = Depends(require_ws_write)):
     _require_db()
-    email = _email(session)
-    db = SessionLocal()
+    email = ws.email
+    db = ws.session()
     try:
-        src = _get_view(db, view_id, email)
+        src = _get_view(db, view_id, ws)
         now = _now()
         view = DashboardView(
             id=str(uuid.uuid4()),
@@ -265,18 +264,18 @@ def duplicate_dashboard(view_id: str, session=Depends(require_hub_write)):
         db.add(view)
         _audit(db, "DASHBOARD_CREATED", view.name, email)
         db.commit()
-        return _out(view, email, _repo_names(db))
+        return _out(view, email, _repo_names(db, ws))
     finally:
         db.close()
 
 
 @router.delete("/{view_id}")
-def delete_dashboard(view_id: str, session=Depends(require_hub_write)):
+def delete_dashboard(view_id: str, ws: WorkspaceCtx = Depends(require_ws_write)):
     _require_db()
-    email = _email(session)
-    db = SessionLocal()
+    email = ws.email
+    db = ws.session()
     try:
-        view = _get_view(db, view_id, email)
+        view = _get_view(db, view_id, ws)
         if not _can_edit(view, email):
             raise HTTPException(status_code=403, detail="Solo quien creó este dashboard puede eliminarlo.")
         _audit(db, "DASHBOARD_DELETED", view.name, email)

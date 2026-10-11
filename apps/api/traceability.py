@@ -19,10 +19,10 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import and_, or_
 
-from auth_deps import require_hub_read
 from database import SessionLocal, db_ping
 from models import AuditEvent, Finding, GateBypassRequest, Repository, RunbookExecution, Scan, SecretIncident
 from velocity import DECIDED, SLA_DAYS, fingerprint
+from workspaces import WorkspaceCtx, require_ws
 
 router = APIRouter(prefix="/api/v1/traceability", tags=["Trazabilidad"])
 
@@ -98,6 +98,11 @@ ACTION_LABEL = {
     "DASHBOARD_DELETED": "Eliminó un dashboard",
     "WEBHOOK_REPO_UNKNOWN": "Recibió un webhook de un repositorio no registrado",
     "SECURITY_ALERT_SENT": "Envió una alerta por correo",
+    "WORKSPACE_RENAMED": "Renombró el espacio",
+    "WORKSPACE_MEMBER_INVITED": "Invitó a una persona al espacio",
+    "WORKSPACE_MEMBER_ROLE": "Cambió el rol de una persona",
+    "WORKSPACE_MEMBER_REMOVED": "Quitó a una persona del espacio",
+    "WORKSPACE_MEMBER_LEFT": "Salió del espacio",
 }
 
 CATEGORIES = [
@@ -110,7 +115,7 @@ CATEGORIES = [
     ("pillow", "Pillow", ("FIX_INTEL_",)),
     ("automations", "Automatizaciones", ("RUNBOOK_",)),
     ("compliance", "Cumplimiento", ("COMPLIANCE_", "TRACE_")),
-    ("config", "Configuración", ("REPO_", "DASHBOARD_", "WEBHOOK_")),
+    ("config", "Configuración", ("REPO_", "DASHBOARD_", "WEBHOOK_", "WORKSPACE_")),
     ("alerts", "Alertas", ("SECURITY_ALERT",)),
 ]
 CATEGORY_LABEL = {cid: label for cid, label, _ in CATEGORIES}
@@ -134,10 +139,6 @@ def _iso(dt: datetime | None) -> str | None:
 def _require_db() -> None:
     if not db_ping():
         raise HTTPException(status_code=503, detail="Base de datos no disponible.")
-
-
-def _actor(session) -> str:
-    return ((session or {}).get("email") or "web_hub").strip().lower()
 
 
 def issue_key(repo_id: str, fp: str) -> str:
@@ -285,7 +286,7 @@ class Issue:
         return {r.id for r in self.rows}
 
 
-def _load(db, repo_ids: list[str] | None = None, *, key: str | None = None) -> tuple[dict[str, Issue], dict[str, list[Scan]], dict[str, set]]:
+def _load(db, repo_ids: list[str], *, key: str | None = None) -> tuple[dict[str, Issue], dict[str, list[Scan]], dict[str, set]]:
     q = db.query(
         Finding.id,
         Finding.repository_id,
@@ -298,9 +299,7 @@ def _load(db, repo_ids: list[str] | None = None, *, key: str | None = None) -> t
         Finding.created_at,
         Finding.line_number,
         Finding.cwe,
-    )
-    if repo_ids:
-        q = q.filter(Finding.repository_id.in_(repo_ids))
+    ).filter(Finding.repository_id.in_(repo_ids or ["__none__"]))
 
     issues: dict[str, Issue] = {}
     engines_seen: dict[str, set] = defaultdict(set)
@@ -473,14 +472,19 @@ def list_issues(
     date_to: Optional[str] = Query(default=None, alias="to"),
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-    _auth=Depends(require_hub_read),
+    ws: WorkspaceCtx = Depends(require_ws),
 ):
     _require_db()
+    if repository_id:
+        ws.require_repo(repository_id)
     db = SessionLocal()
     try:
         now = _now()
-        repos = {r.id: r.name for r in db.query(Repository.id, Repository.name).all()}
-        issues, scans_by_repo, _ = _load(db, [repository_id] if repository_id else None)
+        repos = {
+            r.id: r.name
+            for r in db.query(Repository.id, Repository.name).filter(Repository.workspace_id == ws.id).all()
+        }
+        issues, scans_by_repo, _ = _load(db, [repository_id] if repository_id else ws.scope_ids)
         items = list(issues.values())
 
         start, end = _parse_day(date_from), _parse_day(date_to, end=True)
@@ -548,12 +552,12 @@ def list_issues(
 # ---------------------------------------------------------------------------
 
 
-def _resolve(db, ref: str) -> Issue:
-    issues, _, _ = _load(db, key=ref)
+def _resolve(db, ref: str, ws: WorkspaceCtx) -> Issue:
+    issues, _, _ = _load(db, ws.scope_ids, key=ref)
     if ref in issues:
         return issues[ref]
     f = db.get(Finding, ref)
-    if f:
+    if f and ws.has_repo(f.repository_id):
         k = issue_key(f.repository_id, fingerprint(f.engine, f.title, f.file_path))
         issues, _, _ = _load(db, [f.repository_id], key=k)
         if k in issues:
@@ -579,6 +583,7 @@ def _event(at: datetime | None, kind: str, title: str, *, detail: str | None = N
 def _timeline(db, it: Issue, now: datetime) -> tuple[list[dict], dict]:
     repo = db.get(Repository, it.repo_id)
     repo_name = repo.name if repo else it.repo_id
+    ws_id = (repo.workspace_id if repo else None) or "__none__"
     scan_ids = {r.scan_id for r in it.rows} | {p["closed_scan"] for p in it.periods if p["closed_scan"]}
     scans = {s.id: s for s in db.query(Scan).filter(Scan.id.in_(list(scan_ids))).all()} if scan_ids else {}
     rows_by_scan = {r.scan_id: r for r in it.rows}
@@ -656,7 +661,7 @@ def _timeline(db, it: Issue, now: datetime) -> tuple[list[dict], dict]:
     legacy_pillow = (
         db.query(AuditEvent)
         .filter(AuditEvent.action.in_(["FIX_INTEL_ACCEPTED", "FIX_INTEL_DISMISSED"]))
-        .filter(AuditEvent.finding_id.is_(None), AuditEvent.target == repo_name)
+        .filter(AuditEvent.finding_id.is_(None), AuditEvent.target == repo_name, AuditEvent.workspace_id == ws_id)
         .all()
     )
     audit_rows += [e for e in legacy_pillow if (e.detail or "").endswith(f"· {it.title}")]
@@ -695,7 +700,8 @@ def _timeline(db, it: Issue, now: datetime) -> tuple[list[dict], dict]:
     # Excepciones al gate pedidas mientras estaba abierto y bloqueando
     if blocked and open_windows:
         bq = db.query(GateBypassRequest).filter(
-            or_(GateBypassRequest.repository_id == it.repo_id, GateBypassRequest.repository_id.is_(None))
+            or_(GateBypassRequest.repository_id == it.repo_id, GateBypassRequest.repository_id.is_(None)),
+            GateBypassRequest.workspace_id == ws_id,
         )
         for b in bq.all():
             created = _aware(b.created_at)
@@ -727,7 +733,9 @@ def _timeline(db, it: Issue, now: datetime) -> tuple[list[dict], dict]:
             label = f"{inc.rule_id} en {inc.file_path or 'n/a'}"
             sec = (
                 db.query(AuditEvent)
-                .filter(AuditEvent.action.like("SECRET_%"), AuditEvent.target == repo_name)
+                .filter(
+                    AuditEvent.action.like("SECRET_%"), AuditEvent.target == repo_name, AuditEvent.workspace_id == ws_id
+                )
                 .all()
             )
             for e in sorted(sec, key=lambda e: _aware(e.created_at) or now):
@@ -793,11 +801,11 @@ def _timeline(db, it: Issue, now: datetime) -> tuple[list[dict], dict]:
 
 
 @router.get("/findings/{ref}")
-def issue_detail(ref: str, _auth=Depends(require_hub_read)):
+def issue_detail(ref: str, ws: WorkspaceCtx = Depends(require_ws)):
     _require_db()
     db = SessionLocal()
     try:
-        it = _resolve(db, ref)
+        it = _resolve(db, ref, ws)
         events, summary = _timeline(db, it, _now())
         return {"summary": summary, "timeline": events}
     finally:
@@ -805,16 +813,17 @@ def issue_detail(ref: str, _auth=Depends(require_hub_read)):
 
 
 @router.get("/findings/{ref}/evidence")
-def issue_evidence(ref: str, session=Depends(require_hub_read)):
+def issue_evidence(ref: str, ws: WorkspaceCtx = Depends(require_ws)):
     _require_db()
     db = SessionLocal()
     try:
-        it = _resolve(db, ref)
+        it = _resolve(db, ref, ws)
         now = _now()
         events, summary = _timeline(db, it, now)
-        actor = _actor(session)
+        actor = ws.actor
         db.add(AuditEvent(
             id=str(uuid.uuid4()),
+            workspace_id=ws.id,
             action="TRACE_EVIDENCE_EXPORTED",
             target=summary["repository_name"][:200],
             detail=f"{it.title} ({it.path or 'sin archivo'})"[:1000],
@@ -862,12 +871,12 @@ def list_events(
     date_to: Optional[str] = Query(default=None, alias="to"),
     limit: int = Query(default=100, ge=1, le=2000),
     offset: int = Query(default=0, ge=0),
-    _auth=Depends(require_hub_read),
+    ws: WorkspaceCtx = Depends(require_ws),
 ):
     _require_db()
     db = SessionLocal()
     try:
-        base = db.query(AuditEvent)
+        base = db.query(AuditEvent).filter(AuditEvent.workspace_id == ws.id)
         start, end = _parse_day(date_from), _parse_day(date_to, end=True)
         if start:
             base = base.filter(AuditEvent.created_at >= start)
@@ -935,7 +944,9 @@ def list_events(
                 {"id": cid, "label": label, "count": cat_counts.get(cid, 0)}
                 for cid, label, _ in CATEGORIES
             ] + ([{"id": "other", "label": "Otros", "count": cat_counts["other"]}] if cat_counts.get("other") else []),
-            "repositories": sorted({r.name for r in db.query(Repository.name).all()}),
+            "repositories": sorted(
+                {r.name for r in db.query(Repository.name).filter(Repository.workspace_id == ws.id).all()}
+            ),
         }
     finally:
         db.close()

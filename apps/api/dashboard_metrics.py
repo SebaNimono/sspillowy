@@ -122,8 +122,12 @@ def compute_heatmap(db: Session, weeks: int = 12, repo_ids: list[str] | None = N
     }
 
 
-def list_audit_events(db: Session, limit: int = 40, repo_ids: list[str] | None = None) -> list[dict]:
+def list_audit_events(
+    db: Session, limit: int = 40, repo_ids: list[str] | None = None, workspace_id: str | None = None
+) -> list[dict]:
     q = db.query(AuditEvent)
+    if workspace_id:
+        q = q.filter(AuditEvent.workspace_id == workspace_id)
     if repo_ids:
         # Los eventos guardan el nombre del repositorio como target
         names = [n for (n,) in db.query(Repository.name).filter(Repository.id.in_(repo_ids)).all()]

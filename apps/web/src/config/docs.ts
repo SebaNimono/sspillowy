@@ -117,6 +117,57 @@ export const DOC_SECTIONS: DocSection[] = [
     ],
   },
   {
+    id: 'espacios',
+    group: 'Empezar',
+    title: 'Espacios y equipo',
+    summary: 'Cada cuenta trabaja en su propio espacio privado. Solo ven tus proyectos las personas que invites.',
+    blocks: [
+      {
+        type: 'p',
+        text: 'Al crear tu cuenta recibes un espacio propio y vacío. Todo lo que agregues ahí (repositorios, análisis, hallazgos, gates, dashboards, informes y evidencias) es privado: nadie más lo ve hasta que lo invites.',
+      },
+      { type: 'h', text: 'Invitar a tu equipo' },
+      {
+        type: 'steps',
+        items: [
+          {
+            title: 'Abre el selector de espacio',
+            text: 'En el menú lateral, bajo el logo, pulsa el nombre de tu espacio y elige "Personas y acceso".',
+          },
+          {
+            title: 'Escribe el correo y el rol',
+            text: 'La persona recibe un correo. Cuando inicie sesión con ese mismo correo entrará directo a tu espacio.',
+          },
+          {
+            title: 'Ajusta o quita el acceso cuando quieras',
+            text: 'Desde la misma ventana puedes cambiar el rol de cada persona o retirarla del espacio.',
+          },
+        ],
+      },
+      { type: 'h', text: 'Roles' },
+      {
+        type: 'table',
+        head: ['Rol', 'Qué puede hacer'],
+        rows: [
+          ['Propietario', 'Todo, incluido invitar, cambiar roles y renombrar el espacio.'],
+          ['Administrador', 'Lo mismo que el propietario: gestiona personas, el Security Gate y aprueba excepciones.'],
+          ['Miembro', 'Conecta repositorios, lanza análisis y decide sobre los hallazgos.'],
+          ['Lector', 'Solo consulta: ve dashboards, hallazgos e informes, sin cambiar nada.'],
+        ],
+      },
+      {
+        type: 'callout',
+        tone: 'info',
+        text: 'Si perteneces a varios espacios, cambia entre ellos desde el mismo selector. Las alertas de seguridad llegan a los propietarios y administradores de cada espacio.',
+      },
+      {
+        type: 'callout',
+        tone: 'tip',
+        text: 'Un repositorio solo puede estar conectado en un espacio. Si alguien ya lo agregó, pídele que te invite a su espacio.',
+      },
+    ],
+  },
+  {
     id: 'recorrido',
     group: 'Empezar',
     title: 'Recorrido por la plataforma',

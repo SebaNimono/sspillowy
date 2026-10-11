@@ -1,10 +1,36 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Column, Date, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from database import Base
+
+
+class Workspace(Base):
+    """Espacio de trabajo: agrupa repositorios y todo lo que se deriva de ellos."""
+
+    __tablename__ = "workspaces"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    name = Column(String, nullable=False)
+    created_by = Column(String, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class WorkspaceMember(Base):
+    """Acceso de una persona (por correo) a un espacio. owner | admin | member | viewer."""
+
+    __tablename__ = "workspace_members"
+    __table_args__ = (UniqueConstraint("workspace_id", "email", name="uq_workspace_member"),)
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    workspace_id = Column(String, ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, index=True)
+    email = Column(String, nullable=False, index=True)
+    role = Column(String, nullable=False, default="member")
+    invited_by = Column(String, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    last_used_at = Column(DateTime, nullable=True)
 
 
 class User(Base):
@@ -49,6 +75,7 @@ class Repository(Base):
     __tablename__ = "repositories"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    workspace_id = Column(String, nullable=True, index=True)
     name = Column(String, nullable=False, index=True)
     url = Column(String, nullable=False, unique=True)
     branch = Column(String, default="main")
@@ -150,6 +177,7 @@ class GateBypassRequest(Base):
     __tablename__ = "gate_bypass_requests"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    workspace_id = Column(String, nullable=True, index=True)
     repository_id = Column(String, ForeignKey("repositories.id"), nullable=True, index=True)
     reason = Column(Text, nullable=False)
     status = Column(String, default="PENDING", index=True)  # PENDING|APPROVED|REJECTED|EXPIRED
@@ -165,6 +193,7 @@ class AuditEvent(Base):
     __tablename__ = "audit_events"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    workspace_id = Column(String, nullable=True, index=True)
     action = Column(String, nullable=False, index=True)
     target = Column(String, nullable=True)
     detail = Column(Text, nullable=True)
@@ -246,6 +275,7 @@ class DashboardView(Base):
     __tablename__ = "dashboard_views"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    workspace_id = Column(String, nullable=True, index=True)
     name = Column(String, nullable=False)
     description = Column(Text, nullable=True)
     # JSON: lista de ids de repositorio; vacía = todos
@@ -268,6 +298,7 @@ class Runbook(Base):
     __tablename__ = "runbooks"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    workspace_id = Column(String, nullable=True, index=True)
     name = Column(String, nullable=False)
     description = Column(Text, nullable=True)
     enabled = Column(Boolean, default=True)
@@ -289,6 +320,7 @@ class RunbookExecution(Base):
     __tablename__ = "runbook_executions"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    workspace_id = Column(String, nullable=True, index=True)
     runbook_id = Column(String, nullable=False, index=True)
     runbook_name = Column(String, nullable=False)
     trigger = Column(String, nullable=False)
@@ -307,10 +339,11 @@ class RunbookExecution(Base):
 
 
 class ComplianceFrameworkSetting(Base):
-    """Marcos de cumplimiento activados por la organización."""
+    """Marcos de cumplimiento activados en cada espacio."""
 
-    __tablename__ = "compliance_frameworks"
+    __tablename__ = "ws_compliance_frameworks"
 
+    workspace_id = Column(String, primary_key=True)
     framework_id = Column(String, primary_key=True)
     enabled = Column(Boolean, default=True)
     updated_by = Column(String, nullable=True)
@@ -320,8 +353,9 @@ class ComplianceFrameworkSetting(Base):
 class ComplianceControlState(Base):
     """Datos que aporta el equipo a un control: responsable, evidencia, verificación manual o exclusión."""
 
-    __tablename__ = "compliance_control_states"
+    __tablename__ = "ws_compliance_controls"
 
+    workspace_id = Column(String, primary_key=True)
     control_id = Column(String, primary_key=True)
     owner_email = Column(String, nullable=True)
     note = Column(Text, nullable=True)
@@ -340,6 +374,7 @@ class ComplianceSnapshot(Base):
     __tablename__ = "compliance_snapshots"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    workspace_id = Column(String, nullable=True, index=True)
     day = Column(Date, nullable=False, index=True)
     framework_id = Column(String, nullable=False, index=True)
     score = Column(Integer, default=0)

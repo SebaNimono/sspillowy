@@ -22,10 +22,10 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from auth_deps import require_hub_read, require_hub_write
 from database import SessionLocal, db_ping
 from models import AuditEvent, Finding, Repository, Runbook, RunbookExecution, Scan, SecretIncident
 from velocity import SLA_DAYS, fingerprint, first_seen_map
+from workspaces import WorkspaceCtx, admin_recipients, bind_session, require_ws, require_ws_write
 
 router = APIRouter(prefix="/api/v1/runbooks", tags=["Automatizaciones"])
 
@@ -282,12 +282,12 @@ def _message(rb: Runbook, ev: Event) -> tuple[str, str]:
     return title, "\n".join(lines)
 
 
-def _act_email(action: dict, rb: Runbook, ev: Event, simulate: bool) -> tuple[bool, str]:
-    from email_service import alert_recipients, mailer_configured, send_email_sync
+def _act_email(db, action: dict, rb: Runbook, ev: Event, simulate: bool) -> tuple[bool, str]:
+    from email_service import mailer_configured, send_email_sync
 
     to = list(action.get("to") or [])
     if action.get("security_team"):
-        to += [e for e in alert_recipients() if e not in to]
+        to += [e for e in admin_recipients(db, rb.workspace_id) if e not in to]
     if not to:
         return False, "No hay destinatarios: configura el equipo de seguridad o añade correos."
     if simulate:
@@ -334,7 +334,13 @@ def _act_assign(db, action: dict, ev: Event, simulate: bool) -> tuple[bool, str]
     from secret_management import _derive_status, fingerprint_for
 
     fps = {fingerprint_for(f) for f in ev.findings if (f.engine or "") == "gitleaks"}
-    incidents = db.query(SecretIncident).filter(SecretIncident.fingerprint.in_(list(fps))).all() if fps else []
+    incidents = (
+        db.query(SecretIncident)
+        .filter(SecretIncident.fingerprint.in_(list(fps)), SecretIncident.repository_id == ev.repo.id)
+        .all()
+        if fps
+        else []
+    )
     pending = [i for i in incidents if not i.owner_email]
     if not pending:
         return True, "Los secretos ya tenían responsable."
@@ -408,7 +414,7 @@ def execute(db, rb: Runbook, ev: Event, *, simulate: bool, actor: str) -> Runboo
         kind = action.get("type")
         try:
             if kind == "email":
-                ok, msg = _act_email(action, rb, ev, simulate)
+                ok, msg = _act_email(db, action, rb, ev, simulate)
             elif kind == "webhook":
                 ok, msg = _act_webhook(action, rb, ev, simulate)
             elif kind == "assign_owner":
@@ -470,8 +476,9 @@ def run_runbooks_for_scan(scan_id: str) -> int:
         if not scan or scan.status not in ("COMPLETED", "FAILED"):
             return 0
         repo = db.get(Repository, scan.repository_id)
-        if not repo:
+        if not repo or not repo.workspace_id:
             return 0
+        bind_session(db, repo.workspace_id)
         already = {
             rid
             for (rid,) in db.query(RunbookExecution.runbook_id).filter(
@@ -479,7 +486,8 @@ def run_runbooks_for_scan(scan_id: str) -> int:
             )
         }
         executed = 0
-        for rb in db.query(Runbook).filter(Runbook.enabled.is_(True)).all():
+        runbooks = db.query(Runbook).filter(Runbook.enabled.is_(True), Runbook.workspace_id == repo.workspace_id)
+        for rb in runbooks.all():
             if rb.id in already:
                 continue
             ev, _reason = build_event(db, rb, scan, repo)
@@ -503,10 +511,6 @@ def run_runbooks_for_scan(scan_id: str) -> int:
 def _require_db() -> None:
     if not db_ping():
         raise HTTPException(status_code=503, detail="Base de datos no disponible")
-
-
-def _actor(session) -> str:
-    return ((session or {}).get("email") or "web_hub").strip().lower()
 
 
 def _out(rb: Runbook, repo_names: dict[str, str]) -> dict:
@@ -547,35 +551,35 @@ def _exec_out(e: RunbookExecution) -> dict:
     }
 
 
-def _repo_names(db) -> dict[str, str]:
-    return {r.id: r.name for r in db.query(Repository).all()}
+def _repo_names(db, ws: WorkspaceCtx) -> dict[str, str]:
+    return {r.id: r.name for r in db.query(Repository).filter(Repository.workspace_id == ws.id).all()}
 
 
 @router.get("")
-def list_runbooks(_auth=Depends(require_hub_read)):
+def list_runbooks(ws: WorkspaceCtx = Depends(require_ws)):
     _require_db()
     db = SessionLocal()
     try:
-        names = _repo_names(db)
-        rows = db.query(Runbook).order_by(Runbook.created_at.asc()).all()
-        from email_service import alert_recipients, mailer_configured
+        names = _repo_names(db, ws)
+        rows = db.query(Runbook).filter(Runbook.workspace_id == ws.id).order_by(Runbook.created_at.asc()).all()
+        from email_service import mailer_configured
 
         return {
             "runbooks": [_out(r, names) for r in rows],
             "email_ready": mailer_configured(),
-            "security_team": alert_recipients(),
+            "security_team": admin_recipients(db, ws.id),
         }
     finally:
         db.close()
 
 
 @router.post("", status_code=201)
-def create_runbook(body: RunbookBody, session=Depends(require_hub_write)):
+def create_runbook(body: RunbookBody, ws: WorkspaceCtx = Depends(require_ws_write)):
     _require_db()
     actions = _validate(body)
-    db = SessionLocal()
+    db = ws.session()
     try:
-        names = _repo_names(db)
+        names = _repo_names(db, ws)
         rb = Runbook(
             id=str(uuid.uuid4()),
             name=body.name.strip(),
@@ -590,33 +594,33 @@ def create_runbook(body: RunbookBody, session=Depends(require_hub_write)):
             ),
             actions=json.dumps(actions),
             template=body.template,
-            owner_email=_actor(session),
+            owner_email=ws.actor,
             created_at=_now(),
             updated_at=_now(),
         )
         db.add(rb)
-        _audit(db, _actor(session), "RUNBOOK_CREATED", rb.name, f"{TRIGGER_LABEL[rb.trigger]} → {len(actions)} acción(es)")
+        _audit(db, ws.actor, "RUNBOOK_CREATED", rb.name, f"{TRIGGER_LABEL[rb.trigger]} → {len(actions)} acción(es)")
         db.commit()
         return _out(rb, names)
     finally:
         db.close()
 
 
-def _get(db, runbook_id: str) -> Runbook:
+def _get(db, runbook_id: str, ws: WorkspaceCtx) -> Runbook:
     rb = db.get(Runbook, runbook_id)
-    if not rb:
+    if not rb or rb.workspace_id != ws.id:
         raise HTTPException(status_code=404, detail="Runbook no encontrado.")
     return rb
 
 
 @router.put("/{runbook_id}")
-def update_runbook(runbook_id: str, body: RunbookBody, session=Depends(require_hub_write)):
+def update_runbook(runbook_id: str, body: RunbookBody, ws: WorkspaceCtx = Depends(require_ws_write)):
     _require_db()
     actions = _validate(body)
-    db = SessionLocal()
+    db = ws.session()
     try:
-        names = _repo_names(db)
-        rb = _get(db, runbook_id)
+        names = _repo_names(db, ws)
+        rb = _get(db, runbook_id, ws)
         rb.name = body.name.strip()
         rb.description = (body.description or "").strip() or None
         rb.enabled = body.enabled
@@ -629,7 +633,7 @@ def update_runbook(runbook_id: str, body: RunbookBody, session=Depends(require_h
         )
         rb.actions = json.dumps(actions)
         rb.updated_at = _now()
-        _audit(db, _actor(session), "RUNBOOK_UPDATED", rb.name, f"{TRIGGER_LABEL[rb.trigger]} → {len(actions)} acción(es)")
+        _audit(db, ws.actor, "RUNBOOK_UPDATED", rb.name, f"{TRIGGER_LABEL[rb.trigger]} → {len(actions)} acción(es)")
         db.commit()
         return _out(rb, names)
     finally:
@@ -637,28 +641,28 @@ def update_runbook(runbook_id: str, body: RunbookBody, session=Depends(require_h
 
 
 @router.patch("/{runbook_id}")
-def toggle_runbook(runbook_id: str, body: RunbookPatch, session=Depends(require_hub_write)):
+def toggle_runbook(runbook_id: str, body: RunbookPatch, ws: WorkspaceCtx = Depends(require_ws_write)):
     _require_db()
-    db = SessionLocal()
+    db = ws.session()
     try:
-        rb = _get(db, runbook_id)
+        rb = _get(db, runbook_id, ws)
         if body.enabled is not None:
             rb.enabled = body.enabled
             rb.updated_at = _now()
-            _audit(db, _actor(session), "RUNBOOK_ENABLED" if body.enabled else "RUNBOOK_DISABLED", rb.name, "")
+            _audit(db, ws.actor, "RUNBOOK_ENABLED" if body.enabled else "RUNBOOK_DISABLED", rb.name, "")
         db.commit()
-        return _out(rb, _repo_names(db))
+        return _out(rb, _repo_names(db, ws))
     finally:
         db.close()
 
 
 @router.delete("/{runbook_id}")
-def delete_runbook(runbook_id: str, session=Depends(require_hub_write)):
+def delete_runbook(runbook_id: str, ws: WorkspaceCtx = Depends(require_ws_write)):
     _require_db()
-    db = SessionLocal()
+    db = ws.session()
     try:
-        rb = _get(db, runbook_id)
-        _audit(db, _actor(session), "RUNBOOK_DELETED", rb.name, "")
+        rb = _get(db, runbook_id, ws)
+        _audit(db, ws.actor, "RUNBOOK_DELETED", rb.name, "")
         db.delete(rb)
         db.commit()
         return {"ok": True}
@@ -667,14 +671,14 @@ def delete_runbook(runbook_id: str, session=Depends(require_hub_write)):
 
 
 @router.post("/{runbook_id}/test")
-def test_runbook(runbook_id: str, body: TestBody, session=Depends(require_hub_write)):
+def test_runbook(runbook_id: str, body: TestBody, ws: WorkspaceCtx = Depends(require_ws_write)):
     """Simula el runbook contra el último análisis del repositorio elegido, sin ejecutar acciones."""
     _require_db()
-    db = SessionLocal()
+    db = ws.session()
     try:
-        rb = _get(db, runbook_id)
+        rb = _get(db, runbook_id, ws)
         statuses = ["FAILED"] if rb.trigger == "SCAN_FAILED" else ["COMPLETED"]
-        q = db.query(Scan).filter(Scan.status.in_(statuses))
+        q = db.query(Scan).filter(Scan.status.in_(statuses), Scan.repository_id.in_(ws.scope_ids))
         if body.repository_id:
             q = q.filter(Scan.repository_id == body.repository_id)
         else:
@@ -695,7 +699,7 @@ def test_runbook(runbook_id: str, body: TestBody, session=Depends(require_hub_wr
         scan_label = f"último análisis de {repo.name if repo else '—'}"
         if ev is None:
             return {"matched": False, "reason": f"Con el {scan_label}: {reason}", "execution": None}
-        row = execute(db, rb, ev, simulate=True, actor=_actor(session))
+        row = execute(db, rb, ev, simulate=True, actor=ws.actor)
         db.commit()
         return {"matched": True, "reason": f"Con el {scan_label} se activaría.", "execution": _exec_out(row)}
     finally:
@@ -706,12 +710,12 @@ def test_runbook(runbook_id: str, body: TestBody, session=Depends(require_hub_wr
 def list_executions(
     runbook_id: Optional[str] = Query(default=None),
     limit: int = Query(default=100, ge=1, le=500),
-    _auth=Depends(require_hub_read),
+    ws: WorkspaceCtx = Depends(require_ws),
 ):
     _require_db()
     db = SessionLocal()
     try:
-        q = db.query(RunbookExecution)
+        q = db.query(RunbookExecution).filter(RunbookExecution.workspace_id == ws.id)
         if runbook_id:
             q = q.filter(RunbookExecution.runbook_id == runbook_id)
         rows = q.order_by(RunbookExecution.created_at.desc()).limit(limit).all()

@@ -89,6 +89,7 @@ import {
   FolderGit2,
 } from 'lucide-react';
 import '../styles/dashboards.css';
+import '../styles/workspaces.css';
 
 interface PageProps {
   sidebarState: SidebarState;
@@ -288,6 +289,56 @@ const Widget: React.FC<{
 );
 
 const Empty: React.FC<{ text: string }> = ({ text }) => <p className="dash-panel-empty">{text}</p>;
+
+const START_STEPS = [
+  {
+    title: 'Conecta un repositorio',
+    text: 'Pega la URL de GitHub o GitLab. Solo tú y las personas que invites lo verán.',
+    action: 'Conectar repositorio',
+    tab: 'repositories',
+  },
+  {
+    title: 'Lanza el primer análisis',
+    text: 'Revisamos el código, las dependencias y los secretos expuestos. Tarda unos minutos.',
+    action: 'Ir a escaneos',
+    tab: 'scans',
+  },
+  {
+    title: 'Define tu Security Gate',
+    text: 'Decide cuántos problemas críticos o altos toleras antes de bloquear un despliegue.',
+    action: 'Configurar gate',
+    tab: 'gates',
+  },
+];
+
+const GetStarted: React.FC<{ onNavigate?: (tab: string) => void }> = ({ onNavigate }) => (
+  <div className="ws-start">
+    <Database size={36} color="#8250df" />
+    <h2>Empieza ahora</h2>
+    <p>
+      Tu espacio está vacío. Conecta tu primer repositorio y en minutos verás aquí tus métricas de seguridad. Para trabajar
+      en equipo, invita a tus compañeros desde el selector de espacio en el menú lateral.
+    </p>
+    <ol className="ws-start-steps">
+      {START_STEPS.map((s, i) => (
+        <li key={s.tab}>
+          <span className="ws-start-num">{i + 1}</span>
+          <div>
+            <strong>{s.title}</strong>
+            <p>{s.text}</p>
+            <button
+              type="button"
+              className={i === 0 ? 'btn btn-primary' : 'btn btn-secondary'}
+              onClick={() => onNavigate?.(s.tab)}
+            >
+              {s.action}
+            </button>
+          </div>
+        </li>
+      ))}
+    </ol>
+  </div>
+);
 
 export const DashboardPage: React.FC<PageProps> = ({
   sidebarState,
@@ -688,19 +739,7 @@ export const DashboardPage: React.FC<PageProps> = ({
         </div>
       )}
 
-      {!loading && !dataReady && (
-        <div className="dash-empty">
-          <Database size={40} color="#656d76" />
-          <h2>Sin datos todavía</h2>
-          <p>
-            Los dashboards se llenan con repositorios, escaneos y hallazgos reales. Registra un repo o ejecuta un escaneo
-            para ver métricas aquí.
-          </p>
-          <button type="button" className="btn btn-primary" onClick={() => onNavigate?.('repositories')}>
-            Ir a repositorios
-          </button>
-        </div>
-      )}
+      {!loading && !dataReady && <GetStarted onNavigate={onNavigate} />}
 
       {!loading && dataReady && (
         <div className="dw-grid">

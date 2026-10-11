@@ -332,8 +332,8 @@ def finalize_scan(
     engines_note: str,
 ) -> None:
     from email_service import send_security_alert
-    from gate_eval import evaluate_gate
-    from models import SecurityGate
+    from gate_eval import evaluate_gate, gate_for
+    from workspaces import admin_recipients
 
     total = sum(counts.values())
     scan.status = "COMPLETED"
@@ -354,14 +354,10 @@ def finalize_scan(
     )
 
     # Evaluar Security Gate con hallazgos abiertos del repo (incluye este escaneo)
-    gate = db.get(SecurityGate, "default-policy")
-    if not gate:
-        gate = SecurityGate(id="default-policy")
-        db.add(gate)
-        db.flush()
+    gate = gate_for(db, repo.workspace_id)
 
     _set_progress(db, scan, "gate", "Evaluando Security Gate…")
-    ev = evaluate_gate(db, gate, repository_id=repo.id)
+    ev = evaluate_gate(db, gate, repository_id=repo.id, workspace_id=repo.workspace_id)
     scan.gate_status = ev.decision if ev.decision != "DISABLED" else "SKIPPED"
     scan.gate_detail = ev.summary()[:2000]
     _append_audit(
@@ -377,6 +373,7 @@ def finalize_scan(
     if should_alert:
         try:
             sent = send_security_alert(
+                recipients=admin_recipients(db, repo.workspace_id),
                 repo_name=repo.name,
                 decision=ev.decision,
                 summary=ev.summary(),
@@ -451,6 +448,9 @@ def run_repo_scan_job(
             scan.completed_at = _now()
             db.commit()
             return
+        from workspaces import bind_session
+
+        bind_session(db, repo.workspace_id)
 
         source_note = ""
         target: Path | None = None

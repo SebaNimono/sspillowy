@@ -172,6 +172,7 @@ const SESSION_STORAGE_KEY = 'sspillowy_session';
 const USER_STORAGE_KEY = 'sspillowy_user';
 const REMEMBER_KEY = 'sspillowy_remember';
 const LAST_EMAIL_KEY = 'sspillowy_last_email';
+const WORKSPACE_KEY = 'sspillowy_workspace';
 
 /** Evento global cuando la API rechaza la sesión (expirada o cerrada en otro lado). */
 export const SESSION_EXPIRED_EVENT = 'sspillowy:session-expired';
@@ -240,6 +241,7 @@ export function clearStoredSession(): void {
   }
   clearBoth(SESSION_STORAGE_KEY);
   clearBoth(USER_STORAGE_KEY);
+  clearBoth(WORKSPACE_KEY);
 }
 
 export function getRememberPreference(): boolean {
@@ -274,10 +276,31 @@ export function forgetLastEmail(): void {
   }
 }
 
+export function getActiveWorkspaceId(): string | null {
+  try {
+    return localStorage.getItem(WORKSPACE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/** Cambia el espacio activo y recarga la consola para que todo se lea del nuevo espacio. */
+export function switchWorkspace(workspaceId: string | null): void {
+  try {
+    if (workspaceId) localStorage.setItem(WORKSPACE_KEY, workspaceId);
+    else localStorage.removeItem(WORKSPACE_KEY);
+  } catch {
+    // ignore
+  }
+  window.location.reload();
+}
+
 function authHeaders(extra?: HeadersInit): Headers {
   const headers = new Headers(extra || {});
   const sid = getStoredSessionId();
   if (sid) headers.set('X-Session-Id', sid);
+  const ws = getActiveWorkspaceId();
+  if (ws) headers.set('X-Workspace-Id', ws);
   return headers;
 }
 
@@ -1235,6 +1258,79 @@ export interface AuthSession {
   avatar_url?: string;
   provider: string;
   expires_at?: string;
+}
+
+export type WorkspaceRole = 'owner' | 'admin' | 'member' | 'viewer';
+
+export interface WorkspaceSummary {
+  id: string;
+  name: string;
+  role: WorkspaceRole;
+  role_label: string;
+  members: number;
+  repositories: number;
+}
+
+export interface WorkspaceMember {
+  id: string;
+  email: string;
+  name: string | null;
+  joined: boolean;
+  role: WorkspaceRole;
+  role_label: string;
+  invited_by: string | null;
+  created_at: string | null;
+  is_me: boolean;
+}
+
+export interface WorkspaceOverview {
+  current: {
+    id: string;
+    name: string;
+    role: WorkspaceRole;
+    role_label: string;
+    can_manage: boolean;
+    can_write: boolean;
+    repository_count: number;
+  };
+  workspaces: WorkspaceSummary[];
+  members: WorkspaceMember[];
+  roles: { id: Exclude<WorkspaceRole, 'owner'>; label: string }[];
+}
+
+export async function fetchWorkspaces(): Promise<WorkspaceOverview> {
+  return request('/workspaces');
+}
+
+export async function renameWorkspace(name: string): Promise<WorkspaceOverview> {
+  return request('/workspaces/current', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+}
+
+export async function inviteWorkspaceMember(email: string, role: Exclude<WorkspaceRole, 'owner'>): Promise<WorkspaceOverview> {
+  return request('/workspaces/current/members', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, role }),
+  });
+}
+
+export async function changeWorkspaceMemberRole(
+  memberId: string,
+  role: Exclude<WorkspaceRole, 'owner'>,
+): Promise<WorkspaceOverview> {
+  return request(`/workspaces/current/members/${memberId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ role }),
+  });
+}
+
+export async function removeWorkspaceMember(memberId: string): Promise<WorkspaceOverview | { ok: true; left: true }> {
+  return request(`/workspaces/current/members/${memberId}`, { method: 'DELETE' });
 }
 
 export async function logoutSession(): Promise<void> {

@@ -15,6 +15,7 @@ from pydantic import BaseModel
 
 from database import SessionLocal, db_ping
 from models import AuditEvent, Repository, Scan
+from workspaces import bind_session
 from semgrep_scan import run_repo_scan_job
 
 router = APIRouter(prefix="/api/v1/webhooks", tags=["Webhooks"])
@@ -241,6 +242,7 @@ async def github_webhook(
                 "reason": "repositorio no registrado",
                 "github_repo": full_name,
             }
+        bind_session(db, repo.workspace_id)
 
         # Opcional: solo la rama configurada del repo
         only_tracked = os.getenv("WEBHOOK_ONLY_TRACKED_BRANCH", "false").lower() in {

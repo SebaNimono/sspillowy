@@ -109,6 +109,9 @@ def init_db() -> bool:
             conn.execute(text("ALTER TABLE findings ADD COLUMN IF NOT EXISTS ai_verdict TEXT"))
             conn.execute(text("ALTER TABLE findings ADD COLUMN IF NOT EXISTS ai_triaged_at TIMESTAMPTZ"))
             conn.execute(text("ALTER TABLE findings ADD COLUMN IF NOT EXISTS ai_feedback TEXT"))
+            from workspaces import add_workspace_columns
+
+            add_workspace_columns(conn)
             conn.execute(
                 text(
                     """

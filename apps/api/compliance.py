@@ -13,10 +13,9 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from auth_deps import require_hub_read, require_hub_write
 from compliance_catalog import CONTROLS, DOMAINS, FRAMEWORK_BY_ID, FRAMEWORKS
-from database import SessionLocal, db_ping
-from email_service import alert_recipients, mailer_configured
+from database import db_ping
+from email_service import mailer_configured
 from models import (
     AuditEvent,
     ComplianceControlState,
@@ -33,6 +32,7 @@ from models import (
     SecurityGate,
 )
 from velocity import compute_velocity, fingerprint
+from workspaces import WorkspaceCtx, admin_recipients, require_ws, require_ws_write
 
 router = APIRouter(prefix="/api/v1/compliance", tags=["Compliance"])
 
@@ -79,10 +79,13 @@ def current_period(now: datetime | None = None) -> str:
 class _Ctx:
     """Todo lo que necesitan las pruebas, consultado una sola vez."""
 
-    def __init__(self, db, now: datetime):
+    def __init__(self, db, now: datetime, workspace_id: str):
         self.now = now
         recent = now - timedelta(days=90)
-        self.repos = db.query(Repository).filter(Repository.is_active.is_(True)).all()
+        ws = workspace_id
+        self.repos = (
+            db.query(Repository).filter(Repository.is_active.is_(True), Repository.workspace_id == ws).all()
+        )
         ids = [r.id for r in self.repos]
         self.repo_ids = ids
         scans = (
@@ -116,7 +119,11 @@ class _Ctx:
             .filter(Finding.status.in_(["FALSE_POSITIVE", "ACCEPTED_RISK"]), Finding.repository_id.in_(ids or ["__none__"]))
             .all()
         }
-        self.ai_reviewed = db.query(Finding).filter(Finding.ai_feedback.isnot(None)).count()
+        self.ai_reviewed = (
+            db.query(Finding)
+            .filter(Finding.ai_feedback.isnot(None), Finding.repository_id.in_(ids or ["__none__"]))
+            .count()
+        )
 
         sbom_rows = db.query(SbomComponent.repository_id).filter(SbomComponent.repository_id.in_(ids or ["__none__"])).all()
         self.sbom_counts: dict[str, int] = defaultdict(int)
@@ -130,23 +137,36 @@ class _Ctx:
         )
         self.secrets_resolved = (
             db.query(SecretIncident)
-            .filter(SecretIncident.status == "RESOLVED", SecretIncident.resolved_at >= recent)
+            .filter(
+                SecretIncident.status == "RESOLVED",
+                SecretIncident.resolved_at >= recent,
+                SecretIncident.repository_id.in_(ids or ["__none__"]),
+            )
             .count()
         )
-        self.gate = db.query(SecurityGate).first()
-        self.bypasses = db.query(GateBypassRequest).filter(GateBypassRequest.created_at >= recent).all()
-        self.audit_count = db.query(AuditEvent).filter(AuditEvent.created_at >= recent).count()
-        last_event = db.query(AuditEvent).order_by(AuditEvent.created_at.desc()).first()
+        self.gate = db.get(SecurityGate, ws)
+        self.bypasses = (
+            db.query(GateBypassRequest)
+            .filter(GateBypassRequest.created_at >= recent, GateBypassRequest.workspace_id == ws)
+            .all()
+        )
+        audit_q = db.query(AuditEvent).filter(AuditEvent.workspace_id == ws)
+        self.audit_count = audit_q.filter(AuditEvent.created_at >= recent).count()
+        last_event = audit_q.order_by(AuditEvent.created_at.desc()).first()
         self.audit_last = _aware(last_event.created_at) if last_event else None
-        self.runbooks = db.query(Runbook).filter(Runbook.enabled.is_(True)).all()
+        self.runbooks = db.query(Runbook).filter(Runbook.enabled.is_(True), Runbook.workspace_id == ws).all()
         self.executions = (
             db.query(RunbookExecution)
-            .filter(RunbookExecution.created_at >= recent, RunbookExecution.status != "SIMULATED")
+            .filter(
+                RunbookExecution.created_at >= recent,
+                RunbookExecution.status != "SIMULATED",
+                RunbookExecution.workspace_id == ws,
+            )
             .all()
         )
         self.velocity = compute_velocity(db, range_days=90, repo_ids=ids or ["__none__"], now=now)
         self.mail_ready = mailer_configured()
-        self.recipients = alert_recipients()
+        self.recipients = admin_recipients(db, ws)
 
 
 # --------------------------------------------------------------------------- pruebas automáticas
@@ -405,16 +425,22 @@ def _owasp_status(c: _Ctx, code: str) -> dict:
     return {"status": "PARTIAL", "reason": "Sin análisis recientes que lo demuestren.", "findings": 0}
 
 
-def _enabled_map(db) -> dict[str, bool]:
-    rows = {r.framework_id: bool(r.enabled) for r in db.query(ComplianceFrameworkSetting).all()}
+def _enabled_map(db, workspace_id: str) -> dict[str, bool]:
+    rows = {
+        r.framework_id: bool(r.enabled)
+        for r in db.query(ComplianceFrameworkSetting).filter(ComplianceFrameworkSetting.workspace_id == workspace_id)
+    }
     return {f["id"]: rows.get(f["id"], f["default"]) for f in FRAMEWORKS}
 
 
-def evaluate(db, now: datetime | None = None) -> dict:
+def evaluate(db, workspace_id: str, now: datetime | None = None) -> dict:
     now = now or _now()
-    ctx = _Ctx(db, now)
-    states = {s.control_id: s for s in db.query(ComplianceControlState).all()}
-    enabled = _enabled_map(db)
+    ctx = _Ctx(db, now, workspace_id)
+    states = {
+        s.control_id: s
+        for s in db.query(ComplianceControlState).filter(ComplianceControlState.workspace_id == workspace_id)
+    }
+    enabled = _enabled_map(db, workspace_id)
 
     mappings: dict[str, list[dict]] = defaultdict(list)
     for fw in FRAMEWORKS:
@@ -506,16 +532,15 @@ def evaluate(db, now: datetime | None = None) -> dict:
     }
 
 
-def _snapshot(db, data: dict) -> dict[str, list[dict]]:
+def _snapshot(db, data: dict, workspace_id: str) -> dict[str, list[dict]]:
     """Guarda la preparación de hoy y devuelve la tendencia de 90 días por marco."""
     today = _now().date()
-    existing = {
-        s.framework_id: s for s in db.query(ComplianceSnapshot).filter(ComplianceSnapshot.day == today).all()
-    }
+    snaps = db.query(ComplianceSnapshot).filter(ComplianceSnapshot.workspace_id == workspace_id)
+    existing = {s.framework_id: s for s in snaps.filter(ComplianceSnapshot.day == today).all()}
     for fw in data["frameworks"]:
         row = existing.get(fw["id"])
         if row is None:
-            row = ComplianceSnapshot(id=str(uuid.uuid4()), day=today, framework_id=fw["id"])
+            row = ComplianceSnapshot(id=str(uuid.uuid4()), workspace_id=workspace_id, day=today, framework_id=fw["id"])
             db.add(row)
         row.score = fw["score"]
         row.passing = fw["counts"]["COMPLIANT"]
@@ -523,14 +548,14 @@ def _snapshot(db, data: dict) -> dict[str, list[dict]]:
     db.commit()
     since = today - timedelta(days=90)
     trend: dict[str, list[dict]] = defaultdict(list)
-    for s in db.query(ComplianceSnapshot).filter(ComplianceSnapshot.day >= since).order_by(ComplianceSnapshot.day.asc()).all():
+    for s in snaps.filter(ComplianceSnapshot.day >= since).order_by(ComplianceSnapshot.day.asc()).all():
         trend[s.framework_id].append({"day": s.day.isoformat(), "score": s.score})
     return trend
 
 
-def iso_controls(db, repo_ids: list[str] | None = None, now: datetime | None = None) -> list[dict]:
+def iso_controls(db, workspace_id: str, now: datetime | None = None) -> list[dict]:
     """Compatibilidad con /compliance/iso27001: requisitos de ISO 27001 con estados Cumple/Parcial/Brecha."""
-    data = evaluate(db, now)
+    data = evaluate(db, workspace_id, now)
     iso = next(f for f in data["frameworks"] if f["id"] == "iso27001")
     legacy = {"PENDING": "PARTIAL", "NOT_APPLICABLE": "COMPLIANT"}
     return [
@@ -554,28 +579,24 @@ def _require_db():
         raise HTTPException(status_code=503, detail="Base de datos no disponible")
 
 
-def _actor(session) -> str:
-    return ((session or {}).get("email") or "hub")[:255]
-
-
 def _audit(db, actor: str, action: str, target: str, detail: str = "") -> None:
     db.add(AuditEvent(id=str(uuid.uuid4()), action=action, target=target[:200], detail=detail[:1000], actor_email=actor, created_at=_now()))
 
 
-def _overview(db) -> dict:
-    data = evaluate(db)
-    trend = _snapshot(db, data)
+def _overview(db, workspace_id: str) -> dict:
+    data = evaluate(db, workspace_id)
+    trend = _snapshot(db, data, workspace_id)
     for fw in data["frameworks"]:
         fw["trend"] = trend.get(fw["id"], [])
     return data
 
 
 @router.get("")
-def compliance_overview(_auth=Depends(require_hub_read)):
+def compliance_overview(ws: WorkspaceCtx = Depends(require_ws)):
     _require_db()
-    db = SessionLocal()
+    db = ws.session()
     try:
-        return _overview(db)
+        return _overview(db, ws.id)
     finally:
         db.close()
 
@@ -585,23 +606,23 @@ class FrameworkPatch(BaseModel):
 
 
 @router.put("/frameworks/{framework_id}")
-def set_framework(framework_id: str, body: FrameworkPatch, session=Depends(require_hub_write)):
+def set_framework(framework_id: str, body: FrameworkPatch, ws: WorkspaceCtx = Depends(require_ws_write)):
     _require_db()
     fw = FRAMEWORK_BY_ID.get(framework_id)
     if not fw:
         raise HTTPException(status_code=404, detail="Marco no encontrado")
-    db = SessionLocal()
+    db = ws.session()
     try:
-        row = db.get(ComplianceFrameworkSetting, framework_id)
+        row = db.get(ComplianceFrameworkSetting, (ws.id, framework_id))
         if row is None:
-            row = ComplianceFrameworkSetting(framework_id=framework_id)
+            row = ComplianceFrameworkSetting(workspace_id=ws.id, framework_id=framework_id)
             db.add(row)
         row.enabled = body.enabled
-        row.updated_by = _actor(session)
+        row.updated_by = ws.actor
         row.updated_at = _now()
-        _audit(db, _actor(session), "COMPLIANCE_FRAMEWORK_ENABLED" if body.enabled else "COMPLIANCE_FRAMEWORK_DISABLED", fw["short"])
+        _audit(db, ws.actor, "COMPLIANCE_FRAMEWORK_ENABLED" if body.enabled else "COMPLIANCE_FRAMEWORK_DISABLED", fw["short"])
         db.commit()
-        return _overview(db)
+        return _overview(db, ws.id)
     finally:
         db.close()
 
@@ -616,7 +637,7 @@ class ControlPatch(BaseModel):
 
 
 @router.put("/controls/{control_id}")
-def update_control(control_id: str, body: ControlPatch, session=Depends(require_hub_write)):
+def update_control(control_id: str, body: ControlPatch, ws: WorkspaceCtx = Depends(require_ws_write)):
     _require_db()
     meta = CONTROLS.get(control_id)
     if not meta:
@@ -631,12 +652,12 @@ def update_control(control_id: str, body: ControlPatch, session=Depends(require_
     if fields.get("not_applicable") and len((fields.get("na_reason") or "").strip()) < 5:
         raise HTTPException(status_code=400, detail="Explica por qué no aplica (al menos 5 caracteres).")
 
-    actor = _actor(session)
-    db = SessionLocal()
+    actor = ws.actor
+    db = ws.session()
     try:
-        st = db.get(ComplianceControlState, control_id)
+        st = db.get(ComplianceControlState, (ws.id, control_id))
         if st is None:
-            st = ComplianceControlState(control_id=control_id)
+            st = ComplianceControlState(workspace_id=ws.id, control_id=control_id)
             db.add(st)
         for key in ("owner_email", "note", "evidence_url"):
             if key in fields:
@@ -662,30 +683,30 @@ def update_control(control_id: str, body: ControlPatch, session=Depends(require_
         st.updated_by = actor
         st.updated_at = _now()
         db.commit()
-        return _overview(db)
+        return _overview(db, ws.id)
     finally:
         db.close()
 
 
 @router.get("/frameworks/{framework_id}/evidence")
-def framework_evidence(framework_id: str, session=Depends(require_hub_read)):
+def framework_evidence(framework_id: str, ws: WorkspaceCtx = Depends(require_ws)):
     _require_db()
     if framework_id not in FRAMEWORK_BY_ID:
         raise HTTPException(status_code=404, detail="Marco no encontrado")
-    db = SessionLocal()
+    db = ws.session()
     try:
-        data = evaluate(db)
+        data = evaluate(db, ws.id)
         fw = next(f for f in data["frameworks"] if f["id"] == framework_id)
         controls = {c["id"]: c for c in data["controls"]}
         used = {cid for r in fw["requirements"] for cid in r["controls"]}
         events = (
             db.query(AuditEvent)
-            .filter(AuditEvent.created_at >= _now() - timedelta(days=90))
+            .filter(AuditEvent.workspace_id == ws.id, AuditEvent.created_at >= _now() - timedelta(days=90))
             .order_by(AuditEvent.created_at.desc())
             .limit(500)
             .all()
         )
-        _audit(db, _actor(session), "COMPLIANCE_EVIDENCE_EXPORTED", fw["short"])
+        _audit(db, ws.actor, "COMPLIANCE_EVIDENCE_EXPORTED", fw["short"])
         db.commit()
         return {
             "platform": "SSPILLOWY",

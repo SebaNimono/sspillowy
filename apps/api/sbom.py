@@ -13,10 +13,10 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 
-from auth_deps import require_hub_read
 from database import SessionLocal, db_ping
 from models import Finding, Repository, SbomComponent, SbomSnapshot
 from semgrep_scan import ACTIVE_STATUSES, relative_file_path
+from workspaces import WorkspaceCtx, require_ws
 
 router = APIRouter(prefix="/api/v1/sbom", tags=["Supply Chain & SBOM"])
 
@@ -134,11 +134,11 @@ def persist_sbom(db, *, scan, repo, packages: list[dict], scan_root: Path | None
     return len(merged)
 
 
-def _vuln_index(db, repository_id: Optional[str]) -> dict[tuple[str, str, str], dict]:
+def _vuln_index(db, repo_ids: list[str]) -> dict[tuple[str, str, str], dict]:
     """(repo, paquete, versión) -> resumen de vulnerabilidades activas de Trivy."""
-    q = db.query(Finding).filter(Finding.engine == "trivy", Finding.status.in_(ACTIVE_STATUSES))
-    if repository_id:
-        q = q.filter(Finding.repository_id == repository_id)
+    q = db.query(Finding).filter(
+        Finding.engine == "trivy", Finding.status.in_(ACTIVE_STATUSES), Finding.repository_id.in_(repo_ids)
+    )
     index: dict[tuple[str, str, str], dict] = {}
     for f in q.all():
         m = _PKG_RE.search(f.description or "")
@@ -179,20 +179,22 @@ def _loads(raw: Optional[str]) -> list:
 @router.get("")
 async def get_sbom(
     repository_id: Optional[str] = Query(default=None),
-    _auth=Depends(require_hub_read),
+    ws: WorkspaceCtx = Depends(require_ws),
 ):
     _require_db()
+    if repository_id:
+        ws.require_repo(repository_id)
+    scope = [repository_id] if repository_id else ws.scope_ids
     db = SessionLocal()
     try:
-        repos = {r.id: r for r in db.query(Repository).all()}
-        q = db.query(SbomComponent)
-        if repository_id:
-            q = q.filter(SbomComponent.repository_id == repository_id)
+        repos = {r.id: r for r in db.query(Repository).filter(Repository.workspace_id == ws.id).all()}
+        q = db.query(SbomComponent).filter(SbomComponent.repository_id.in_(scope))
         components = q.order_by(SbomComponent.name.asc()).all()
-        vulns = _vuln_index(db, repository_id)
+        vulns = _vuln_index(db, scope)
 
         latest: dict[str, SbomSnapshot] = {}
-        for snap in db.query(SbomSnapshot).order_by(SbomSnapshot.created_at.desc()).all():
+        snaps = db.query(SbomSnapshot).filter(SbomSnapshot.repository_id.in_(scope))
+        for snap in snaps.order_by(SbomSnapshot.created_at.desc()).all():
             latest.setdefault(snap.repository_id, snap)
 
         out_components = []
@@ -249,8 +251,9 @@ async def get_sbom(
 
 
 @router.get("/{repository_id}/cyclonedx")
-async def export_cyclonedx(repository_id: str, _auth=Depends(require_hub_read)):
+async def export_cyclonedx(repository_id: str, ws: WorkspaceCtx = Depends(require_ws)):
     _require_db()
+    ws.require_repo(repository_id)
     db = SessionLocal()
     try:
         repo = db.get(Repository, repository_id)
@@ -264,7 +267,7 @@ async def export_cyclonedx(repository_id: str, _auth=Depends(require_hub_read)):
         )
         if not components:
             raise HTTPException(status_code=404, detail="Este repositorio aún no tiene SBOM. Lanza un análisis de dependencias.")
-        vulns = _vuln_index(db, repository_id)
+        vulns = _vuln_index(db, [repository_id])
 
         bom_components, bom_vulns = [], {}
         for c in components:
