@@ -26,7 +26,7 @@ interface IntegrationsPageProps {
   onGoToSite?: () => void;
 }
 
-const CATEGORIES = ['Repositorios', 'CI/CD', 'Alertas y chat', 'Automatización', 'Gestión de tareas', 'Incidentes', 'Monitoreo'] as const;
+const CATEGORIES = ['Repositorios', 'Motores de escaneo', 'CI/CD', 'Alertas y chat', 'Automatización', 'Gestión de tareas', 'Incidentes', 'Monitoreo'] as const;
 type Category = (typeof CATEGORIES)[number];
 
 interface Entry {
@@ -77,6 +77,17 @@ const REPO_PROVIDERS: { id: Exclude<RepoProvider, 'other'>; name: string; summar
   { id: 'gitlab', name: 'GitLab', summary: 'Proyectos de GitLab.com o de tu propio servidor GitLab.', keywords: 'git self-hosted' },
   { id: 'bitbucket', name: 'Bitbucket', summary: 'Repositorios de Bitbucket Cloud.', keywords: 'git atlassian' },
   { id: 'azure', name: 'Azure DevOps', summary: 'Repositorios de Azure Repos.', keywords: 'git microsoft repos' },
+];
+
+const SCAN_ENGINES: { id: string; name: string; logo: LogoId; summary: string; keywords: string }[] = [
+  { id: 'osv-scanner', name: 'OSV-Scanner', logo: 'osv', summary: 'Dependencias vulnerables usando la base pública OSV.dev.', keywords: 'sca dependencias google gratuito' },
+  { id: 'grype', name: 'Grype', logo: 'grype', summary: 'Vulnerabilidades en imágenes de contenedor y paquetes.', keywords: 'contenedores docker imagenes anchore gratuito' },
+  { id: 'dependency-check', name: 'OWASP Dependency-Check', logo: 'owasp', summary: 'Busca componentes con CVE conocidos en tus dependencias.', keywords: 'sca cve dependencias owasp gratuito' },
+  { id: 'checkov', name: 'Checkov', logo: 'checkov', summary: 'Malas configuraciones en Terraform, Kubernetes y Dockerfiles.', keywords: 'iac infraestructura terraform kubernetes gratuito' },
+  { id: 'bandit', name: 'Bandit', logo: 'bandit', summary: 'Análisis estático de seguridad para código Python.', keywords: 'sast python gratuito' },
+  { id: 'sonarqube', name: 'SonarQube Community', logo: 'sonarqube', summary: 'Calidad y seguridad del código con la edición gratuita.', keywords: 'sast calidad codigo gratuito' },
+  { id: 'nuclei', name: 'Nuclei', logo: 'nuclei', summary: 'Pruebas sobre la aplicación desplegada con plantillas abiertas.', keywords: 'dast web plantillas gratuito' },
+  { id: 'trufflehog', name: 'TruffleHog', logo: 'trufflehog', summary: 'Secretos en el historial y verificación de si siguen activos.', keywords: 'secretos credenciales gratuito' },
 ];
 
 function buildEntries(
@@ -213,6 +224,7 @@ function buildEntries(
     { id: 'jira', name: 'Jira', logo: 'jira', category: 'Gestión de tareas', summary: 'Crea tareas desde un hallazgo y ciérralas al corregirlo.', installed: false, soon: true, keywords: 'atlassian tickets' },
     { id: 'linear', name: 'Linear', logo: 'linear', category: 'Gestión de tareas', summary: 'Convierte hallazgos en issues con su severidad.', installed: false, soon: true, keywords: 'issues' },
     { id: 'pagerduty', name: 'PagerDuty', logo: 'pagerduty', category: 'Incidentes', summary: 'Abre un incidente ante un secreto expuesto o un crítico.', installed: false, soon: true, keywords: 'guardia on-call' },
+    ...SCAN_ENGINES.map((e) => ({ ...e, category: 'Motores de escaneo' as const, installed: false, soon: true })),
   );
 
   if (data.platform) {
