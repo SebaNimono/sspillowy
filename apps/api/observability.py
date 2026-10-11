@@ -9,21 +9,26 @@ from __future__ import annotations
 
 import atexit
 import hmac
+import ipaddress
 import json
 import os
+import socket
 import statistics
 import threading
 import time
 import uuid
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlparse
 
+import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 
 import obs_metrics
 from database import SessionLocal, db_ping
-from models import AuditEvent, Finding, ObsBucket, RunbookExecution, Scan, SecretIncident
+from models import AuditEvent, Finding, ObsBucket, Repository, RunbookExecution, Scan, SecretIncident
 from workspaces import WorkspaceCtx, platform_admins, require_ws
 from obs_metrics import LAT_BOUNDS
 
@@ -238,6 +243,57 @@ def _engine_availability() -> dict[str, tuple[bool, str]]:
     return out
 
 
+def _public_host(host: str) -> bool:
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except OSError:
+        return False
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+            return False
+    return bool(infos)
+
+
+def _probe(repo_id: str, name: str, url: str) -> dict:
+    parsed = urlparse(url)
+    host = parsed.hostname or ""
+    base = {"id": f"app-{repo_id}", "name": name, "url": url}
+    if parsed.scheme not in ("http", "https") or not host:
+        return {**base, "status": "down", "detail": "La URL registrada no es válida"}
+    if not _public_host(host):
+        return {**base, "status": "down", "detail": f"{host} no es una dirección pública"}
+    t0 = time.perf_counter()
+    try:
+        res = httpx.get(url, timeout=6.0, follow_redirects=False, headers={"User-Agent": "SSPILLOWY-uptime/1.0"})
+    except httpx.TimeoutException:
+        return {**base, "status": "down", "detail": f"{host} no respondió en 6 s"}
+    except httpx.HTTPError:
+        return {**base, "status": "down", "detail": f"No se pudo conectar con {host}"}
+    ms = round((time.perf_counter() - t0) * 1000)
+    if res.status_code >= 500:
+        status = "down"
+    elif res.status_code >= 400 or ms > 2500:
+        status = "degraded"
+    else:
+        status = "up"
+    return {**base, "status": status, "detail": f"{host} · HTTP {res.status_code} en {ms} ms"}
+
+
+def _app_checks(db, workspace_id: str) -> list[dict]:
+    """Disponibilidad de las aplicaciones publicadas que el espacio registró en sus repositorios."""
+    repos = (
+        db.query(Repository.id, Repository.name, Repository.dast_url)
+        .filter(Repository.workspace_id == workspace_id, Repository.dast_url.isnot(None))
+        .all()
+    )
+    targets = [(rid, name, url.strip()) for rid, name, url in repos if (url or "").strip()][:20]
+    if not targets:
+        return []
+    with ThreadPoolExecutor(max_workers=min(8, len(targets))) as pool:
+        return list(pool.map(lambda t: _probe(*t), targets))
+
+
 def _db_latency() -> float | None:
     t0 = time.perf_counter()
     ok = db_ping()
@@ -376,6 +432,9 @@ def compute_observability(
             "status": "degraded" if pillow_agg["count"] >= 3 and bad / pillow_agg["count"] > 0.2 else "up",
             "detail": f"{_n(pillow_agg['count'], 'consulta', 'consultas')}, {bad} con error" if pillow_agg["count"] else "Sin consultas en el periodo",
         })
+
+    if not platform:
+        components = _app_checks(db, workspace_id)
 
     critical = {"api", "database"}
     if any(c["status"] == "down" and c["id"] in critical for c in components):

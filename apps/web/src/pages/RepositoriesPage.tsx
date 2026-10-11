@@ -564,6 +564,19 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
             <RefreshCw size={20} className="spin" style={{ marginBottom: '0.5rem' }} />
             <div>{t('common.loading')}</div>
           </div>
+        ) : repos.length === 0 ? (
+          <div className="empty-state">
+            <FolderGit2 size={32} color="#656d76" />
+            <h3>Aún no hay ningún repositorio</h3>
+            <p>
+              Conecta tu primer repositorio de GitHub o GitLab pegando su URL. Después podrás lanzar un análisis y ver
+              aquí su estado de salud.
+            </p>
+            <button className="btn btn-primary" onClick={() => setShowModal(true)}>
+              <Plus size={16} />
+              <span>{t('repos.newRepo')}</span>
+            </button>
+          </div>
         ) : (
           <div className="table-container">
             <table className="custom-table">

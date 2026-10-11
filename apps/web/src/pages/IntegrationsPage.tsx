@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Check, Copy, ExternalLink, Send, Unplug } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Check, Copy, ExternalLink, Search, Send, Unplug } from 'lucide-react';
 import { Header } from '../components/Header';
 import { SidebarState } from '../components/Sidebar';
 import {
@@ -30,6 +30,27 @@ const STATUS_LABEL: Record<Status, string> = {
   off: 'Sin configurar',
   soon: 'Próximamente',
 };
+
+const CATEGORIES = [
+  'Repositorios',
+  'CI/CD',
+  'Alertas y chat',
+  'Automatización',
+  'Gestión de tareas',
+  'Incidentes',
+  'Monitoreo',
+] as const;
+type Category = (typeof CATEGORIES)[number];
+
+interface Entry {
+  id: string;
+  name: string;
+  category: Category;
+  status: Status;
+  description: string;
+  keywords?: string;
+  body?: React.ReactNode;
+}
 
 const CHAT_HELP: Record<ChatKind, { name: string; placeholder: string; steps: string[] }> = {
   slack: {
@@ -78,11 +99,207 @@ const CopyField: React.FC<{ value: string }> = ({ value }) => {
   );
 };
 
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+function buildEntries(
+  data: IntegrationsOverview,
+  onNavigate: ((tab: string) => void) | undefined,
+  setData: (d: IntegrationsOverview) => void,
+): Entry[] {
+  const go = (tab: string, label: string, primary = false) => (
+    <button type="button" className={primary ? 'btn btn-primary' : 'btn btn-secondary'} onClick={() => onNavigate?.(tab)}>
+      {label}
+    </button>
+  );
+  const entries: Entry[] = [
+    {
+      id: 'github',
+      name: 'GitHub',
+      category: 'Repositorios',
+      status: data.github.repos ? 'on' : 'ready',
+      description: 'Analiza repositorios de GitHub con solo pegar su URL. Con el webhook, cada push o pull request se analiza solo.',
+      keywords: 'git webhook push pull request',
+      body: (
+        <>
+          <ul className="ig-facts">
+            <li>{plural(data.github.repos, 'repositorio conectado', 'repositorios conectados')}</li>
+            <li>Análisis automático por webhook: {data.github.webhook_ready ? 'disponible' : 'no habilitado en el servidor'}</li>
+          </ul>
+          {data.github.webhook_ready && (
+            <>
+              <small className="ig-label">URL del webhook</small>
+              <CopyField value={data.github.webhook_url} />
+            </>
+          )}
+          <div className="ig-actions">
+            {go('repositories', 'Conectar repositorio', true)}
+            {go('docs', 'Guía del webhook')}
+          </div>
+        </>
+      ),
+    },
+    {
+      id: 'gitlab',
+      name: 'GitLab',
+      category: 'Repositorios',
+      status: data.gitlab.repos ? 'on' : 'ready',
+      description: 'Analiza proyectos de GitLab igual que los de GitHub: pega la URL del repositorio y lanza el análisis.',
+      keywords: 'git',
+      body: (
+        <>
+          <ul className="ig-facts">
+            <li>{plural(data.gitlab.repos, 'repositorio conectado', 'repositorios conectados')}</li>
+          </ul>
+          <div className="ig-actions">{go('repositories', 'Conectar repositorio')}</div>
+        </>
+      ),
+    },
+    {
+      id: 'bitbucket',
+      name: 'Bitbucket',
+      category: 'Repositorios',
+      status: 'soon',
+      description: 'Conectar repositorios de Bitbucket Cloud y analizarlos en cada push.',
+      keywords: 'git atlassian',
+    },
+    {
+      id: 'azure-devops',
+      name: 'Azure DevOps',
+      category: 'Repositorios',
+      status: 'soon',
+      description: 'Repositorios y pipelines de Azure DevOps con el mismo Security Gate.',
+      keywords: 'git microsoft pipelines',
+    },
+    {
+      id: 'cicd',
+      name: 'Security Gate en CI/CD',
+      category: 'CI/CD',
+      status: data.cicd.repos && data.cicd.gate_enabled ? 'on' : 'ready',
+      description:
+        'Tu pipeline (GitHub Actions, GitLab CI, Jenkins…) consulta el gate antes de desplegar y se detiene si hay problemas graves sin resolver.',
+      keywords: 'github actions gitlab ci jenkins pipeline despliegue gate',
+      body: (
+        <>
+          <ul className="ig-facts">
+            <li>Gate del espacio: {data.cicd.gate_enabled ? 'activo' : 'desactivado'}</li>
+          </ul>
+          <small className="ig-label">Consulta desde tu pipeline</small>
+          <CopyField value={`${data.cicd.check_url}?repository_url=<URL de tu repositorio>`} />
+          <div className="ig-actions">
+            {go('gates', 'Configurar gate')}
+            {go('docs', 'Ver ejemplo de pipeline')}
+          </div>
+        </>
+      ),
+    },
+    {
+      id: 'email',
+      name: 'Correo',
+      category: 'Alertas y chat',
+      status: data.email.ready ? 'on' : 'off',
+      description: 'Cuando el Security Gate bloquea un despliegue, avisamos por correo a los propietarios y administradores del espacio.',
+      keywords: 'email mail alertas',
+      body: (
+        <ul className="ig-facts">
+          {data.email.recipients.length ? data.email.recipients.map((e) => <li key={e}>{e}</li>) : <li>Sin destinatarios todavía</li>}
+        </ul>
+      ),
+    },
+    ...(['slack', 'teams'] as ChatKind[]).map(
+      (kind): Entry => ({
+        id: kind,
+        name: CHAT_HELP[kind].name,
+        category: 'Alertas y chat',
+        status: data.chat[kind].connected ? 'on' : 'ready',
+        description: `Recibe en un canal de ${CHAT_HELP[kind].name} las alertas cuando el Security Gate bloquea un despliegue.`,
+        keywords: 'chat canal mensajes alertas webhook',
+        body: <ChatBody kind={kind} data={data} onChange={setData} />,
+      }),
+    ),
+    {
+      id: 'google-chat',
+      name: 'Google Chat',
+      category: 'Alertas y chat',
+      status: 'soon',
+      description: 'Alertas del Security Gate en un espacio de Google Chat.',
+      keywords: 'chat google workspace',
+    },
+    {
+      id: 'webhooks',
+      name: 'Webhooks personalizados',
+      category: 'Automatización',
+      status: 'ready',
+      description:
+        'Envía un aviso a cualquier servicio cuando se detecta un secreto, un hallazgo nuevo o un bloqueo del gate, desde una automatización.',
+      keywords: 'webhook api runbook automatizacion json',
+      body: <div className="ig-actions">{go('runbooks', 'Crear automatización')}</div>,
+    },
+    {
+      id: 'jira',
+      name: 'Jira',
+      category: 'Gestión de tareas',
+      status: 'soon',
+      description: 'Crear una tarea desde un hallazgo y cerrarla sola cuando el siguiente análisis confirme la corrección.',
+      keywords: 'atlassian tickets tareas',
+    },
+    {
+      id: 'linear',
+      name: 'Linear',
+      category: 'Gestión de tareas',
+      status: 'soon',
+      description: 'Convertir hallazgos en issues de Linear con su severidad y plazo.',
+      keywords: 'issues tareas',
+    },
+    {
+      id: 'pagerduty',
+      name: 'PagerDuty',
+      category: 'Incidentes',
+      status: 'soon',
+      description: 'Abrir un incidente cuando aparece un secreto expuesto o un crítico en producción.',
+      keywords: 'guardia on-call incidentes',
+    },
+  ];
+
+  if (data.platform) {
+    entries.push({
+      id: 'prometheus',
+      name: 'Prometheus y Grafana',
+      category: 'Monitoreo',
+      status: data.platform.prometheus ? 'on' : 'off',
+      description: 'Métricas de funcionamiento de toda la plataforma. Solo las ven los administradores de la plataforma.',
+      keywords: 'metricas observabilidad dashboards',
+      body: (
+        <>
+          <CopyField value={data.platform.metrics_url} />
+          <div className="ig-actions">
+            {go('observability', 'Ver observabilidad')}
+            {data.platform.grafana_url && (
+              <a className="btn btn-secondary" href={data.platform.grafana_url} target="_blank" rel="noreferrer noopener">
+                <ExternalLink size={14} /> Abrir Grafana
+              </a>
+            )}
+          </div>
+        </>
+      ),
+    });
+  }
+  return entries;
+}
+
+const normalize = (s: string) =>
+  s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
 let cached: IntegrationsOverview | null = null;
 
 export const IntegrationsPage: React.FC<IntegrationsPageProps> = ({ onNavigate, ...headerProps }) => {
   const [data, setDataState] = useState<IntegrationsOverview | null>(cached);
   const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [category, setCategory] = useState<Category | 'all'>('all');
+  const [status, setStatus] = useState<Status | 'all'>('all');
 
   const setData = (d: IntegrationsOverview) => {
     cached = d;
@@ -94,6 +311,21 @@ export const IntegrationsPage: React.FC<IntegrationsPageProps> = ({ onNavigate, 
       .then(setData)
       .catch((e) => setError(e instanceof Error ? e.message : 'No se pudieron cargar las integraciones.'));
   }, []);
+
+  const entries = useMemo(() => (data ? buildEntries(data, onNavigate, setData) : []), [data, onNavigate]);
+  const categories = CATEGORIES.filter((c) => entries.some((e) => e.category === c));
+
+  const visible = useMemo(() => {
+    const q = normalize(query.trim());
+    return entries.filter(
+      (e) =>
+        (category === 'all' || e.category === category) &&
+        (status === 'all' || e.status === status) &&
+        (!q || normalize(`${e.name} ${e.category} ${e.description} ${e.keywords ?? ''}`).includes(q)),
+    );
+  }, [entries, query, category, status]);
+
+  const connected = entries.filter((e) => e.status === 'on').length;
 
   return (
     <div>
@@ -109,139 +341,81 @@ export const IntegrationsPage: React.FC<IntegrationsPageProps> = ({ onNavigate, 
 
       {data && (
         <>
-          <h2 className="ig-section">Repositorios</h2>
-          <div className="ig-grid">
-            <article className="ig-card">
-              <header>
-                <strong>GitHub</strong>
-                <Badge status={data.github.repos ? 'on' : 'ready'} />
-              </header>
-              <p>
-                Analiza repositorios de GitHub con solo pegar su URL. Con el webhook, cada push o pull request se analiza
-                solo.
-              </p>
-              <ul className="ig-facts">
-                <li>
-                  {data.github.repos} {data.github.repos === 1 ? 'repositorio conectado' : 'repositorios conectados'}
-                </li>
-                <li>Análisis automático por webhook: {data.github.webhook_ready ? 'disponible' : 'no habilitado en el servidor'}</li>
-              </ul>
-              {data.github.webhook_ready && (
-                <>
-                  <small className="ig-label">URL del webhook</small>
-                  <CopyField value={data.github.webhook_url} />
-                </>
-              )}
-              <div className="ig-actions">
-                <button type="button" className="btn btn-primary" onClick={() => onNavigate?.('repositories')}>
-                  Conectar repositorio
-                </button>
-                <button type="button" className="btn btn-secondary" onClick={() => onNavigate?.('docs')}>
-                  Guía del webhook
-                </button>
-              </div>
-            </article>
-
-            <article className="ig-card">
-              <header>
-                <strong>GitLab</strong>
-                <Badge status={data.gitlab.repos ? 'on' : 'ready'} />
-              </header>
-              <p>Analiza proyectos de GitLab igual que los de GitHub: pega la URL del repositorio y lanza el análisis.</p>
-              <ul className="ig-facts">
-                <li>
-                  {data.gitlab.repos} {data.gitlab.repos === 1 ? 'repositorio conectado' : 'repositorios conectados'}
-                </li>
-              </ul>
-              <div className="ig-actions">
-                <button type="button" className="btn btn-secondary" onClick={() => onNavigate?.('repositories')}>
-                  Conectar repositorio
-                </button>
-              </div>
-            </article>
-
-            <article className="ig-card">
-              <header>
-                <strong>CI/CD · Security Gate</strong>
-                <Badge status={data.cicd.repos && data.cicd.gate_enabled ? 'on' : 'ready'} />
-              </header>
-              <p>
-                Tu pipeline (GitHub Actions, GitLab CI, Jenkins…) consulta el gate antes de desplegar y se detiene si hay
-                problemas graves sin resolver.
-              </p>
-              <ul className="ig-facts">
-                <li>Gate del espacio: {data.cicd.gate_enabled ? 'activo' : 'desactivado'}</li>
-              </ul>
-              <small className="ig-label">Consulta desde tu pipeline</small>
-              <CopyField value={`${data.cicd.check_url}?repository_url=<URL de tu repositorio>`} />
-              <div className="ig-actions">
-                <button type="button" className="btn btn-secondary" onClick={() => onNavigate?.('gates')}>
-                  Configurar gate
-                </button>
-                <button type="button" className="btn btn-secondary" onClick={() => onNavigate?.('docs')}>
-                  Ver ejemplo de pipeline
-                </button>
-              </div>
-            </article>
+          <div className="ig-toolbar">
+            <label className="ig-search">
+              <Search size={15} />
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Buscar integraciones"
+                aria-label="Buscar integraciones"
+              />
+            </label>
+            <select value={status} onChange={(e) => setStatus(e.target.value as Status | 'all')} aria-label="Estado">
+              <option value="all">Todos los estados</option>
+              {(Object.keys(STATUS_LABEL) as Status[]).map((s) => (
+                <option key={s} value={s}>
+                  {STATUS_LABEL[s]}
+                </option>
+              ))}
+            </select>
+            <span className="ig-count">
+              {connected} de {entries.length} conectadas
+            </span>
           </div>
 
-          <h2 className="ig-section">Alertas</h2>
-          <div className="ig-grid">
-            <article className="ig-card">
-              <header>
-                <strong>Correo</strong>
-                <Badge status={data.email.ready ? 'on' : 'off'} />
-              </header>
-              <p>Cuando el Security Gate bloquea un despliegue, avisamos por correo a los propietarios y administradores del espacio.</p>
-              <ul className="ig-facts">
-                {data.email.recipients.length ? (
-                  data.email.recipients.map((e) => <li key={e}>{e}</li>)
-                ) : (
-                  <li>Sin destinatarios todavía</li>
-                )}
-              </ul>
-            </article>
-
-            {(['slack', 'teams'] as ChatKind[]).map((kind) => (
-              <ChatCard key={kind} kind={kind} data={data} onChange={setData} />
+          <div className="ig-chips" role="group" aria-label="Categorías">
+            <button type="button" className={category === 'all' ? 'is-active' : ''} onClick={() => setCategory('all')}>
+              Todas
+            </button>
+            {categories.map((c) => (
+              <button key={c} type="button" className={category === c ? 'is-active' : ''} onClick={() => setCategory(c)}>
+                {c}
+                <span>{entries.filter((e) => e.category === c).length}</span>
+              </button>
             ))}
           </div>
 
-          <h2 className="ig-section">Gestión de tareas</h2>
-          <div className="ig-grid">
-            <article className="ig-card is-muted">
-              <header>
-                <strong>Jira</strong>
-                <Badge status="soon" />
-              </header>
-              <p>Crear una tarea en Jira desde un hallazgo y cerrarla sola cuando el siguiente análisis confirme la corrección.</p>
-            </article>
-          </div>
-
-          {data.platform && (
-            <>
-              <h2 className="ig-section">Monitoreo de la plataforma</h2>
-              <div className="ig-grid">
-                <article className="ig-card">
-                  <header>
-                    <strong>Prometheus y Grafana</strong>
-                    <Badge status={data.platform.prometheus ? 'on' : 'off'} />
-                  </header>
-                  <p>Métricas de funcionamiento de toda la plataforma. Solo las ven los administradores de la plataforma.</p>
-                  <CopyField value={data.platform.metrics_url} />
-                  <div className="ig-actions">
-                    <button type="button" className="btn btn-secondary" onClick={() => onNavigate?.('observability')}>
-                      Ver observabilidad
-                    </button>
-                    {data.platform.grafana_url && (
-                      <a className="btn btn-secondary" href={data.platform.grafana_url} target="_blank" rel="noreferrer noopener">
-                        <ExternalLink size={14} /> Abrir Grafana
-                      </a>
-                    )}
+          {visible.length === 0 ? (
+            <div className="empty-state">
+              <Search size={26} color="#656d76" />
+              <h3>No hay integraciones que coincidan</h3>
+              <p>Prueba con otra palabra o quita los filtros.</p>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => {
+                  setQuery('');
+                  setCategory('all');
+                  setStatus('all');
+                }}
+              >
+                Quitar filtros
+              </button>
+            </div>
+          ) : (
+            categories
+              .filter((c) => visible.some((e) => e.category === c))
+              .map((c) => (
+                <section key={c}>
+                  <h2 className="ig-section">{c}</h2>
+                  <div className="ig-grid">
+                    {visible
+                      .filter((e) => e.category === c)
+                      .map((e) => (
+                        <article key={e.id} className={`ig-card ${e.status === 'soon' ? 'is-muted' : ''}`}>
+                          <header>
+                            <strong>{e.name}</strong>
+                            <Badge status={e.status} />
+                          </header>
+                          <p>{e.description}</p>
+                          {e.body}
+                        </article>
+                      ))}
                   </div>
-                </article>
-              </div>
-            </>
+                </section>
+              ))
           )}
         </>
       )}
@@ -249,7 +423,7 @@ export const IntegrationsPage: React.FC<IntegrationsPageProps> = ({ onNavigate, 
   );
 };
 
-const ChatCard: React.FC<{
+const ChatBody: React.FC<{
   kind: ChatKind;
   data: IntegrationsOverview;
   onChange: (d: IntegrationsOverview) => void;
@@ -276,13 +450,7 @@ const ChatCard: React.FC<{
   };
 
   return (
-    <article className="ig-card">
-      <header>
-        <strong>{help.name}</strong>
-        <Badge status={chat.connected ? 'on' : 'ready'} />
-      </header>
-      <p>Recibe en un canal de {help.name} las alertas cuando el Security Gate bloquea un despliegue.</p>
-
+    <>
       {chat.connected ? (
         <>
           <ul className="ig-facts">
@@ -355,6 +523,6 @@ const ChatCard: React.FC<{
 
       {error && <p className="ig-error">{error}</p>}
       {notice && <p className="ig-notice">{notice}</p>}
-    </article>
+    </>
   );
 };

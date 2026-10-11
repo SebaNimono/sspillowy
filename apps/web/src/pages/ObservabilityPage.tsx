@@ -200,7 +200,11 @@ export const ObservabilityPage: React.FC<PageProps> = ({ onNavigate, ...headerPr
     <div className="ob-page">
       <Header
         title="Observabilidad"
-        subtitle="La salud de SSPILLOWY y de su pipeline de seguridad: disponibilidad, tiempos de respuesta, análisis y objetivos de servicio."
+        subtitle={
+          data && !data.platform_view
+            ? 'La disponibilidad de tus aplicaciones y la salud de tus análisis de seguridad.'
+            : 'La salud de SSPILLOWY y de su pipeline de seguridad: disponibilidad, tiempos de respuesta, análisis y objetivos de servicio.'
+        }
         onNavigate={onNavigate}
         {...headerProps}
       />
@@ -231,11 +235,29 @@ export const ObservabilityPage: React.FC<PageProps> = ({ onNavigate, ...headerPr
 
       {data && (
         <>
-          <div className={`ob-banner ${OVERALL[data.status].tone}`}>
-            <Activity size={18} />
-            <strong>{OVERALL[data.status].text}</strong>
-            <span>En línea desde hace {fmtUptime(data.uptime_seconds)}</span>
-          </div>
+          {data.platform_view ? (
+            <div className={`ob-banner ${OVERALL[data.status].tone}`}>
+              <Activity size={18} />
+              <strong>{OVERALL[data.status].text}</strong>
+              <span>En línea desde hace {fmtUptime(data.uptime_seconds)}</span>
+            </div>
+          ) : (
+            <h2 className="ob-section-title">
+              <Activity size={16} /> Disponibilidad de tus aplicaciones
+            </h2>
+          )}
+
+          {!data.platform_view && data.components.length === 0 && (
+            <div className="card ob-empty">
+              <p>
+                Aún no monitoreas ninguna aplicación. Al agregar un repositorio, indica la URL donde está publicada tu
+                aplicación y aquí verás si responde y cuánto tarda.
+              </p>
+              <button type="button" className="btn btn-primary" onClick={() => onNavigate?.('repositories')}>
+                Ir a repositorios
+              </button>
+            </div>
+          )}
 
           <section className="ob-components">
             {data.components.map((c) => {

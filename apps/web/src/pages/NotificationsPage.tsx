@@ -49,6 +49,8 @@ export const NotificationsPage: React.FC<PageProps> = ({
   const [filter, setFilter] = useState<'all' | 'unread' | 'critical'>('all');
   const [apiOffline, setApiOffline] = useState(false);
 
+  const [loaded, setLoaded] = useState(false);
+
   const load = () => {
     fetchNotifications()
       .then((data) => {
@@ -58,7 +60,8 @@ export const NotificationsPage: React.FC<PageProps> = ({
       .catch(() => {
         setApiOffline(true);
         setItems([]);
-      });
+      })
+      .finally(() => setLoaded(true));
   };
 
   useEffect(() => {
@@ -137,6 +140,24 @@ export const NotificationsPage: React.FC<PageProps> = ({
             <span>Eventos ({visible.length})</span>
           </div>
         </div>
+
+        {loaded && visible.length === 0 && (
+          <div className="empty-state">
+            <Bell size={28} color="#656d76" />
+            <h3>
+              {items.length === 0
+                ? 'No hay notificaciones'
+                : filter === 'unread'
+                  ? 'No tienes notificaciones sin leer'
+                  : 'No hay notificaciones críticas'}
+            </h3>
+            <p>
+              {items.length === 0
+                ? 'Aquí aparecerán los secretos expuestos, los bloqueos del Security Gate y los hallazgos críticos de tus repositorios.'
+                : 'Cambia el filtro para ver el resto.'}
+            </p>
+          </div>
+        )}
 
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           {visible.map((item) => (

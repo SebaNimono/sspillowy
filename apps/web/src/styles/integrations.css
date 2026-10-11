@@ -1,3 +1,89 @@
+.ig-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.75rem;
+}
+
+.ig-search {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 0.7rem;
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  color: var(--fg-muted);
+}
+
+.ig-search input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.55rem 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 0.88rem;
+  color: var(--fg-default);
+}
+
+.ig-search:focus-within {
+  border-color: #0969da;
+}
+
+.ig-toolbar select {
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  font-size: 0.85rem;
+  color: var(--fg-default);
+}
+
+.ig-count {
+  font-size: 0.8rem;
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+.ig-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 1.25rem;
+}
+
+.ig-chips button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.75rem;
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  font-size: 0.8rem;
+  color: var(--fg-default);
+  cursor: pointer;
+}
+
+.ig-chips button span {
+  font-size: 0.72rem;
+  color: var(--fg-muted);
+}
+
+.ig-chips button:hover {
+  border-color: #8c959f;
+}
+
+.ig-chips button.is-active {
+  border-color: #0969da;
+  background: #ddf4ff;
+  color: #0969da;
+  font-weight: 600;
+}
+
+.ig-chips button.is-active span {
+  color: #0969da;
+}
+
 .ig-section {
   margin: 1.5rem 0 0.75rem;
   font-size: 0.78rem;
@@ -7,7 +93,7 @@
   color: var(--fg-muted);
 }
 
-.ig-section:first-of-type {
+section:first-of-type > .ig-section {
   margin-top: 0;
 }
 

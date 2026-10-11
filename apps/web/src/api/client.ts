@@ -973,7 +973,15 @@ export interface ObservabilityData {
   generated_at: string;
   status: 'operational' | 'degraded' | 'down';
   uptime_seconds: number;
-  components: { id: string; name: string; status: ObsComponentStatus; detail: string; since?: string; last?: string | null }[];
+  components: {
+    id: string;
+    name: string;
+    status: ObsComponentStatus;
+    detail: string;
+    since?: string;
+    last?: string | null;
+    url?: string;
+  }[];
   slos: ObsSlo[];
   kpis: {
     requests: number;
