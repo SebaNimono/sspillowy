@@ -375,7 +375,7 @@ export const DOC_SECTIONS: DocSection[] = [
       { type: 'h', text: '17. Módulos en camino' },
       {
         type: 'p',
-        text: 'Las secciones con la etiqueta "Pronto" están en desarrollo: por ahora, Integraciones. Al abrirla verás qué hará y qué puedes usar mientras tanto.',
+        text: 'En Integraciones verás qué está conectado en tu espacio (GitHub, GitLab, CI/CD, correo) y podrás llevar las alertas a Slack o Microsoft Teams. Lo marcado como "Próximamente", como Jira, está en desarrollo.',
       },
 
       { type: 'h', text: 'Pon a prueba lo aprendido' },
@@ -1402,6 +1402,42 @@ jobs:
     title: 'Glosario',
     summary: 'Los términos de seguridad que vas a encontrar en SSPILLOWY, explicados.',
     blocks: [],
+  },
+  {
+    id: 'slack-teams',
+    group: 'Integraciones',
+    title: 'Alertas en Slack y Teams',
+    summary: 'Lleva las alertas del Security Gate al canal donde ya conversa tu equipo.',
+    blocks: [
+      {
+        type: 'p',
+        text: 'Cuando el Security Gate bloquea un despliegue, además del correo a propietarios y administradores, SSPILLOWY publica un mensaje en los canales conectados con el repositorio, el motivo y un enlace a la consola.',
+      },
+      { type: 'h', text: 'Slack' },
+      {
+        type: 'steps',
+        items: [
+          { title: 'Crea una app', text: 'En api.slack.com/apps crea una app para tu espacio de trabajo de Slack.' },
+          { title: 'Activa Incoming Webhooks', text: 'Pulsa "Add New Webhook to Workspace", elige el canal y copia la URL.' },
+          { title: 'Pégala en SSPILLOWY', text: 'En Integraciones, tarjeta Slack, pega la URL, pulsa Conectar y luego "Enviar prueba".' },
+        ],
+      },
+      { type: 'h', text: 'Microsoft Teams' },
+      {
+        type: 'steps',
+        items: [
+          { title: 'Abre Flujos de trabajo', text: 'En el canal, abre el menú ••• y elige "Flujos de trabajo".' },
+          { title: 'Usa la plantilla', text: 'Elige "Publicar en un canal cuando se reciba una solicitud de webhook" y copia la URL que te entrega.' },
+          { title: 'Pégala en SSPILLOWY', text: 'En Integraciones, tarjeta Microsoft Teams, pega la URL, pulsa Conectar y luego "Enviar prueba".' },
+        ],
+      },
+      {
+        type: 'callout',
+        tone: 'info',
+        text: 'Solo los propietarios y administradores del espacio pueden conectar o quitar canales. Cada espacio tiene los suyos.',
+      },
+      { type: 'goto', tab: 'integrations', label: 'Ir a Integraciones' },
+    ],
   },
   {
     id: 'faq',

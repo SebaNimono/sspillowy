@@ -22,7 +22,7 @@
   padding: 0.35rem 0.75rem;
   border: none;
   border-right: 1px solid var(--border-default);
-  background: #ffffff;
+  background: var(--bg-surface);
   color: var(--fg-muted);
   cursor: pointer;
 }
@@ -43,7 +43,7 @@
   padding: 0.38rem 0.55rem;
   border: 1px solid var(--border-default);
   border-radius: 6px;
-  background: #ffffff;
+  background: var(--bg-surface);
 }
 
 .vl-updated {
@@ -125,7 +125,6 @@
   padding: 0.8rem 0.95rem;
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
-  border-left: 3px solid var(--c);
   border-radius: 8px;
 }
 
@@ -255,7 +254,7 @@
   flex-direction: column;
   gap: 0.2rem;
   padding: 0.55rem 0.7rem;
-  background: #ffffff;
+  background: var(--bg-surface);
   border: 1px solid var(--border-default);
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(31, 35, 40, 0.12);

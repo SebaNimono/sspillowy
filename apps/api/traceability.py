@@ -98,6 +98,9 @@ ACTION_LABEL = {
     "DASHBOARD_DELETED": "Eliminó un dashboard",
     "WEBHOOK_REPO_UNKNOWN": "Recibió un webhook de un repositorio no registrado",
     "SECURITY_ALERT_SENT": "Envió una alerta por correo",
+    "SECURITY_ALERT_POSTED": "Publicó una alerta en Slack o Teams",
+    "INTEGRATION_CONNECTED": "Conectó una integración",
+    "INTEGRATION_REMOVED": "Desconectó una integración",
     "WORKSPACE_RENAMED": "Renombró el espacio",
     "WORKSPACE_MEMBER_INVITED": "Invitó a una persona al espacio",
     "WORKSPACE_MEMBER_ROLE": "Cambió el rol de una persona",
@@ -115,7 +118,7 @@ CATEGORIES = [
     ("pillow", "Pillow", ("FIX_INTEL_",)),
     ("automations", "Automatizaciones", ("RUNBOOK_",)),
     ("compliance", "Cumplimiento", ("COMPLIANCE_", "TRACE_")),
-    ("config", "Configuración", ("REPO_", "DASHBOARD_", "WEBHOOK_", "WORKSPACE_")),
+    ("config", "Configuración", ("REPO_", "DASHBOARD_", "WEBHOOK_", "WORKSPACE_", "INTEGRATION_")),
     ("alerts", "Alertas", ("SECURITY_ALERT",)),
 ]
 CATEGORY_LABEL = {cid: label for cid, label, _ in CATEGORIES}

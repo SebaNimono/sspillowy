@@ -1,0 +1,22 @@
+/* Tarjetas del hub: planas y con esquinas rectas. Se carga después de las hojas de cada página. */
+.main-content :is(
+    .card,
+    .stat-card,
+    .dash-stat,
+    .table-container,
+    [class*='-card'],
+    [class*='-kpi'],
+    [class*='summary-item'],
+    [class*='-slo'],
+    [class*='-tile'],
+    [class*='-panel'],
+    [class*='-empty'],
+    .ob-components > *,
+    .ws-start-steps li
+  ) {
+  border-radius: 0 !important;
+}
+
+.main-content :is(.card, .stat-card, .dash-stat, .stat-card:hover) {
+  box-shadow: none;
+}

@@ -1010,10 +1010,52 @@ export interface ObservabilityData {
   routes: { method: string; path: string; count: number; error_pct: number; client_error_pct: number; avg_ms: number | null; p95_ms: number | null }[];
   incidents: { at: string; severity: 'error' | 'warning'; title: string; target: string | null; detail: string }[];
   integrations: { prometheus: boolean; metrics_url: string; grafana_url: string | null };
+  platform_view: boolean;
 }
 
 export async function fetchObservability(range: ObsRange): Promise<ObservabilityData> {
   return request(`/observability?range=${range}`);
+}
+
+export type ChatKind = 'slack' | 'teams';
+
+export interface ChatIntegration {
+  connected: boolean;
+  enabled?: boolean;
+  target?: string;
+  last_ok_at?: string | null;
+  last_error?: string | null;
+  updated_by?: string | null;
+}
+
+export interface IntegrationsOverview {
+  can_manage: boolean;
+  github: { repos: number; webhook_ready: boolean; webhook_url: string };
+  gitlab: { repos: number };
+  cicd: { check_url: string; gate_enabled: boolean; repos: number };
+  email: { ready: boolean; recipients: string[] };
+  chat: Record<ChatKind, ChatIntegration>;
+  platform: { prometheus: boolean; metrics_url: string; grafana_url: string | null } | null;
+}
+
+export async function fetchIntegrations(): Promise<IntegrationsOverview> {
+  return request('/integrations');
+}
+
+export async function connectChatIntegration(kind: ChatKind, url: string): Promise<IntegrationsOverview> {
+  return request(`/integrations/${kind}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url }),
+  });
+}
+
+export async function disconnectChatIntegration(kind: ChatKind): Promise<IntegrationsOverview> {
+  return request(`/integrations/${kind}`, { method: 'DELETE' });
+}
+
+export async function testChatIntegration(kind: ChatKind): Promise<IntegrationsOverview> {
+  return request(`/integrations/${kind}/test`, { method: 'POST' });
 }
 
 /** Hallazgo que otra página pide abrir en Trazabilidad (id de fila o clave de historia). */

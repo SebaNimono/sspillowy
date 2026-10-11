@@ -1,7 +1,7 @@
 :root {
   /* GitHub + Datadog Light Theme Palette */
   --bg-canvas: #f6f8fa;
-  --bg-surface: #ffffff;
+  --bg-surface: #fafbfc;
   --bg-sidebar: #1b1e2e;
   --bg-subtle: #f3f4f6;
   --bg-hover: #f6f8fa;
@@ -424,7 +424,6 @@ body {
 .ai-card {
   background: #f6f8fa;
   border: 1px solid var(--border-default);
-  border-left: 4px solid var(--accent-purple);
   border-radius: 6px;
   padding: 1rem 1.15rem;
   margin-top: 1rem;

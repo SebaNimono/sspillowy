@@ -16,7 +16,6 @@
   padding: 0.75rem 0.9rem;
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
-  border-left: 3px solid var(--sev);
   border-radius: 8px;
   cursor: pointer;
   text-align: left;
@@ -80,7 +79,7 @@
 
 .fm-search:focus-within {
   border-color: #0969da;
-  background: #ffffff;
+  background: var(--bg-surface);
   box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.15);
 }
 
@@ -129,7 +128,7 @@
 }
 
 .fm-view-toggle button.is-active {
-  background: #ffffff;
+  background: var(--bg-surface);
   color: #0969da;
 }
 

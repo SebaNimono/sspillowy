@@ -31,7 +31,7 @@
 
 .dc-search:focus-within {
   border-color: #0969da;
-  background: #ffffff;
+  background: var(--bg-surface);
   box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.15);
 }
 
@@ -355,7 +355,7 @@
   align-items: center;
   gap: 0.6rem;
   border: 1px solid var(--border-default);
-  background: #ffffff;
+  background: var(--bg-surface);
   border-radius: 8px;
   padding: 0.6rem 0.9rem;
   font: inherit;
@@ -399,7 +399,7 @@
   gap: 0.15rem;
   text-align: left;
   border: 1px solid var(--border-default);
-  background: #ffffff;
+  background: var(--bg-surface);
   border-radius: 8px;
   padding: 0.7rem 0.9rem;
   font: inherit;
@@ -444,7 +444,7 @@
   padding: 0.3rem 0.7rem;
   border: 1px solid var(--border-default);
   border-radius: 999px;
-  background: #ffffff;
+  background: var(--bg-surface);
   font: inherit;
   font-size: 0.78rem;
   font-weight: 600;
@@ -489,9 +489,8 @@
   gap: 0.15rem;
   padding: 0.75rem 0.85rem;
   border: 1px solid var(--border-default);
-  border-top: 3px solid var(--cat);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--bg-surface);
   text-align: left;
   font: inherit;
   cursor: pointer;
@@ -531,7 +530,6 @@
 .dc-concept-detail {
   --cat: #0969da;
   border: 1px solid var(--border-default);
-  border-left: 4px solid var(--cat);
   border-radius: 8px;
   padding: 1rem 1.15rem;
   margin: 0.5rem 0 1rem;
@@ -600,7 +598,7 @@
   padding: 0.25rem 0.6rem;
   border: 1px solid var(--border-default);
   border-radius: 999px;
-  background: #ffffff;
+  background: var(--bg-surface);
   font: inherit;
   font-size: 0.75rem;
   font-weight: 600;

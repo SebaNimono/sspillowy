@@ -24,7 +24,7 @@ from fastapi.responses import PlainTextResponse
 import obs_metrics
 from database import SessionLocal, db_ping
 from models import AuditEvent, Finding, ObsBucket, RunbookExecution, Scan, SecretIncident
-from workspaces import WorkspaceCtx, require_ws
+from workspaces import WorkspaceCtx, platform_admins, require_ws
 from obs_metrics import LAT_BOUNDS
 
 router = APIRouter(prefix="/api/v1/observability", tags=["Observabilidad"])
@@ -245,14 +245,21 @@ def _db_latency() -> float | None:
 
 
 def compute_observability(
-    db, range_key: str = "24h", now: datetime | None = None, *, workspace_id: str, repo_ids: list[str]
+    db,
+    range_key: str = "24h",
+    now: datetime | None = None,
+    *,
+    workspace_id: str,
+    repo_ids: list[str],
+    platform: bool = False,
 ) -> dict:
-    """La salud de la API, el correo y Pillow es de toda la plataforma; análisis e incidentes, solo del espacio."""
+    """Tráfico de la API, correo, webhook y Pillow son de toda la plataforma: solo los ve un administrador de la
+    plataforma. Análisis, motores e incidentes son del espacio."""
     now = now or _now()
     repo_ids = repo_ids or ["__none__"]
     span, step = RANGES.get(range_key, RANGES["24h"])
     since = now - span
-    buckets = _load_buckets(db, since)
+    buckets = _load_buckets(db, since) if platform else []
     http = [b for b in buckets if b["kind"] == "http"]
     api = [b for b in http if PILLOW_PREFIX not in b["key"]]
     email = [b for b in buckets if b["kind"] == "email"]
@@ -333,6 +340,8 @@ def compute_observability(
     hook_errors = sum(b["errors"] for b in hook)
     if not os.getenv("GITHUB_WEBHOOK_SECRET", "").strip():
         components.append({"id": "webhook", "name": "Webhook de GitHub", "status": "unconfigured", "detail": "Sin configurar"})
+    elif not platform:
+        components.append({"id": "webhook", "name": "Webhook de GitHub", "status": "up", "detail": "Disponible"})
     else:
         components.append({
             "id": "webhook", "name": "Webhook de GitHub",
@@ -346,6 +355,8 @@ def compute_observability(
 
     if not mailer_configured():
         components.append({"id": "email", "name": "Correo", "status": "unconfigured", "detail": "Sin configurar"})
+    elif not platform:
+        components.append({"id": "email", "name": "Correo", "status": "up", "detail": "Disponible"})
     else:
         bad = email_agg["errors"]
         components.append({
@@ -356,6 +367,8 @@ def compute_observability(
 
     if not os.getenv("GEMINI_API_KEY", "").strip():
         components.append({"id": "pillow", "name": "Pillow", "status": "unconfigured", "detail": "Sin activar"})
+    elif not platform:
+        components.append({"id": "pillow", "name": "Pillow", "status": "up", "detail": "Disponible"})
     else:
         bad = pillow_agg["errors"]
         components.append({
@@ -378,6 +391,8 @@ def compute_observability(
              99.5, api_agg["count"], api_agg["errors"]),
         _slo("api_latency", "Velocidad de la API", "Peticiones respondidas en menos de 1 segundo.",
              95.0, api_agg["count"], api_agg["count"] - _fast(api_agg)),
+    ] if platform else []
+    slos += [
         _slo("scan_success", "Análisis exitosos", "Análisis que terminan con resultados.",
              95.0, len(finished), len(finished) - len(completed)),
         _slo("scan_duration", "Análisis a tiempo", "Análisis que terminan en menos de 15 minutos.",
@@ -480,6 +495,7 @@ def compute_observability(
     return {
         "range": range_key if range_key in RANGES else "24h",
         "generated_at": now.isoformat(),
+        "platform_view": platform,
         "status": overall,
         "uptime_seconds": round(uptime),
         "components": components,
@@ -516,7 +532,9 @@ def observability_overview(range: str = Query(default="24h"), ws: WorkspaceCtx =
         raise HTTPException(status_code=400, detail="Rango no válido. Usa 24h, 7d o 30d.")
     db = SessionLocal()
     try:
-        return compute_observability(db, range, workspace_id=ws.id, repo_ids=ws.repo_ids)
+        return compute_observability(
+            db, range, workspace_id=ws.id, repo_ids=ws.repo_ids, platform=ws.email in platform_admins()
+        )
     finally:
         db.close()
 

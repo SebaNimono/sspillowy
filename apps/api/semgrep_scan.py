@@ -390,6 +390,15 @@ def finalize_scan(
                 )
         except Exception as exc:
             print(f"[sspillowy] security alert email failed: {exc}")
+        from integrations import notify_chat
+
+        posted = notify_chat(
+            repo.workspace_id,
+            f"Security Gate bloqueó {repo.name}",
+            [ev.summary(), *list(ev.reasons)[:5]],
+        )
+        if posted:
+            _append_audit(db, "integraciones", "SECURITY_ALERT_POSTED", repo.name, f"{posted} canal(es) · {ev.decision}")
 
     scan.progress_stage = "done"
     scan.progress_detail = scan.gate_detail

@@ -215,7 +215,7 @@ export const ObservabilityPage: React.FC<PageProps> = ({ onNavigate, ...headerPr
         </div>
         <div className="ob-toolbar-actions">
           {data && <span className="ob-muted">Actualizado {timeAgo(data.generated_at)} · se refresca cada minuto</span>}
-          {data?.integrations.grafana_url && (
+          {data?.platform_view && data.integrations.grafana_url && (
             <a className="btn btn-secondary" href={data.integrations.grafana_url} target="_blank" rel="noreferrer noopener">
               <ExternalLink size={15} /> Abrir Grafana
             </a>
@@ -288,18 +288,22 @@ export const ObservabilityPage: React.FC<PageProps> = ({ onNavigate, ...headerPr
           </section>
 
           <section className="ob-kpis">
-            <div>
-              <span>Peticiones</span>
-              <strong>{fmtNum(k!.requests)}</strong>
-            </div>
-            <div>
-              <span>Errores del servidor</span>
-              <strong className={k!.error_pct ? 'is-bad' : ''}>{k!.error_pct === null ? '—' : `${k!.error_pct}%`}</strong>
-            </div>
-            <div>
-              <span>Latencia p95</span>
-              <strong>{fmtMs(k!.p95_ms)}</strong>
-            </div>
+            {data.platform_view && (
+              <>
+                <div>
+                  <span>Peticiones</span>
+                  <strong>{fmtNum(k!.requests)}</strong>
+                </div>
+                <div>
+                  <span>Errores del servidor</span>
+                  <strong className={k!.error_pct ? 'is-bad' : ''}>{k!.error_pct === null ? '—' : `${k!.error_pct}%`}</strong>
+                </div>
+                <div>
+                  <span>Latencia p95</span>
+                  <strong>{fmtMs(k!.p95_ms)}</strong>
+                </div>
+              </>
+            )}
             <div>
               <span>Análisis terminados</span>
               <strong>{fmtNum(k!.scans)}</strong>
@@ -314,7 +318,8 @@ export const ObservabilityPage: React.FC<PageProps> = ({ onNavigate, ...headerPr
             </div>
           </section>
 
-          <div className="ob-charts">
+          <div className={data.platform_view ? 'ob-charts' : 'ob-charts ob-charts--single'}>
+            {data.platform_view && (
             <div className="card">
               <h3>Tráfico y latencia de la API</h3>
               <div className="ob-chart">
@@ -333,6 +338,7 @@ export const ObservabilityPage: React.FC<PageProps> = ({ onNavigate, ...headerPr
                 </ResponsiveContainer>
               </div>
             </div>
+            )}
             <div className="card">
               <h3>Análisis y su duración</h3>
               <div className="ob-chart">
@@ -388,6 +394,7 @@ export const ObservabilityPage: React.FC<PageProps> = ({ onNavigate, ...headerPr
               {k!.clone_avg_s !== null && <small className="ob-muted">Descarga del repositorio: {fmtSecs(k!.clone_avg_s)} de media.</small>}
             </div>
 
+            {data.platform_view && (
             <div className="card">
               <div className="ob-card-head">
                 <h3>Rutas de la API</h3>
@@ -434,9 +441,8 @@ export const ObservabilityPage: React.FC<PageProps> = ({ onNavigate, ...headerPr
                 <p className="ob-muted">Aún no hay peticiones registradas en el periodo.</p>
               )}
             </div>
-          </div>
+            )}
 
-          <div className="ob-grid">
             <div className="card">
               <h3>Incidentes recientes</h3>
               {data.incidents.length ? (
@@ -461,7 +467,10 @@ export const ObservabilityPage: React.FC<PageProps> = ({ onNavigate, ...headerPr
                 </p>
               )}
             </div>
+          </div>
 
+          {data.platform_view && (
+          <div className="ob-grid">
             <div className="card ob-connect">
               <h3>
                 <Server size={15} /> Prometheus y Grafana
@@ -487,6 +496,7 @@ export const ObservabilityPage: React.FC<PageProps> = ({ onNavigate, ...headerPr
               <small className="ob-muted">El panel se importa en Grafana desde Dashboards → New → Import y se conecta a tu fuente de Prometheus.</small>
             </div>
           </div>
+          )}
         </>
       )}
     </div>

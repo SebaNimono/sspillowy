@@ -84,7 +84,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       id: 'resources',
       label: t('nav.groupResources'),
-      items: [navItem('docs', BookOpen), navItem('integrations', Puzzle, true)],
+      items: [navItem('docs', BookOpen), navItem('integrations', Puzzle)],
     },
   ];
 

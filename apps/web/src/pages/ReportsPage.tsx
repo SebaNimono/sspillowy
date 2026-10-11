@@ -262,7 +262,7 @@ export const ReportsPage: React.FC<PageProps> = ({
         </div>
       </div>
 
-      {s && (
+      {s && active.length > 0 && (
         <div className="cp-summary">
           <div className="cp-summary-item">
             <span>Marcos activos</span>
@@ -296,7 +296,10 @@ export const ReportsPage: React.FC<PageProps> = ({
           {active.length === 0 ? (
             <div className="card cp-empty">
               <ClipboardCheck size={28} color="#0969da" />
-              <p>No hay marcos activos. Elige los que aplican a tu organización.</p>
+              <p>
+                Aún no mides ningún marco. Elige los que aplican a tu organización (por ejemplo ISO 27001 o SOC 2) y
+                verás qué cumples y qué te falta.
+              </p>
               <button type="button" className="btn btn-primary" onClick={() => setCatalogOpen(true)}>
                 Gestionar marcos
               </button>

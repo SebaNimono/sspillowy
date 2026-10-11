@@ -342,6 +342,16 @@ def bootstrap() -> None:
         moved = adopt_orphans(db)
         if moved:
             print(f"[sspillowy] datos sin espacio asignados a {legacy_owner()}: {moved}", flush=True)
+        legacy = (
+            db.query(WorkspaceMember.workspace_id)
+            .filter(WorkspaceMember.email == legacy_owner(), WorkspaceMember.role == "owner")
+            .order_by(WorkspaceMember.created_at.asc())
+            .first()
+        )
+        if legacy:
+            from compliance import pin_default_frameworks
+
+            pin_default_frameworks(db, legacy[0])
     except Exception as exc:
         db.rollback()
         print(f"[sspillowy] asignación de espacios omitida: {exc}", flush=True)

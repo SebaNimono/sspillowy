@@ -39,7 +39,7 @@
 }
 
 .dw-range button.is-active {
-  background: #ffffff;
+  background: var(--bg-surface);
   color: #0969da;
   box-shadow: inset 0 -2px 0 #0969da;
 }

@@ -430,7 +430,23 @@ def _enabled_map(db, workspace_id: str) -> dict[str, bool]:
         r.framework_id: bool(r.enabled)
         for r in db.query(ComplianceFrameworkSetting).filter(ComplianceFrameworkSetting.workspace_id == workspace_id)
     }
-    return {f["id"]: rows.get(f["id"], f["default"]) for f in FRAMEWORKS}
+    return {f["id"]: rows.get(f["id"], False) for f in FRAMEWORKS}
+
+
+def pin_default_frameworks(db, workspace_id: str) -> None:
+    """Fija como activos los marcos que el espacio original usaba por defecto (los nuevos parten sin marcos)."""
+    have = {
+        r.framework_id
+        for r in db.query(ComplianceFrameworkSetting).filter(ComplianceFrameworkSetting.workspace_id == workspace_id)
+    }
+    added = False
+    for f in FRAMEWORKS:
+        if f["default"] and f["id"] not in have:
+            db.add(ComplianceFrameworkSetting(workspace_id=workspace_id, framework_id=f["id"], enabled=True,
+                                              updated_by="sistema", updated_at=_now()))
+            added = True
+    if added:
+        db.commit()
 
 
 def evaluate(db, workspace_id: str, now: datetime | None = None) -> dict:

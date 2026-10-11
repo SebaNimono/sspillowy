@@ -15,7 +15,6 @@
   padding: 0.8rem 0.95rem;
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
-  border-left: 3px solid var(--c);
   border-radius: 8px;
 }
 
@@ -86,7 +85,7 @@
   padding: 0.38rem 0.55rem;
   border: 1px solid var(--border-default);
   border-radius: 6px;
-  background: #ffffff;
+  background: var(--bg-surface);
 }
 
 .sb-chips {
@@ -102,7 +101,7 @@
   padding: 0.28rem 0.7rem;
   border-radius: 999px;
   border: 1px solid var(--border-default);
-  background: #ffffff;
+  background: var(--bg-surface);
   color: var(--fg-muted);
   cursor: pointer;
   display: inline-flex;
@@ -363,7 +362,7 @@
 
 .sb-icon-btn {
   border: 1px solid var(--border-default);
-  background: #ffffff;
+  background: var(--bg-surface);
   color: var(--fg-muted);
   border-radius: 6px;
   padding: 0.3rem;

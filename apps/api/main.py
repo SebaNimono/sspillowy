@@ -67,6 +67,7 @@ from obs_metrics import MetricsMiddleware  # noqa: E402
 from observability import metrics_router, start_flusher  # noqa: E402
 from observability import router as observability_router  # noqa: E402
 from traceability import router as traceability_router  # noqa: E402
+from integrations import router as integrations_router  # noqa: E402
 from workspaces import (  # noqa: E402
     WorkspaceCtx,
     adopt_orphans,
@@ -169,6 +170,7 @@ app.include_router(compliance_router)
 app.include_router(observability_router)
 app.include_router(traceability_router)
 app.include_router(workspaces_router)
+app.include_router(integrations_router)
 app.include_router(metrics_router)
 
 # Estado de lectura de notificaciones por usuario ("email:id"; efímero por instancia)

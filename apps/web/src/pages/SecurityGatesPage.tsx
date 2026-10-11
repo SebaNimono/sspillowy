@@ -467,11 +467,9 @@ export const SecurityGatesPage: React.FC<PageProps> = ({
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginTop: '1rem' }}>
           <div
             style={{
-              background: '#ffffff',
+              background: 'var(--bg-surface)',
               padding: '1.25rem',
-              borderRadius: '8px',
               border: '1px solid var(--border-default)',
-              borderTop: '3px solid #cf222e',
             }}
           >
             <div style={{ fontWeight: 600, fontSize: '0.95rem', marginBottom: '0.35rem', color: '#cf222e' }}>
@@ -502,11 +500,9 @@ export const SecurityGatesPage: React.FC<PageProps> = ({
 
           <div
             style={{
-              background: '#ffffff',
+              background: 'var(--bg-surface)',
               padding: '1.25rem',
-              borderRadius: '8px',
               border: '1px solid var(--border-default)',
-              borderTop: '3px solid #9a6700',
             }}
           >
             <div style={{ fontWeight: 600, fontSize: '0.95rem', marginBottom: '0.35rem', color: '#9a6700' }}>
@@ -535,7 +531,7 @@ export const SecurityGatesPage: React.FC<PageProps> = ({
             />
           </div>
 
-          <div style={{ background: '#ffffff', padding: '1.25rem', borderRadius: '8px', border: '1px solid var(--border-default)' }}>
+          <div style={{ background: 'var(--bg-surface)', padding: '1.25rem', border: '1px solid var(--border-default)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#1f2328' }}>
@@ -554,7 +550,7 @@ export const SecurityGatesPage: React.FC<PageProps> = ({
             </div>
           </div>
 
-          <div style={{ background: '#ffffff', padding: '1.25rem', borderRadius: '8px', border: '1px solid var(--border-default)' }}>
+          <div style={{ background: 'var(--bg-surface)', padding: '1.25rem', border: '1px solid var(--border-default)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#8250df' }}>

@@ -21,6 +21,7 @@ import { RunbooksPage } from './pages/RunbooksPage';
 import { ExecutivePage } from './pages/ExecutivePage';
 import { ObservabilityPage } from './pages/ObservabilityPage';
 import { TraceabilityPage } from './pages/TraceabilityPage';
+import { IntegrationsPage } from './pages/IntegrationsPage';
 import { PillowAgent } from './components/PillowAgent';
 import { ComingSoonPage } from './pages/ComingSoonPage';
 import { ROADMAP } from './config/roadmap';
@@ -37,6 +38,7 @@ import {
 } from './api/client';
 import { CookieBanner } from './components/CookieBanner';
 import { AppToaster } from './components/Toast';
+import './styles/flat.css';
 
 type AppView = 'site' | 'login' | 'console' | LegalDoc | 'reset-password';
 
@@ -100,6 +102,7 @@ const VALID_TABS = new Set([
   'observability',
   'traceability',
   'docs',
+  'integrations',
   ...Object.keys(ROADMAP),
 ]);
 
@@ -461,6 +464,8 @@ const AppShell: React.FC = () => {
         return <ObservabilityPage {...pageProps} />;
       case 'traceability':
         return <TraceabilityPage {...pageProps} />;
+      case 'integrations':
+        return <IntegrationsPage {...pageProps} />;
       default:
         if (ROADMAP[activeTab]) return <ComingSoonPage key={activeTab} module={ROADMAP[activeTab]} {...pageProps} />;
         return <DashboardPage {...pageProps} />;

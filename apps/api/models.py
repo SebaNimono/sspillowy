@@ -350,6 +350,21 @@ class ComplianceFrameworkSetting(Base):
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
+class WorkspaceIntegration(Base):
+    """Canales de chat conectados a un espacio (Slack, Teams) para recibir alertas."""
+
+    __tablename__ = "ws_integrations"
+
+    workspace_id = Column(String, primary_key=True)
+    kind = Column(String, primary_key=True)
+    url = Column(Text, nullable=False)
+    enabled = Column(Boolean, default=True)
+    last_ok_at = Column(DateTime, nullable=True)
+    last_error = Column(String, nullable=True)
+    updated_by = Column(String, nullable=True)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
 class ComplianceControlState(Base):
     """Datos que aporta el equipo a un control: responsable, evidencia, verificación manual o exclusión."""
 
