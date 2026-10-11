@@ -137,12 +137,12 @@ export const GithubWebhookPanel: React.FC<{
                 className="btn btn-secondary"
                 disabled={busy}
                 onClick={() => {
-                  if (window.confirm('¿Desconectar el webhook? Los push dejarán de analizarse solos.')) {
+                  if (window.confirm('¿Desinstalar el análisis automático? Los push dejarán de analizarse solos.')) {
                     void run(deleteGithubWebhook, (r) => r);
                   }
                 }}
               >
-                <Unplug size={14} /> Desconectar
+                <Unplug size={14} /> Desinstalar
               </button>
             )}
           </div>
@@ -159,13 +159,13 @@ export const GithubWebhookPanel: React.FC<{
       </p>
       <div className="ig-actions">
         <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void generate()}>
-          {busy ? 'Generando…' : 'Conectar'}
+          {busy ? 'Generando…' : 'Instalar'}
         </button>
       </div>
       {error && <p className="ig-error">{error}</p>}
     </>
   ) : (
-    <p className="ig-hint">Pide a un propietario o administrador del espacio que lo conecte.</p>
+    <p className="ig-hint">Pide a un propietario o administrador del espacio que lo instale.</p>
   );
 };
 

@@ -807,7 +807,7 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
             <p className="rp-sub">
               Cada push o pull request de un repositorio de GitHub agregado en este espacio se analiza solo.
             </p>
-            <div className="ig-card" style={{ border: 'none', padding: 0, background: 'transparent' }}>
+            <div className="ig-modal-body">
               <GithubWebhookPanel data={integrations} onChange={setIntegrations} />
             </div>
             <div className="rp-footer">

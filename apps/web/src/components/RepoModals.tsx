@@ -92,8 +92,9 @@ const nameFromUrl = (u: string) =>
 export const AddRepoModal: React.FC<{
   onClose: () => void;
   onCreated: (repo: Repository) => void;
-}> = ({ onClose, onCreated }) => {
-  const [provider, setProvider] = useState<RepoProvider | null>(null);
+  initialProvider?: RepoProvider;
+}> = ({ onClose, onCreated, initialProvider }) => {
+  const [provider, setProvider] = useState<RepoProvider | null>(initialProvider ?? null);
   const [url, setUrl] = useState('');
   const [name, setName] = useState('');
   const [branch, setBranch] = useState('');

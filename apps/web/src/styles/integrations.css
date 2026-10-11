@@ -1,8 +1,10 @@
+/* ---------- Catálogo ---------- */
+
 .ig-toolbar {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  margin-bottom: 0.75rem;
+  margin-bottom: 1.5rem;
 }
 
 .ig-search {
@@ -10,7 +12,7 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0 0.7rem;
+  padding: 0 0.75rem;
   border: 1px solid var(--border-default);
   background: var(--bg-surface);
   color: var(--fg-muted);
@@ -19,7 +21,7 @@
 .ig-search input {
   flex: 1;
   min-width: 0;
-  padding: 0.55rem 0;
+  padding: 0.6rem 0;
   border: none;
   outline: none;
   background: transparent;
@@ -32,7 +34,7 @@
 }
 
 .ig-toolbar select {
-  padding: 0.5rem 0.6rem;
+  padding: 0.55rem 0.6rem;
   border: 1px solid var(--border-default);
   background: var(--bg-surface);
   font-size: 0.85rem;
@@ -45,123 +47,213 @@
   white-space: nowrap;
 }
 
-.ig-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  margin-bottom: 1.25rem;
-}
-
-.ig-chips button {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.3rem 0.75rem;
-  border: 1px solid var(--border-default);
-  background: var(--bg-surface);
-  font-size: 0.8rem;
-  color: var(--fg-default);
-  cursor: pointer;
-}
-
-.ig-chips button span {
-  font-size: 0.72rem;
-  color: var(--fg-muted);
-}
-
-.ig-chips button:hover {
-  border-color: #8c959f;
-}
-
-.ig-chips button.is-active {
-  border-color: #0969da;
-  background: #ddf4ff;
-  color: #0969da;
-  font-weight: 600;
-}
-
-.ig-chips button.is-active span {
-  color: #0969da;
+.ig-group + .ig-group {
+  margin-top: 2rem;
 }
 
 .ig-section {
-  margin: 1.5rem 0 0.75rem;
-  font-size: 0.78rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.75rem;
+  font-size: 0.95rem;
   font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--fg-muted);
+  color: var(--fg-default);
 }
 
-section:first-of-type > .ig-section {
-  margin-top: 0;
+.ig-section span {
+  padding: 0 0.45rem;
+  border: 1px solid var(--border-default);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--fg-muted);
 }
 
 .ig-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 0.75rem;
 }
 
 .ig-card {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
-  padding: 1.1rem 1.2rem;
+  gap: 0.65rem;
+  padding: 1rem;
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
   min-width: 0;
+  transition: border-color 0.12s ease;
 }
 
-.ig-card.is-muted {
-  opacity: 0.75;
+.ig-card:hover {
+  border-color: #8c959f;
 }
 
-.ig-card header {
+.ig-card.is-soon {
+  background: transparent;
+}
+
+.ig-card.is-soon .il-tile {
+  filter: grayscale(1);
+  opacity: 0.6;
+}
+
+.ig-card-top {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-
-.ig-card header strong {
-  flex: 1;
+  gap: 0.7rem;
   min-width: 0;
-  font-size: 0.98rem;
 }
 
-.ig-card header svg {
-  flex: 0 0 auto;
+.ig-card-title {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ig-card-title strong {
+  font-size: 0.92rem;
+  color: var(--fg-default);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ig-card-title span {
+  font-size: 0.74rem;
+  color: var(--fg-muted);
 }
 
 .ig-card > p {
   margin: 0;
-  font-size: 0.84rem;
-  line-height: 1.5;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--fg-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 2.4em;
+}
+
+.ig-card > footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: auto;
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--border-default);
+  min-height: 2.4rem;
+}
+
+.ig-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
   color: var(--fg-muted);
 }
 
-.ig-badge {
-  flex: 0 0 auto;
-  padding: 0.15rem 0.5rem;
-  font-size: 0.7rem;
-  font-weight: 700;
-  border: 1px solid var(--border-default);
-  color: var(--fg-muted);
-  background: var(--bg-canvas);
+.ig-state i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #8c959f;
 }
 
-.ig-badge.is-on {
-  color: #1a7f37;
-  border-color: #4ac26b;
-  background: #dafbe1;
+.ig-state.is-on i {
+  background: #1a7f37;
 }
 
-.ig-badge.is-off {
+.ig-state.is-warn {
   color: #9a6700;
-  border-color: #d4a72c;
-  background: #fff8c5;
 }
+
+.ig-state.is-warn i {
+  background: #bf8700;
+}
+
+.ig-install {
+  padding: 0.3rem 0.9rem;
+  font-size: 0.8rem;
+}
+
+/* ---------- Logos ---------- */
+
+.il-tile {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-default);
+  background: #ffffff;
+}
+
+.il-stack {
+  position: relative;
+  display: inline-flex;
+}
+
+.il-badge {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  padding: 1px;
+  background: #ffffff;
+  color: #bf8700;
+  fill: #bf8700;
+}
+
+/* ---------- Modal de configuración ---------- */
+
+.ig-modal {
+  width: 100%;
+  max-width: 580px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.ig-modal-head {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.ig-modal-head > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.ig-modal-head h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--fg-default);
+}
+
+.ig-modal-head span {
+  font-size: 0.78rem;
+  color: var(--fg-muted);
+}
+
+.ig-modal-summary {
+  margin: 0.85rem 0 0;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid var(--border-default);
+  font-size: 0.86rem;
+  color: var(--fg-muted);
+}
+
+.ig-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  padding-top: 0.9rem;
+}
+
+/* ---------- Piezas compartidas con los paneles ---------- */
 
 .ig-facts {
   margin: 0;
@@ -171,6 +263,10 @@ section:first-of-type > .ig-section {
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
+}
+
+.ig-facts li svg {
+  vertical-align: -2px;
 }
 
 .ig-label {
@@ -212,38 +308,29 @@ section:first-of-type > .ig-section {
   white-space: pre;
 }
 
-.ig-steps .ig-copy {
-  margin: 0.3rem 0 0.4rem;
-}
-
-.ig-steps strong,
-.ig-steps code {
-  color: var(--fg-default);
-}
-
-.ig-facts li svg {
-  vertical-align: -2px;
-}
-
 .ig-icon-btn {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   border: 1px solid var(--border-default);
   background: var(--bg-surface);
   color: var(--fg-muted);
   cursor: pointer;
 }
 
+.ig-icon-btn:hover {
+  color: var(--fg-default);
+  border-color: #8c959f;
+}
+
 .ig-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-  margin-top: auto;
-  padding-top: 0.35rem;
+  padding-top: 0.25rem;
 }
 
 .ig-actions .btn {
@@ -255,24 +342,42 @@ section:first-of-type > .ig-section {
 .ig-steps {
   margin: 0;
   padding-left: 1.1rem;
-  font-size: 0.8rem;
-  line-height: 1.5;
+  font-size: 0.82rem;
+  line-height: 1.55;
   color: var(--fg-muted);
+}
+
+.ig-steps .ig-copy {
+  margin: 0.3rem 0 0.4rem;
+}
+
+.ig-steps strong,
+.ig-steps code {
+  color: var(--fg-default);
 }
 
 .ig-connect {
   display: flex;
   gap: 0.5rem;
-  margin-top: auto;
 }
 
 .ig-connect input {
   flex: 1;
   min-width: 0;
-  padding: 0.45rem 0.6rem;
+  padding: 0.5rem 0.6rem;
   border: 1px solid var(--border-default);
-  background: var(--bg-input);
-  font-size: 0.82rem;
+  background: var(--bg-input, #fff);
+  font-size: 0.84rem;
+}
+
+.ig-link {
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: inherit;
+  font-weight: 600;
+  color: #0969da;
+  cursor: pointer;
 }
 
 .ig-error {
@@ -289,23 +394,23 @@ section:first-of-type > .ig-section {
 
 .ig-hint {
   margin: 0;
-  font-size: 0.8rem;
+  font-size: 0.82rem;
+  line-height: 1.5;
   color: var(--fg-muted);
 }
 
 .ig-empty {
+  padding: 2rem;
   text-align: center;
   color: var(--fg-muted);
 }
 
-@media (max-width: 1100px) {
-  .ig-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
 @media (max-width: 700px) {
-  .ig-grid {
-    grid-template-columns: 1fr;
+  .ig-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .ig-search {
+    flex-basis: 100%;
   }
 }
