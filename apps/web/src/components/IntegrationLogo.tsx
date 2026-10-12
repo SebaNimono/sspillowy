@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bug, Container, KeyRound, Mail, PackageSearch, Radar, ServerCog, Webhook, Workflow, Zap } from 'lucide-react';
+import { Mail, Webhook, Workflow, Zap } from 'lucide-react';
 import type { RepoProvider } from '../api/client';
 import { ProviderLogo } from './ProviderLogo';
 
@@ -118,17 +118,12 @@ const Mark: React.FC<{ id: LogoId; size: number }> = ({ id, size }) => {
     case 'webhooks':
       return <Webhook size={size} color="#8250df" />;
     case 'osv':
-      return <PackageSearch size={size} color="#1a73e8" />;
     case 'grype':
-      return <Container size={size} color="#0b6e99" />;
     case 'checkov':
-      return <ServerCog size={size} color="#6f42c1" />;
     case 'bandit':
-      return <Bug size={size} color="#3776ab" />;
     case 'nuclei':
-      return <Radar size={size} color="#cf222e" />;
     case 'trufflehog':
-      return <KeyRound size={size} color="#bc4c00" />;
+      return <img src={`/integrations/${id}.png`} width={size} height={size} alt="" draggable={false} />;
     default:
       return null;
   }
