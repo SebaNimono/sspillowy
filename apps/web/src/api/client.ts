@@ -944,6 +944,7 @@ export async function fetchAuditLog(repositoryIds?: string[]): Promise<AuditEven
 export interface DashboardViewConfig {
   widgets: Record<string, boolean>;
   thresholds: { critical_max: number; high_max: number; open_max: number; health_min: number };
+  layout?: { id: string; span: number }[];
 }
 
 export interface DashboardView {

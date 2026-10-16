@@ -3250,10 +3250,88 @@ a.cookie-inline {
   cursor: pointer;
 }
 
-.dash-settings-trigger:hover {
+.dash-settings-trigger:hover,
+.dash-settings-trigger.is-active {
   border-color: #9dbfe8;
   color: #0969da;
   background: #f1f6fb;
+}
+
+.dash-settings-layout {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.dash-settings-layout-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.55rem;
+  align-items: center;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid #e6ebf0;
+  background: #ffffff;
+  opacity: 0.55;
+}
+
+.dash-settings-layout-row.is-on {
+  opacity: 1;
+  background: #f1f6fb;
+  border-color: #c9daf0;
+}
+
+.dash-settings-layout-row.is-dragging {
+  opacity: 0.45;
+}
+
+.dash-settings-grip {
+  color: #8c959f;
+  cursor: grab;
+  display: inline-flex;
+}
+
+.dash-settings-layout-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.dash-settings-layout-toggle input {
+  margin-top: 0.2rem;
+  accent-color: #5b8fd4;
+}
+
+.dash-settings-layout-toggle strong {
+  display: block;
+  font-size: 0.84rem;
+  color: #1f2328;
+}
+
+.dash-settings-layout-toggle em {
+  display: block;
+  font-style: normal;
+  font-size: 0.72rem;
+  color: #8c959f;
+  line-height: 1.35;
+}
+
+.dash-settings-span,
+.dash-settings-span-fixed {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #656d76;
+}
+
+.dash-settings-span {
+  border: 1px solid #e6ebf0;
+  background: #ffffff;
+  padding: 0.3rem 0.4rem;
+  min-width: 4.5rem;
+}
+
+.dash-settings-span-fixed {
+  white-space: nowrap;
 }
 
 .dash-settings-backdrop {

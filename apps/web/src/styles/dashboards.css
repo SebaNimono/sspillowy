@@ -165,13 +165,28 @@
 .dw-span-8 { grid-column: span 40; }
 .dw-span-12 { grid-column: span 60; }
 
+.dw-kpi-band {
+  grid-column: span 60;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1rem;
+  min-width: 0;
+}
+
+.dw-kpi-band.is-arranging {
+  outline: 1px dashed #c9daf0;
+  outline-offset: 4px;
+  padding: 0.35rem;
+  background: #f7fafc;
+}
+
 .dw-kpi {
-  grid-column: span 12;
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
   padding: 0.95rem 1.1rem;
   min-width: 0;
+  margin-bottom: 0;
   border: 1px solid #e6ebf0;
   background: #f7f9fb;
   box-shadow: none;
@@ -260,6 +275,70 @@
   background: #fafbfc;
   border-color: #e6ebf0;
   box-shadow: none;
+}
+
+.dw-widget.is-arranging {
+  outline: 1px dashed #c9daf0;
+  outline-offset: 2px;
+}
+
+.dw-widget.is-drag-over {
+  outline-color: #5b8fd4;
+  background: #f1f6fb;
+}
+
+.dw-arrange {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.dw-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid #e6ebf0;
+  background: #ffffff;
+  color: #656d76;
+  cursor: grab;
+}
+
+.dw-drag-handle:active {
+  cursor: grabbing;
+}
+
+.dw-span-select {
+  border: 1px solid #e6ebf0;
+  background: #ffffff;
+  color: #656d76;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.25rem 0.35rem;
+}
+
+.dw-arrange-hint {
+  width: 100%;
+  margin: 0 0 0.85rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid #c9daf0;
+  background: #f1f6fb;
+  color: #0a3069;
+  font-size: 0.8rem;
+}
+
+@media (max-width: 1200px) {
+  .dw-kpi-band {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .dw-kpi-band {
+    grid-template-columns: 1fr;
+  }
 }
 
 .dw-head {
@@ -538,7 +617,7 @@
   .dw-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .dw-kpi,
+  .dw-kpi-band,
   .dw-span-3,
   .dw-span-4,
   .dw-span-5,
@@ -556,7 +635,7 @@
   .dw-grid {
     grid-template-columns: 1fr;
   }
-  .dw-kpi,
+  .dw-kpi-band,
   .dw-span-3,
   .dw-span-4,
   .dw-span-5,

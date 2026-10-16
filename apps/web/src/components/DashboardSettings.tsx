@@ -1,12 +1,17 @@
 import React, { useState } from 'react';
-import { Settings2, X } from 'lucide-react';
+import { GripVertical, Settings2, X } from 'lucide-react';
 import {
   DashboardConfig,
-  WIDGET_GROUPS,
+  DashboardWidgetId,
   WIDGET_HINTS,
   WIDGET_IDS,
   WIDGET_LABELS,
+  WIDGET_SPAN_OPTIONS,
+  WidgetSpan,
+  moveLayoutItem,
+  normalizeLayout,
   saveDashboardConfig,
+  setLayoutSpan,
   syncDashboardConfigToUrl,
 } from '../config/dashboardConfig';
 
@@ -15,23 +20,36 @@ interface DashboardSettingsProps {
   onChange: (config: DashboardConfig) => void;
   /** false: el dashboard guarda su propia configuración en el servidor. */
   persistLocal?: boolean;
+  arranging?: boolean;
+  onArrangingChange?: (on: boolean) => void;
 }
 
-export const DashboardSettings: React.FC<DashboardSettingsProps> = ({ config, onChange, persistLocal = true }) => {
+export const DashboardSettings: React.FC<DashboardSettingsProps> = ({
+  config,
+  onChange,
+  persistLocal = true,
+  arranging = false,
+  onArrangingChange,
+}) => {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(config);
+  const [dragId, setDragId] = useState<DashboardWidgetId | null>(null);
 
   const openPanel = () => {
-    setDraft(config);
+    setDraft({
+      ...config,
+      layout: normalizeLayout(config.layout),
+    });
     setOpen(true);
   };
 
   const apply = () => {
+    const next = { ...draft, layout: normalizeLayout(draft.layout) };
     if (persistLocal) {
-      saveDashboardConfig(draft);
-      syncDashboardConfigToUrl(draft);
+      saveDashboardConfig(next);
+      syncDashboardConfigToUrl(next);
     }
-    onChange(draft);
+    onChange(next);
     setOpen(false);
   };
 
@@ -44,10 +62,21 @@ export const DashboardSettings: React.FC<DashboardSettingsProps> = ({ config, on
 
   if (!open) {
     return (
-      <button type="button" className="dash-settings-trigger" onClick={openPanel} title="Personalizar dashboard">
-        <Settings2 size={16} />
-        <span>Personalizar</span>
-      </button>
+      <>
+        <button
+          type="button"
+          className={`dash-settings-trigger ${arranging ? 'is-active' : ''}`}
+          onClick={() => onArrangingChange?.(!arranging)}
+          title="Mover y redimensionar widgets en el tablero"
+        >
+          <GripVertical size={16} />
+          <span>{arranging ? 'Listo' : 'Mover'}</span>
+        </button>
+        <button type="button" className="dash-settings-trigger" onClick={openPanel} title="Personalizar dashboard">
+          <Settings2 size={16} />
+          <span>Personalizar</span>
+        </button>
+      </>
     );
   }
 
@@ -62,7 +91,9 @@ export const DashboardSettings: React.FC<DashboardSettingsProps> = ({ config, on
         <div className="dash-settings-head">
           <div>
             <h2 id="dash-settings-title">Personalizar dashboard</h2>
-            <p className="dash-settings-sub">{enabledCount} de {WIDGET_IDS.length} bloques activos</p>
+            <p className="dash-settings-sub">
+              {enabledCount} de {WIDGET_IDS.length} bloques · arrastra para ordenar
+            </p>
           </div>
           <button type="button" className="dash-settings-close" onClick={() => setOpen(false)} aria-label="Cerrar">
             <X size={18} />
@@ -70,8 +101,8 @@ export const DashboardSettings: React.FC<DashboardSettingsProps> = ({ config, on
         </div>
 
         <p className="dash-settings-lead">
-          Activa solo lo que necesitas y define umbrales. Si un valor supera el máximo (o el health baja del mínimo), el
-          KPI se tiñe en rojo suave.{' '}
+          Activa bloques, cámbiales el ancho y reordénalos. También puedes usar <strong>Mover</strong> en el tablero para
+          arrastrarlos en vivo.{' '}
           {persistLocal
             ? 'Los ajustes quedan en este navegador y en la URL.'
             : 'Los ajustes se guardan en este dashboard y los ve todo el equipo.'}
@@ -79,7 +110,7 @@ export const DashboardSettings: React.FC<DashboardSettingsProps> = ({ config, on
 
         <section className="dash-settings-section">
           <div className="dash-settings-section-head">
-            <h3>Bloques visibles</h3>
+            <h3>Orden y tamaño</h3>
             <div className="dash-settings-bulk">
               <button type="button" onClick={() => setAll(true)}>
                 Todos
@@ -90,29 +121,65 @@ export const DashboardSettings: React.FC<DashboardSettingsProps> = ({ config, on
             </div>
           </div>
 
-          {WIDGET_GROUPS.map((group) => (
-            <div key={group.title} className="dash-settings-group">
-              <h4>{group.title}</h4>
-              <div className="dash-settings-tiles">
-                {group.ids.map((id) => (
-                  <label key={id} className={`dash-settings-tile ${draft.widgets[id] ? 'is-on' : ''}`}>
-                    <input
-                      type="checkbox"
-                      checked={draft.widgets[id]}
-                      onChange={(e) =>
-                        setDraft({
-                          ...draft,
-                          widgets: { ...draft.widgets, [id]: e.target.checked },
-                        })
-                      }
-                    />
-                    <span className="dash-settings-tile-title">{WIDGET_LABELS[id]}</span>
-                    <span className="dash-settings-tile-hint">{WIDGET_HINTS[id]}</span>
-                  </label>
-                ))}
+          <div className="dash-settings-layout">
+            {draft.layout.map((item) => (
+              <div
+                key={item.id}
+                className={`dash-settings-layout-row ${draft.widgets[item.id] ? 'is-on' : ''} ${dragId === item.id ? 'is-dragging' : ''}`}
+                draggable
+                onDragStart={() => setDragId(item.id)}
+                onDragEnd={() => setDragId(null)}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={() => {
+                  if (!dragId) return;
+                  setDraft({ ...draft, layout: moveLayoutItem(draft.layout, dragId, item.id) });
+                  setDragId(null);
+                }}
+              >
+                <span className="dash-settings-grip" aria-hidden>
+                  <GripVertical size={14} />
+                </span>
+                <label className="dash-settings-layout-toggle">
+                  <input
+                    type="checkbox"
+                    checked={draft.widgets[item.id]}
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        widgets: { ...draft.widgets, [item.id]: e.target.checked },
+                      })
+                    }
+                  />
+                  <span>
+                    <strong>{WIDGET_LABELS[item.id]}</strong>
+                    <em>{WIDGET_HINTS[item.id]}</em>
+                  </span>
+                </label>
+                {item.id === 'kpis' ? (
+                  <span className="dash-settings-span-fixed">Fila completa</span>
+                ) : (
+                  <select
+                    className="dash-settings-span"
+                    value={item.span}
+                    disabled={!draft.widgets[item.id]}
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        layout: setLayoutSpan(draft.layout, item.id, Number(e.target.value) as WidgetSpan),
+                      })
+                    }
+                    aria-label={`Ancho de ${WIDGET_LABELS[item.id]}`}
+                  >
+                    {WIDGET_SPAN_OPTIONS.map((opt) => (
+                      <option key={opt.span} value={opt.span}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </section>
 
         <section className="dash-settings-section">
@@ -185,7 +252,7 @@ export const DashboardSettings: React.FC<DashboardSettingsProps> = ({ config, on
         {persistLocal && (
           <p className="dash-settings-query-hint">
             Ejemplo URL:{' '}
-            <code>?w=kpis,health,heatmap&amp;crit_max=0&amp;health_min=80</code>
+            <code>?w=kpis,health,heatmap&amp;layout=kpis:12,trend:8,gates:4&amp;crit_max=0</code>
           </p>
         )}
 

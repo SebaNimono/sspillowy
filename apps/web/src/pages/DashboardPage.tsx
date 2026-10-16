@@ -43,12 +43,20 @@ import {
   ALERT_COLORS,
   PASTEL_GATE,
   PASTEL_SEVERITY,
-  DEFAULT_DASHBOARD_CONFIG,
   DashboardConfig,
+  DashboardWidgetId,
   MetricAlert,
+  WIDGET_SPAN_OPTIONS,
+  WidgetSpan,
   healthAlert,
   loadDashboardConfig,
+  mergeDashboardConfig,
   metricAlert,
+  moveLayoutItem,
+  normalizeLayout,
+  saveDashboardConfig,
+  setLayoutSpan,
+  syncDashboardConfigToUrl,
 } from '../config/dashboardConfig';
 import {
   PILLOW_WIDGETS_EVENT,
@@ -78,6 +86,7 @@ import {
   Database,
   Flame,
   GitPullRequest,
+  GripVertical,
   Hourglass,
   Layers,
   Package,
@@ -261,17 +270,42 @@ const Delta: React.FC<{ value: number | null; suffix?: string; goodWhenUp?: bool
 const Widget: React.FC<{
   title: string;
   icon: React.ReactNode;
-  span: 3 | 4 | 5 | 6 | 7 | 8 | 12;
+  span: WidgetSpan;
   chip?: React.ReactNode;
   onOpen?: () => void;
   children: React.ReactNode;
-}> = ({ title, icon, span, chip, onOpen, children }) => (
+  arranging?: boolean;
+  widgetId?: DashboardWidgetId;
+  dragOver?: boolean;
+  onDragStart?: () => void;
+  onDragEnd?: () => void;
+  onDragOver?: (e: React.DragEvent) => void;
+  onDrop?: () => void;
+  onSpanChange?: (span: WidgetSpan) => void;
+}> = ({
+  title,
+  icon,
+  span,
+  chip,
+  onOpen,
+  children,
+  arranging,
+  widgetId,
+  dragOver,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDrop,
+  onSpanChange,
+}) => (
   <motion.section
-    className={`card dw-widget dw-span-${span}`}
+    className={`card dw-widget dw-span-${span}${arranging ? ' is-arranging' : ''}${dragOver ? ' is-drag-over' : ''}`}
     initial={{ opacity: 0 }}
     whileInView={{ opacity: 1 }}
     viewport={{ once: true }}
     transition={{ duration: 0.28 }}
+    onDragOver={arranging ? onDragOver : undefined}
+    onDrop={arranging ? onDrop : undefined}
   >
     <header className="dw-head">
       <div className="card-title">
@@ -279,8 +313,37 @@ const Widget: React.FC<{
         <span>{title}</span>
       </div>
       <div className="dw-head-right">
-        {chip}
-        {onOpen && (
+        {arranging && widgetId && (
+          <div className="dw-arrange">
+            <button
+              type="button"
+              className="dw-drag-handle"
+              draggable
+              onDragStart={onDragStart}
+              onDragEnd={onDragEnd}
+              title="Arrastrar para mover"
+              aria-label={`Mover ${title}`}
+            >
+              <GripVertical size={14} />
+            </button>
+            {widgetId !== 'kpis' && (
+              <select
+                className="dw-span-select"
+                value={span}
+                onChange={(e) => onSpanChange?.(Number(e.target.value) as WidgetSpan)}
+                aria-label={`Ancho de ${title}`}
+              >
+                {WIDGET_SPAN_OPTIONS.map((opt) => (
+                  <option key={opt.span} value={opt.span}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        )}
+        {!arranging && chip}
+        {!arranging && onOpen && (
           <button type="button" className="dw-link" onClick={onOpen}>
             Ver hallazgos →
           </button>
@@ -357,13 +420,10 @@ export const DashboardPage: React.FC<PageProps> = ({
 }) => {
   const { t } = useI18n();
   const [config, setConfig] = useState<DashboardConfig>(() =>
-    view
-      ? {
-          widgets: { ...DEFAULT_DASHBOARD_CONFIG.widgets, ...(view.config?.widgets ?? {}) },
-          thresholds: { ...DEFAULT_DASHBOARD_CONFIG.thresholds, ...(view.config?.thresholds ?? {}) },
-        }
-      : loadDashboardConfig(),
+    view ? mergeDashboardConfig(view.config as Partial<DashboardConfig> | null) : loadDashboardConfig(),
   );
+  const [arranging, setArranging] = useState(false);
+  const [dragId, setDragId] = useState<DashboardWidgetId | null>(null);
   const [range, setRange] = useState<RangeDays>(() => (view ? view.range_days : loadRange()));
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -466,13 +526,19 @@ export const DashboardPage: React.FC<PageProps> = ({
   };
 
   const changeConfig = (next: DashboardConfig) => {
-    setConfig(next);
-    if (view) persistView({ config: next as unknown as DashboardView['config'] });
+    const normalized = { ...next, layout: normalizeLayout(next.layout) };
+    setConfig(normalized);
+    if (view) persistView({ config: normalized as unknown as DashboardView['config'] });
+    else {
+      saveDashboardConfig(normalized);
+      syncDashboardConfigToUrl(normalized);
+    }
   };
 
   const resolvedStats = stats ?? EMPTY_STATS;
   const loading = stats === null;
-  const { thresholds, widgets } = config;
+  const { thresholds, widgets, layout } = config;
+  const visibleLayout = layout.filter((item) => widgets[item.id]);
   const now = updatedAt?.getTime() ?? Date.now();
   const goFindings = () => onNavigate?.('findings');
 
@@ -746,7 +812,13 @@ export const DashboardPage: React.FC<PageProps> = ({
           {!loading && dataReady && (
             <span className={`dash-status-pill dash-status-pill--${openAlert}`}>{active.length} hallazgos activos</span>
           )}
-          <DashboardSettings config={config} onChange={changeConfig} persistLocal={!view} />
+          <DashboardSettings
+            config={config}
+            onChange={changeConfig}
+            persistLocal={!view}
+            arranging={arranging}
+            onArrangingChange={setArranging}
+          />
         </div>
       </div>
 
@@ -760,369 +832,470 @@ export const DashboardPage: React.FC<PageProps> = ({
 
       {!loading && !dataReady && <GetStarted onNavigate={onNavigate} />}
 
+      {!loading && dataReady && arranging && (
+        <p className="dw-arrange-hint">
+          Arrastra el asa de cada bloque para reordenarlo y usa el selector de ancho. Pulsa <strong>Listo</strong> cuando
+          termines.
+        </p>
+      )}
+
       {!loading && dataReady && (
         <div className="dw-grid">
-          {widgets.kpis &&
-            kpis.map((k) => (
-              <motion.section
-                key={k.id}
-                className={`card dw-kpi dw-kpi--${k.tone}`}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.25 }}
-              >
-                <span className="dw-kpi-label">{k.label}</span>
-                <div className="dw-kpi-row">
-                  <span className="dw-kpi-value" style={{ color: k.color }}>
-                    {k.value === null ? '—' : <AnimatedNumber value={k.value} />}
-                    {k.value !== null && k.suffix ? <small>{k.suffix}</small> : null}
-                  </span>
-                  <Sparkline data={k.spark} color={k.color} id={k.id} />
-                </div>
-                {k.foot}
-                <span className="dw-kpi-hint">{k.hint}</span>
-              </motion.section>
-            ))}
+          {visibleLayout.map((item) => {
+            const dragProps = {
+              arranging,
+              widgetId: item.id,
+              dragOver: dragId !== null && dragId !== item.id,
+              onDragStart: () => setDragId(item.id),
+              onDragEnd: () => setDragId(null),
+              onDragOver: (e: React.DragEvent) => e.preventDefault(),
+              onDrop: () => {
+                if (!dragId) return;
+                changeConfig({ ...config, layout: moveLayoutItem(config.layout, dragId, item.id) });
+                setDragId(null);
+              },
+              onSpanChange: (span: WidgetSpan) =>
+                changeConfig({ ...config, layout: setLayoutSpan(config.layout, item.id, span) }),
+            };
 
-          {widgets.trend && (
-            <Widget
-              title={`Detección por severidad · ${range} días`}
-              icon={<Activity size={18} color="#8250df" />}
-              span={8}
-              chip={<span className="dash-chip">{derived.detected} detectados</span>}
-            >
-              {derived.series.some((d) => d.total > 0) ? (
-                <div className="dash-chart" style={{ height: 240 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={derived.series}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#eaeef2" vertical={false} />
-                      <XAxis dataKey="label" tick={{ fill: '#656d76', fontSize: 11 }} axisLine={false} tickLine={false} minTickGap={18} />
-                      <YAxis allowDecimals={false} tick={{ fill: '#656d76', fontSize: 11 }} axisLine={false} tickLine={false} width={32} />
-                      <Tooltip content={<ChartTooltip />} />
-                      {TREND_SEVERITIES.map((sev) => (
-                        <Area
-                          key={sev}
-                          type="monotone"
-                          dataKey={sev}
-                          name={SEVERITY_LABEL[sev]}
-                          stackId="sev"
-                          stroke={PASTEL_SEVERITY[sev]}
-                          fill={PASTEL_SEVERITY[sev]}
-                          fillOpacity={0.55}
-                          strokeWidth={1.25}
-                        />
-                      ))}
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              ) : (
-                <Empty text={`Sin escaneos con hallazgos en los últimos ${range} días.`} />
-              )}
-            </Widget>
-          )}
-
-          {widgets.gates && (
-            <Widget title="Security Gate" icon={<GitPullRequest size={18} color="#1a7f37" />} span={4} chip={<span className="dash-chip">{range} días</span>}>
-              {gatePie.length ? (
-                <div className="dw-donut">
-                  <div className="dash-chart" style={{ height: 180 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie data={gatePie} dataKey="value" nameKey="name" innerRadius="62%" outerRadius="92%" paddingAngle={2} stroke="none">
-                          {gatePie.map((d) => (
-                            <Cell key={d.name} fill={d.fill} />
-                          ))}
-                        </Pie>
-                        <Tooltip content={<ChartTooltip />} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    <div className="dw-donut-center">
-                      <b>{derived.passRate === null ? '—' : `${Math.round(derived.passRate)}%`}</b>
-                      <span>aprobado</span>
+            if (item.id === 'kpis') {
+              return (
+                <div
+                  key="kpis"
+                  className={`dw-kpi-band${arranging ? ' is-arranging' : ''}`}
+                  onDragOver={arranging ? (e) => e.preventDefault() : undefined}
+                  onDrop={
+                    arranging
+                      ? () => {
+                          if (!dragId) return;
+                          changeConfig({ ...config, layout: moveLayoutItem(config.layout, dragId, 'kpis') });
+                          setDragId(null);
+                        }
+                      : undefined
+                  }
+                >
+                  {arranging && (
+                    <div className="dw-arrange" style={{ gridColumn: '1 / -1', marginBottom: '0.25rem' }}>
+                      <button
+                        type="button"
+                        className="dw-drag-handle"
+                        draggable
+                        onDragStart={() => setDragId('kpis')}
+                        onDragEnd={() => setDragId(null)}
+                        title="Arrastrar fila de KPIs"
+                      >
+                        <GripVertical size={14} />
+                      </button>
+                      <span style={{ fontSize: '0.75rem', color: '#656d76', fontWeight: 600 }}>KPIs</span>
                     </div>
-                  </div>
-                  <ul className="dw-legend">
-                    {gatePie.map((d) => (
-                      <li key={d.name}>
-                        <i style={{ background: d.fill }} />
-                        <span>{d.name}</span>
-                        <b>{d.value}</b>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : (
-                <Empty text="Sin escaneos evaluados por el gate en este rango." />
-              )}
-            </Widget>
-          )}
-
-          {widgets.sla && (
-            <Widget
-              title="Cumplimiento de plazos (SLA)"
-              icon={<Timer size={18} color="#bf8700" />}
-              span={5}
-              chip={<span className={`dash-chip dash-chip--${slaCompliance >= 90 ? 'ok' : slaCompliance >= 70 ? 'warn' : 'danger'}`}>{slaCompliance}% en plazo</span>}
-              onOpen={goFindings}
-            >
-              {active.length ? (
-                <>
-                  <div className="dash-chart" style={{ height: 190 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={slaData} layout="vertical" barSize={16} margin={{ left: 4, right: 12 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#eaeef2" horizontal={false} />
-                        <XAxis type="number" allowDecimals={false} tick={{ fill: '#656d76', fontSize: 11 }} axisLine={false} tickLine={false} />
-                        <YAxis type="category" dataKey="name" tick={{ fill: '#656d76', fontSize: 12 }} axisLine={false} tickLine={false} width={60} />
-                        <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(9,105,218,0.05)' }} />
-                        <Bar dataKey="En plazo" stackId="s" fill="#1a7f37" />
-                        <Bar dataKey="Por vencer" stackId="s" fill="#bf8700" />
-                        <Bar dataKey="Vencido" stackId="s" fill="#cf222e" radius={[0, 4, 4, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <p className="dw-foot">
-                    Plazos: crítico {SLA_DAYS.CRITICAL} d · alto {SLA_DAYS.HIGH} d · medio {SLA_DAYS.MEDIUM} d · bajo {SLA_DAYS.LOW} d
-                  </p>
-                </>
-              ) : (
-                <Empty text="No hay hallazgos activos. Todo en plazo." />
-              )}
-            </Widget>
-          )}
-
-          {widgets.aging && (
-            <Widget title="Antigüedad de hallazgos activos" icon={<Hourglass size={18} color="#bc4c00" />} span={3}>
-              {active.length ? (
-                <div className="dash-chart" style={{ height: 210 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={agingData} barSize={26}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#eaeef2" vertical={false} />
-                      <XAxis dataKey="name" tick={{ fill: '#656d76', fontSize: 11 }} axisLine={false} tickLine={false} />
-                      <YAxis allowDecimals={false} tick={{ fill: '#656d76', fontSize: 11 }} axisLine={false} tickLine={false} width={28} />
-                      <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(9,105,218,0.05)' }} />
-                      <Bar dataKey="hallazgos" radius={[5, 5, 0, 0]}>
-                        {agingData.map((d) => (
-                          <Cell key={d.name} fill={d.fill} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              ) : (
-                <Empty text="Sin hallazgos activos." />
-              )}
-            </Widget>
-          )}
-
-          {widgets.health && (
-            <Widget
-              title="Health Score"
-              icon={<ShieldCheck size={18} color={healthColor} />}
-              span={4}
-              chip={<span className={`dash-chip dash-chip--${healthLevel}`}>mín. {thresholds.health_min}</span>}
-            >
-              <div className="dash-health">
-                <div className="dash-chart" style={{ height: 150, width: 150 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <RadialBarChart
-                      innerRadius="72%"
-                      outerRadius="100%"
-                      data={[{ name: 'health', value: resolvedStats.overall_health_score }]}
-                      startAngle={90}
-                      endAngle={-270}
+                  )}
+                  {kpis.map((k) => (
+                    <motion.section
+                      key={k.id}
+                      className={`card dw-kpi dw-kpi--${k.tone}`}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: 0.25 }}
                     >
-                      <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
-                      <RadialBar dataKey="value" background={{ fill: '#eaeef2' }} cornerRadius={8}>
-                        <Cell fill={healthColor} />
-                      </RadialBar>
-                    </RadialBarChart>
-                  </ResponsiveContainer>
-                  <div className="dash-health-center">
-                    <AnimatedNumber value={resolvedStats.overall_health_score} className="dash-health-score" />
-                    <span>/100</span>
-                  </div>
+                      <span className="dw-kpi-label">{k.label}</span>
+                      <div className="dw-kpi-row">
+                        <span className="dw-kpi-value" style={{ color: k.color }}>
+                          {k.value === null ? '—' : <AnimatedNumber value={k.value} />}
+                          {k.value !== null && k.suffix ? <small>{k.suffix}</small> : null}
+                        </span>
+                        <Sparkline data={k.spark} color={k.color} id={k.id} />
+                      </div>
+                      {k.foot}
+                      <span className="dw-kpi-hint">{k.hint}</span>
+                    </motion.section>
+                  ))}
                 </div>
-                <div className="dash-severity">
-                  {TREND_SEVERITIES.map((s) => (
-                    <div key={s} className="dash-severity-row">
-                      <span style={{ background: PASTEL_SEVERITY[s] }} />
-                      <em>{SEVERITY_LABEL[s]}</em>
-                      <b>{derived.sevActive[s]}</b>
+              );
+            }
+
+            if (item.id === 'trend') {
+              return (
+                <Widget
+                  key="trend"
+                  title={`Detección por severidad · ${range} días`}
+                  icon={<Activity size={18} color="#8250df" />}
+                  span={item.span}
+                  chip={<span className="dash-chip">{derived.detected} detectados</span>}
+                  {...dragProps}
+                >
+                  {derived.series.some((d) => d.total > 0) ? (
+                    <div className="dash-chart" style={{ height: 240 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={derived.series}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#eaeef2" vertical={false} />
+                          <XAxis dataKey="label" tick={{ fill: '#656d76', fontSize: 11 }} axisLine={false} tickLine={false} minTickGap={18} />
+                          <YAxis allowDecimals={false} tick={{ fill: '#656d76', fontSize: 11 }} axisLine={false} tickLine={false} width={32} />
+                          <Tooltip content={<ChartTooltip />} />
+                          {TREND_SEVERITIES.map((sev) => (
+                            <Area
+                              key={sev}
+                              type="monotone"
+                              dataKey={sev}
+                              name={SEVERITY_LABEL[sev]}
+                              stackId="sev"
+                              stroke={PASTEL_SEVERITY[sev]}
+                              fill={PASTEL_SEVERITY[sev]}
+                              fillOpacity={0.55}
+                              strokeWidth={1.25}
+                            />
+                          ))}
+                        </AreaChart>
+                      </ResponsiveContainer>
                     </div>
-                  ))}
-                </div>
-              </div>
-            </Widget>
-          )}
+                  ) : (
+                    <Empty text={`Sin escaneos con hallazgos en los últimos ${range} días.`} />
+                  )}
+                </Widget>
+              );
+            }
 
-          {widgets.topRepos && (
-            <Widget title="Repos con más riesgo" icon={<Trophy size={18} color="#cf222e" />} span={4} onOpen={goFindings}>
-              {topRepos.length ? (
-                <ol className="dw-toplist">
-                  {topRepos.map((r) => (
-                    <li key={r.name}>
-                      <div className="dw-toplist-top">
-                        <span className="dw-toplist-name">{r.name}</span>
-                        <span className="dw-toplist-meta">
-                          {r.counts.CRITICAL ? <em style={{ color: PASTEL_SEVERITY.CRITICAL }}>{r.counts.CRITICAL} C</em> : null}
-                          {r.counts.HIGH ? <em style={{ color: PASTEL_SEVERITY.HIGH }}>{r.counts.HIGH} A</em> : null}
-                          <b>{r.score}</b>
-                        </span>
-                      </div>
-                      <div className="dw-toplist-bar">
-                        <span style={{ width: `${(r.score / topRepos[0].score) * 100}%` }} />
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-              ) : (
-                <Empty text="Ningún repo con hallazgos activos." />
-              )}
-              <p className="dw-foot">Riesgo = 10×crítico + 5×alto + 2×medio + bajo</p>
-            </Widget>
-          )}
-
-          {widgets.topComponents && (
-            <Widget title="Componentes más vulnerables" icon={<Package size={18} color="#9a6700" />} span={4} onOpen={goFindings}>
-              {topComponents.length ? (
-                <ol className="dw-toplist">
-                  {topComponents.map((c) => (
-                    <li key={c.key}>
-                      <div className="dw-toplist-top">
-                        <span className="dw-toplist-name" title={c.sublabel}>
-                          {c.label}
-                        </span>
-                        <span className="dw-toplist-meta">
-                          <em className="dw-engine">{c.engine}</em>
-                          <b>{c.findings.length}</b>
-                        </span>
-                      </div>
-                      <div className="dw-toplist-sub">
-                        {c.fixVersion ? `→ actualizar a ${c.fixVersion}` : c.repositoryName}
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-              ) : (
-                <Empty text="Sin componentes vulnerables activos." />
-              )}
-            </Widget>
-          )}
-
-          {widgets.triage && (
-            <Widget
-              title="Embudo de triage HITL"
-              icon={<FunnelIcon size={18} color="#0969da" />}
-              span={4}
-              chip={<span className="dash-chip">{triaged}% triado</span>}
-            >
-              {findings.length ? (
-                <div className="dw-funnel">
-                  {funnel.map((s) => (
-                    <div key={s.key} className="dw-funnel-row">
-                      <span className="dw-funnel-label">{s.label}</span>
-                      <div className="dw-funnel-bar">
-                        <span style={{ width: `${Math.max(s.pct, s.value ? 3 : 0)}%`, background: s.color }} />
-                      </div>
-                      <b>{s.value}</b>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <Empty text="Sin hallazgos para triar." />
-              )}
-            </Widget>
-          )}
-
-          {widgets.engines && (
-            <Widget title="Motor × severidad (activos)" icon={<Layers size={18} color="#0969da" />} span={12} onOpen={goFindings}>
-              <div className="dw-matrix-wrap">
-                <table className="dw-matrix">
-                  <thead>
-                    <tr>
-                      <th>Motor</th>
-                      {TREND_SEVERITIES.map((s) => (
-                        <th key={s}>{SEVERITY_LABEL[s]}</th>
-                      ))}
-                      <th>Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {engineMatrix.rows.map((r) => (
-                      <tr key={r.key}>
-                        <td>
-                          <ScanLine size={13} /> {r.label}
-                        </td>
-                        {TREND_SEVERITIES.map((s) => {
-                          const v = r.counts[s];
-                          const alpha = v ? 0.12 + (v / engineMatrix.max) * 0.6 : 0;
-                          return (
-                            <td
-                              key={s}
-                              className="dw-matrix-cell"
-                              style={{
-                                background: v ? `color-mix(in srgb, ${PASTEL_SEVERITY[s]} ${Math.round(alpha * 100)}%, #ffffff)` : undefined,
-                                color: alpha > 0.55 ? '#1f2328' : v ? PASTEL_SEVERITY[s] : '#afb8c1',
-                              }}
-                            >
-                              {v || '·'}
-                            </td>
-                          );
-                        })}
-                        <td className="dw-matrix-total">{r.total}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </Widget>
-          )}
-
-          {widgets.heatmap && (
-            <Widget
-              title="Mapa de calor (12 semanas)"
-              icon={<Flame size={18} color="#cf222e" />}
-              span={12}
-              chip={<span className="dash-chip">{heatmap.total_findings_period} hallazgos</span>}
-            >
-              {heatmap.cells.length > 0 && heatmap.total_findings_period > 0 ? (
-                <HeatmapCalendar data={heatmap} />
-              ) : (
-                <Empty text="Sin actividad registrada en las últimas 12 semanas." />
-              )}
-            </Widget>
-          )}
-
-          {widgets.audit && (
-            <Widget
-              title="Bitácora de eventos"
-              icon={<Terminal size={18} color="#0969da" />}
-              span={12}
-              chip={<span className="dash-chip">últimos {Math.min(events.length, 8)}</span>}
-            >
-              {events.length ? (
-                <div className="dash-events">
-                  {events.slice(0, 8).map((event) => {
-                    const color = actionColor(event.action);
-                    return (
-                      <div key={event.id} className="dash-event">
-                        <span className="dash-event-dot" style={{ background: color }} />
-                        <div className="dash-event-body">
-                          <div className="dash-event-top">
-                            <strong style={{ color }}>{event.action}</strong>
-                            <span>{event.target}</span>
-                          </div>
-                          <p>{event.detail}</p>
+            if (item.id === 'gates') {
+              return (
+                <Widget
+                  key="gates"
+                  title="Security Gate"
+                  icon={<GitPullRequest size={18} color="#1a7f37" />}
+                  span={item.span}
+                  chip={<span className="dash-chip">{range} días</span>}
+                  {...dragProps}
+                >
+                  {gatePie.length ? (
+                    <div className="dw-donut">
+                      <div className="dash-chart" style={{ height: 180 }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie data={gatePie} dataKey="value" nameKey="name" innerRadius="62%" outerRadius="92%" paddingAngle={2} stroke="none">
+                              {gatePie.map((d) => (
+                                <Cell key={d.name} fill={d.fill} />
+                              ))}
+                            </Pie>
+                            <Tooltip content={<ChartTooltip />} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                        <div className="dw-donut-center">
+                          <b>{derived.passRate === null ? '—' : `${Math.round(derived.passRate)}%`}</b>
+                          <span>aprobado</span>
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <Empty text="La bitácora se llenará cuando registres repos, escaneos o cambios HITL." />
-              )}
-            </Widget>
-          )}
+                      <ul className="dw-legend">
+                        {gatePie.map((d) => (
+                          <li key={d.name}>
+                            <i style={{ background: d.fill }} />
+                            <span>{d.name}</span>
+                            <b>{d.value}</b>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : (
+                    <Empty text="Sin escaneos evaluados por el gate en este rango." />
+                  )}
+                </Widget>
+              );
+            }
+
+            if (item.id === 'sla') {
+              return (
+                <Widget
+                  key="sla"
+                  title="Cumplimiento de plazos (SLA)"
+                  icon={<Timer size={18} color="#bf8700" />}
+                  span={item.span}
+                  chip={<span className={`dash-chip dash-chip--${slaCompliance >= 90 ? 'ok' : slaCompliance >= 70 ? 'warn' : 'danger'}`}>{slaCompliance}% en plazo</span>}
+                  onOpen={goFindings}
+                  {...dragProps}
+                >
+                  {active.length ? (
+                    <>
+                      <div className="dash-chart" style={{ height: 190 }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={slaData} layout="vertical" barSize={16} margin={{ left: 4, right: 12 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#eaeef2" horizontal={false} />
+                            <XAxis type="number" allowDecimals={false} tick={{ fill: '#656d76', fontSize: 11 }} axisLine={false} tickLine={false} />
+                            <YAxis type="category" dataKey="name" tick={{ fill: '#656d76', fontSize: 12 }} axisLine={false} tickLine={false} width={60} />
+                            <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(9,105,218,0.05)' }} />
+                            <Bar dataKey="En plazo" stackId="s" fill="#8fd4a8" />
+                            <Bar dataKey="Por vencer" stackId="s" fill="#e6d09a" />
+                            <Bar dataKey="Vencido" stackId="s" fill="#e8a0a8" radius={[0, 4, 4, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <p className="dw-foot">
+                        Plazos: crítico {SLA_DAYS.CRITICAL} d · alto {SLA_DAYS.HIGH} d · medio {SLA_DAYS.MEDIUM} d · bajo {SLA_DAYS.LOW} d
+                      </p>
+                    </>
+                  ) : (
+                    <Empty text="No hay hallazgos activos. Todo en plazo." />
+                  )}
+                </Widget>
+              );
+            }
+
+            if (item.id === 'aging') {
+              return (
+                <Widget key="aging" title="Antigüedad de hallazgos activos" icon={<Hourglass size={18} color="#bc4c00" />} span={item.span} {...dragProps}>
+                  {active.length ? (
+                    <div className="dash-chart" style={{ height: 210 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={agingData} barSize={26}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#eaeef2" vertical={false} />
+                          <XAxis dataKey="name" tick={{ fill: '#656d76', fontSize: 11 }} axisLine={false} tickLine={false} />
+                          <YAxis allowDecimals={false} tick={{ fill: '#656d76', fontSize: 11 }} axisLine={false} tickLine={false} width={28} />
+                          <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(9,105,218,0.05)' }} />
+                          <Bar dataKey="hallazgos" radius={[5, 5, 0, 0]}>
+                            {agingData.map((d) => (
+                              <Cell key={d.name} fill={d.fill} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  ) : (
+                    <Empty text="Sin hallazgos activos." />
+                  )}
+                </Widget>
+              );
+            }
+
+            if (item.id === 'health') {
+              return (
+                <Widget
+                  key="health"
+                  title="Health Score"
+                  icon={<ShieldCheck size={18} color={healthColor} />}
+                  span={item.span}
+                  chip={<span className={`dash-chip dash-chip--${healthLevel}`}>mín. {thresholds.health_min}</span>}
+                  {...dragProps}
+                >
+                  <div className="dash-health">
+                    <div className="dash-chart" style={{ height: 150, width: 150 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <RadialBarChart
+                          innerRadius="72%"
+                          outerRadius="100%"
+                          data={[{ name: 'health', value: resolvedStats.overall_health_score }]}
+                          startAngle={90}
+                          endAngle={-270}
+                        >
+                          <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
+                          <RadialBar dataKey="value" background={{ fill: '#eaeef2' }} cornerRadius={8}>
+                            <Cell fill={healthColor} />
+                          </RadialBar>
+                        </RadialBarChart>
+                      </ResponsiveContainer>
+                      <div className="dash-health-center">
+                        <AnimatedNumber value={resolvedStats.overall_health_score} className="dash-health-score" />
+                        <span>/100</span>
+                      </div>
+                    </div>
+                    <div className="dash-severity">
+                      {TREND_SEVERITIES.map((s) => (
+                        <div key={s} className="dash-severity-row">
+                          <span style={{ background: PASTEL_SEVERITY[s] }} />
+                          <em>{SEVERITY_LABEL[s]}</em>
+                          <b>{derived.sevActive[s]}</b>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </Widget>
+              );
+            }
+
+            if (item.id === 'topRepos') {
+              return (
+                <Widget key="topRepos" title="Repos con más riesgo" icon={<Trophy size={18} color="#cf222e" />} span={item.span} onOpen={goFindings} {...dragProps}>
+                  {topRepos.length ? (
+                    <ol className="dw-toplist">
+                      {topRepos.map((r) => (
+                        <li key={r.name}>
+                          <div className="dw-toplist-top">
+                            <span className="dw-toplist-name">{r.name}</span>
+                            <span className="dw-toplist-meta">
+                              {r.counts.CRITICAL ? <em style={{ color: PASTEL_SEVERITY.CRITICAL }}>{r.counts.CRITICAL} C</em> : null}
+                              {r.counts.HIGH ? <em style={{ color: PASTEL_SEVERITY.HIGH }}>{r.counts.HIGH} A</em> : null}
+                              <b>{r.score}</b>
+                            </span>
+                          </div>
+                          <div className="dw-toplist-bar">
+                            <span style={{ width: `${(r.score / topRepos[0].score) * 100}%` }} />
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <Empty text="Ningún repo con hallazgos activos." />
+                  )}
+                  <p className="dw-foot">Riesgo = 10×crítico + 5×alto + 2×medio + bajo</p>
+                </Widget>
+              );
+            }
+
+            if (item.id === 'topComponents') {
+              return (
+                <Widget key="topComponents" title="Componentes más vulnerables" icon={<Package size={18} color="#9a6700" />} span={item.span} onOpen={goFindings} {...dragProps}>
+                  {topComponents.length ? (
+                    <ol className="dw-toplist">
+                      {topComponents.map((c) => (
+                        <li key={c.key}>
+                          <div className="dw-toplist-top">
+                            <span className="dw-toplist-name" title={c.sublabel}>
+                              {c.label}
+                            </span>
+                            <span className="dw-toplist-meta">
+                              <em className="dw-engine">{c.engine}</em>
+                              <b>{c.findings.length}</b>
+                            </span>
+                          </div>
+                          <div className="dw-toplist-sub">
+                            {c.fixVersion ? `→ actualizar a ${c.fixVersion}` : c.repositoryName}
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <Empty text="Sin componentes vulnerables activos." />
+                  )}
+                </Widget>
+              );
+            }
+
+            if (item.id === 'triage') {
+              return (
+                <Widget
+                  key="triage"
+                  title="Embudo de triage HITL"
+                  icon={<FunnelIcon size={18} color="#0969da" />}
+                  span={item.span}
+                  chip={<span className="dash-chip">{triaged}% triado</span>}
+                  {...dragProps}
+                >
+                  {findings.length ? (
+                    <div className="dw-funnel">
+                      {funnel.map((s) => (
+                        <div key={s.key} className="dw-funnel-row">
+                          <span className="dw-funnel-label">{s.label}</span>
+                          <div className="dw-funnel-bar">
+                            <span style={{ width: `${Math.max(s.pct, s.value ? 3 : 0)}%`, background: s.color }} />
+                          </div>
+                          <b>{s.value}</b>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <Empty text="Sin hallazgos para triar." />
+                  )}
+                </Widget>
+              );
+            }
+
+            if (item.id === 'engines') {
+              return (
+                <Widget key="engines" title="Motor × severidad (activos)" icon={<Layers size={18} color="#0969da" />} span={item.span} onOpen={goFindings} {...dragProps}>
+                  <div className="dw-matrix-wrap">
+                    <table className="dw-matrix">
+                      <thead>
+                        <tr>
+                          <th>Motor</th>
+                          {TREND_SEVERITIES.map((s) => (
+                            <th key={s}>{SEVERITY_LABEL[s]}</th>
+                          ))}
+                          <th>Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {engineMatrix.rows.map((r) => (
+                          <tr key={r.key}>
+                            <td>
+                              <ScanLine size={13} /> {r.label}
+                            </td>
+                            {TREND_SEVERITIES.map((s) => {
+                              const v = r.counts[s];
+                              const alpha = v ? 0.12 + (v / engineMatrix.max) * 0.6 : 0;
+                              return (
+                                <td
+                                  key={s}
+                                  className="dw-matrix-cell"
+                                  style={{
+                                    background: v ? `color-mix(in srgb, ${PASTEL_SEVERITY[s]} ${Math.round(alpha * 100)}%, #ffffff)` : undefined,
+                                    color: alpha > 0.55 ? '#1f2328' : v ? PASTEL_SEVERITY[s] : '#afb8c1',
+                                  }}
+                                >
+                                  {v || '·'}
+                                </td>
+                              );
+                            })}
+                            <td className="dw-matrix-total">{r.total}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </Widget>
+              );
+            }
+
+            if (item.id === 'heatmap') {
+              return (
+                <Widget
+                  key="heatmap"
+                  title="Mapa de calor (12 semanas)"
+                  icon={<Flame size={18} color="#cf222e" />}
+                  span={item.span}
+                  chip={<span className="dash-chip">{heatmap.total_findings_period} hallazgos</span>}
+                  {...dragProps}
+                >
+                  {heatmap.cells.length > 0 && heatmap.total_findings_period > 0 ? (
+                    <HeatmapCalendar data={heatmap} />
+                  ) : (
+                    <Empty text="Sin actividad registrada en las últimas 12 semanas." />
+                  )}
+                </Widget>
+              );
+            }
+
+            if (item.id === 'audit') {
+              return (
+                <Widget
+                  key="audit"
+                  title="Bitácora de eventos"
+                  icon={<Terminal size={18} color="#0969da" />}
+                  span={item.span}
+                  chip={<span className="dash-chip">últimos {Math.min(events.length, 8)}</span>}
+                  {...dragProps}
+                >
+                  {events.length ? (
+                    <div className="dash-events">
+                      {events.slice(0, 8).map((event) => {
+                        const color = actionColor(event.action);
+                        return (
+                          <div key={event.id} className="dash-event">
+                            <span className="dash-event-dot" style={{ background: color }} />
+                            <div className="dash-event-body">
+                              <div className="dash-event-top">
+                                <strong style={{ color }}>{event.action}</strong>
+                                <span>{event.target}</span>
+                              </div>
+                              <p>{event.detail}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <Empty text="La bitácora se llenará cuando registres repos, escaneos o cambios HITL." />
+                  )}
+                </Widget>
+              );
+            }
+
+            return null;
+          })}
         </div>
       )}
 
