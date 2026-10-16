@@ -60,8 +60,8 @@
       "subtitle": "Deterministic scanner consolidation with AI-assisted triage (Human-in-the-loop)"
     },
     "scans": {
-      "title": "Scan Orchestration",
-      "subtitle": "Worker timeline: Semgrep, Trivy, GitLeaks and OWASP ZAP"
+      "title": "Scans",
+      "subtitle": "Analysis history with Semgrep, Trivy, GitLeaks and OWASP ZAP, plus Security Gate result"
     },
     "gates": {
       "title": "Security Gates & CI/CD Rules",

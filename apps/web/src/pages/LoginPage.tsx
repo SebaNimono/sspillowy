@@ -598,10 +598,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oa
             <div className="login-remember-row">
               <label className="login-terms login-remember">
                 <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-                <span>
-                  Mantener sesión iniciada
-                  <small>{remember ? 'Hasta 30 días en este navegador.' : 'Se cierra al cerrar el navegador o tras 12 horas.'}</small>
-                </span>
+                <span>Mantener sesión iniciada</span>
               </label>
               {rememberedEmail && (
                 <button

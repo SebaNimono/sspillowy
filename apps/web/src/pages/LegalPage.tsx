@@ -12,16 +12,16 @@ const META: Record<
   privacidad: {
     title: 'Política de Privacidad',
     lead:
-      'Documento público exigido para el uso de proveedores de identidad (p. ej. Google OAuth) y para informar a las personas usuarias del Web Hub.',
+      'Qué datos trata SSPILLOWY, para qué, cómo se protegen y qué derechos tiene usted. Aplica al Hub, a la API y a los espacios de trabajo.',
   },
   terminos: {
     title: 'Términos y Condiciones',
     lead:
-      'Condiciones de uso de SSPILLOWY. Al utilizar la plataforma acepta estas normas junto con la Política de Privacidad.',
+      'Reglas de uso de la plataforma: cuentas, espacios, repositorios, Security Gate y asistencia de Pillow. Complementa la Política de Privacidad.',
   },
   cookies: {
     title: 'Cookies',
-    lead: 'Cómo usamos el almacenamiento local del navegador en el Web Hub.',
+    lead: 'Qué guardamos en su navegador para la sesión y la interfaz, y cómo puede cambiarlo.',
   },
 };
 

@@ -244,6 +244,11 @@ export function clearStoredSession(): void {
   clearBoth(SESSION_STORAGE_KEY);
   clearBoth(USER_STORAGE_KEY);
   clearBoth(WORKSPACE_KEY);
+  try {
+    window.dispatchEvent(new Event('sspillowy:workspace-cache-clear'));
+  } catch {
+    // ignore
+  }
 }
 
 export function getRememberPreference(): boolean {
@@ -291,6 +296,11 @@ export function switchWorkspace(workspaceId: string | null): void {
   try {
     if (workspaceId) localStorage.setItem(WORKSPACE_KEY, workspaceId);
     else localStorage.removeItem(WORKSPACE_KEY);
+  } catch {
+    // ignore
+  }
+  try {
+    window.dispatchEvent(new Event('sspillowy:workspace-cache-clear'));
   } catch {
     // ignore
   }

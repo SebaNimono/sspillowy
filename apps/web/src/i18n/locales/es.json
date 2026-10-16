@@ -60,8 +60,8 @@
       "subtitle": "Consolidación determinista de escáneres con triaje asistido por IA (Human-in-the-loop)"
     },
     "scans": {
-      "title": "Orquestación de Escaneos",
-      "subtitle": "Línea de tiempo de workers: Semgrep, Trivy, GitLeaks y OWASP ZAP"
+      "title": "Escaneos",
+      "subtitle": "Historial de análisis con Semgrep, Trivy, GitLeaks y OWASP ZAP, y resultado del Security Gate"
     },
     "gates": {
       "title": "Security Gates & Reglas CI/CD",
