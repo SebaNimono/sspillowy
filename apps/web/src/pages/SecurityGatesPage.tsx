@@ -16,6 +16,7 @@ import {
 } from '../api/client';
 import { ArrowRight, Ban, CircleCheck, PauseCircle, RefreshCw, ShieldAlert, Timer } from 'lucide-react';
 import { useI18n } from '../i18n/I18nProvider';
+import PageSkeleton from '../components/PageSkeleton';
 import '../styles/gates.css';
 
 interface PageProps {
@@ -209,12 +210,7 @@ export const SecurityGatesPage: React.FC<PageProps> = ({ onNavigate, ...headerPr
 
       {apiOffline && <ApiOfflineBanner />}
 
-      {!data && !apiOffline && (
-        <section className="gt-status is-loading">
-          <div className="gt-skeleton" />
-          <div className="gt-skeleton is-short" />
-        </section>
-      )}
+      {!data && !apiOffline && <PageSkeleton variant="panel" rows={5} />}
 
       {data && check && (
         <>

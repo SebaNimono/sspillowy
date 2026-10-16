@@ -6,6 +6,7 @@ import { ApiOfflineBanner } from '../components/ApiOfflineBanner';
 import { Repository, Scan, fetchRepositories, fetchScans, triggerScan } from '../api/client';
 import { Radar, Play, GitBranch, RefreshCw, Search, ExternalLink } from 'lucide-react';
 import { useI18n } from '../i18n/I18nProvider';
+import PageSkeleton from '../components/PageSkeleton';
 import '../styles/scans.css';
 
 interface PageProps {
@@ -349,7 +350,7 @@ export const ScansPage: React.FC<PageProps> = ({
         </div>
 
         {loading ? (
-          <div style={{ color: '#656d76', padding: '2rem', textAlign: 'center' }}>Cargando escaneos…</div>
+          <PageSkeleton variant="table" rows={6} embedded />
         ) : filtered.length === 0 ? (
           <div className="sc-empty">
             <strong>{scans.length === 0 ? 'Aún no hay escaneos' : 'Ningún escaneo coincide con el filtro'}</strong>

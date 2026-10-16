@@ -23,6 +23,7 @@ import { ACTION_META, RUNBOOK_TEMPLATES, TRIGGER_META, WEBHOOK_KIND_LABEL } from
 import { SEVERITY_LABEL } from '../utils/findingGroups';
 import { formatDateTime } from '../utils/formatDateTime';
 import { timeAgo } from '../utils/timeAgo';
+import PageSkeleton from '../components/PageSkeleton';
 import { usePillowPageContext } from '../config/pillowContext';
 import '../styles/runbooks.css';
 
@@ -242,10 +243,7 @@ export const RunbooksPage: React.FC<PageProps> = ({ onNavigate, ...headerProps }
       />
 
       {!loaded ? (
-        <div className="card rb-empty">
-          <RefreshCw size={22} className="rb-spin" />
-          <p>Cargando runbooks…</p>
-        </div>
+        <PageSkeleton variant="cards" rows={4} />
       ) : error ? (
         <div className="card rb-empty rb-error">{error}</div>
       ) : (

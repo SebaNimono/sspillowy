@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { Header } from '../components/Header';
 import { SidebarState } from '../components/Sidebar';
+import PageSkeleton from '../components/PageSkeleton';
 import {
   AuditTrail,
   AuditTrailFilters,
@@ -298,7 +299,7 @@ const IssueDetail: React.FC<{ refId: string; onClose: () => void; onLoaded: (d: 
     download(`historia-${slug(s.title)}.csv`, csv(rows), 'text/csv;charset=utf-8');
   };
 
-  if (loading && !data) return <div className="card tr-detail tr-empty">Cargando historia…</div>;
+  if (loading && !data) return <PageSkeleton variant="panel" rows={5} />;
   if (error && !data) return <div className="card tr-detail tr-error">{error}</div>;
   if (!data) return null;
 
@@ -576,7 +577,7 @@ const FindingsView: React.FC<{ initialRef: string | null }> = ({ initialRef }) =
 
       <div className={`tr-layout ${selected ? 'has-detail' : ''}`}>
         <div className="card tr-list">
-          {loading && !data && <div className="tr-empty">Cargando…</div>}
+          {loading && !data && <PageSkeleton variant="list" rows={7} embedded />}
           {data && data.items.length === 0 && (
             <div className="tr-empty">
               {hasFilters || filters.status !== 'all'

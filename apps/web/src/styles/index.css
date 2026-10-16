@@ -3243,7 +3243,7 @@ a.cookie-inline {
   padding: 0.45rem 0.85rem;
   border-radius: 6px;
   border: 1px solid #d0d7de;
-  background: #ffffff;
+  background: #f7f9fb;
   color: #1f2328;
   font-size: 0.8rem;
   font-weight: 600;
@@ -3251,15 +3251,16 @@ a.cookie-inline {
 }
 
 .dash-settings-trigger:hover {
-  border-color: #0969da;
+  border-color: #9dbfe8;
   color: #0969da;
+  background: #f1f6fb;
 }
 
 .dash-settings-backdrop {
   position: fixed;
   inset: 0;
   z-index: 2000;
-  background: rgba(27, 30, 46, 0.45);
+  background: rgba(27, 30, 46, 0.35);
   display: flex;
   align-items: flex-start;
   justify-content: flex-end;
@@ -3267,27 +3268,34 @@ a.cookie-inline {
 }
 
 .dash-settings-panel {
-  width: min(420px, 100%);
+  width: min(480px, 100%);
   max-height: calc(100vh - 3rem);
   overflow: auto;
-  background: #ffffff;
-  border: 1px solid #d0d7de;
-  border-radius: 10px;
-  padding: 1.25rem;
-  box-shadow: 0 16px 48px rgba(140, 149, 159, 0.28);
+  background: #fafbfc;
+  border: 1px solid #e6ebf0;
+  border-radius: 0;
+  padding: 1.35rem;
+  box-shadow: none;
 }
 
 .dash-settings-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   margin-bottom: 0.5rem;
+  gap: 0.75rem;
 }
 
 .dash-settings-head h2 {
   margin: 0;
   font-size: 1.05rem;
   color: #1f2328;
+}
+
+.dash-settings-sub {
+  margin: 0.2rem 0 0;
+  font-size: 0.75rem;
+  color: #8c959f;
 }
 
 .dash-settings-close {
@@ -3305,44 +3313,140 @@ a.cookie-inline {
   margin: 0 0 1rem;
 }
 
+.dash-settings-section {
+  margin-bottom: 1.15rem;
+}
+
 .dash-settings-section h3 {
-  margin: 0 0 0.6rem;
+  margin: 0;
   font-size: 0.85rem;
   color: #1f2328;
 }
 
-.dash-settings-checks {
-  display: grid;
-  gap: 0.45rem;
-  margin-bottom: 1rem;
-}
-
-.dash-settings-checks label {
+.dash-settings-section-head {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.85rem;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.65rem;
+}
+
+.dash-settings-bulk {
+  display: inline-flex;
+  gap: 0.35rem;
+}
+
+.dash-settings-bulk button {
+  border: 1px solid #e6ebf0;
+  background: #ffffff;
+  color: #656d76;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.25rem 0.55rem;
+  cursor: pointer;
+}
+
+.dash-settings-bulk button:hover {
+  border-color: #9dbfe8;
+  color: #0969da;
+}
+
+.dash-settings-group {
+  margin-bottom: 0.85rem;
+}
+
+.dash-settings-group h4 {
+  margin: 0 0 0.45rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #8c959f;
+}
+
+.dash-settings-tiles {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.dash-settings-tile {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 0.65rem;
+  row-gap: 0.1rem;
+  align-items: start;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #e6ebf0;
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.dash-settings-tile input {
+  grid-row: 1 / span 2;
+  margin-top: 0.15rem;
+  accent-color: #5b8fd4;
+}
+
+.dash-settings-tile.is-on {
+  background: #f1f6fb;
+  border-color: #c9daf0;
+}
+
+.dash-settings-tile-title {
+  font-size: 0.84rem;
+  font-weight: 600;
   color: #1f2328;
+}
+
+.dash-settings-tile-hint {
+  font-size: 0.72rem;
+  color: #8c959f;
+  line-height: 1.35;
 }
 
 .dash-settings-fields {
   display: grid;
   gap: 0.65rem;
-  margin-bottom: 1rem;
+  margin-top: 0.65rem;
 }
 
 .dash-settings-fields label {
   display: grid;
-  gap: 0.3rem;
+  gap: 0.2rem;
   font-size: 0.8rem;
-  color: #656d76;
+  color: #1f2328;
+  font-weight: 600;
+}
+
+.dash-settings-fields em {
+  font-style: normal;
+  font-weight: 400;
+  font-size: 0.72rem;
+  color: #8c959f;
 }
 
 .dash-settings-fields input {
   padding: 0.5rem 0.65rem;
-  border: 1px solid #d0d7de;
-  border-radius: 6px;
+  border: 1px solid #e6ebf0;
+  border-radius: 0;
   font-size: 0.9rem;
+  background: #ffffff;
+}
+
+.app-version {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.28rem 0.55rem;
+  border: 1px solid #e6ebf0;
+  background: #f7f9fb;
+  color: #656d76;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  user-select: none;
 }
 
 .dash-settings-query-hint {

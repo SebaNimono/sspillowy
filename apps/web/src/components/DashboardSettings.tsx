@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Settings2, X } from 'lucide-react';
 import {
   DashboardConfig,
+  WIDGET_GROUPS,
+  WIDGET_HINTS,
   WIDGET_IDS,
   WIDGET_LABELS,
   saveDashboardConfig,
@@ -33,6 +35,13 @@ export const DashboardSettings: React.FC<DashboardSettingsProps> = ({ config, on
     setOpen(false);
   };
 
+  const setAll = (on: boolean) => {
+    const widgets = Object.fromEntries(WIDGET_IDS.map((id) => [id, on])) as DashboardConfig['widgets'];
+    setDraft({ ...draft, widgets });
+  };
+
+  const enabledCount = WIDGET_IDS.filter((id) => draft.widgets[id]).length;
+
   if (!open) {
     return (
       <button type="button" className="dash-settings-trigger" onClick={openPanel} title="Personalizar dashboard">
@@ -51,46 +60,67 @@ export const DashboardSettings: React.FC<DashboardSettingsProps> = ({ config, on
         onClick={(e) => e.stopPropagation()}
       >
         <div className="dash-settings-head">
-          <h2 id="dash-settings-title">Personalizar dashboard</h2>
+          <div>
+            <h2 id="dash-settings-title">Personalizar dashboard</h2>
+            <p className="dash-settings-sub">{enabledCount} de {WIDGET_IDS.length} bloques activos</p>
+          </div>
           <button type="button" className="dash-settings-close" onClick={() => setOpen(false)} aria-label="Cerrar">
             <X size={18} />
           </button>
         </div>
 
         <p className="dash-settings-lead">
-          Elige qué bloques ver y los umbrales de alerta. Si un valor supera el máximo (o el health baja del mínimo), se
-          marca en rojo.{' '}
+          Activa solo lo que necesitas y define umbrales. Si un valor supera el máximo (o el health baja del mínimo), el
+          KPI se tiñe en rojo suave.{' '}
           {persistLocal
-            ? 'Los ajustes se guardan en este navegador y se reflejan en la URL.'
+            ? 'Los ajustes quedan en este navegador y en la URL.'
             : 'Los ajustes se guardan en este dashboard y los ve todo el equipo.'}
         </p>
 
         <section className="dash-settings-section">
-          <h3>Bloques visibles</h3>
-          <div className="dash-settings-checks">
-            {WIDGET_IDS.map((id) => (
-              <label key={id}>
-                <input
-                  type="checkbox"
-                  checked={draft.widgets[id]}
-                  onChange={(e) =>
-                    setDraft({
-                      ...draft,
-                      widgets: { ...draft.widgets, [id]: e.target.checked },
-                    })
-                  }
-                />
-                <span>{WIDGET_LABELS[id]}</span>
-              </label>
-            ))}
+          <div className="dash-settings-section-head">
+            <h3>Bloques visibles</h3>
+            <div className="dash-settings-bulk">
+              <button type="button" onClick={() => setAll(true)}>
+                Todos
+              </button>
+              <button type="button" onClick={() => setAll(false)}>
+                Ninguno
+              </button>
+            </div>
           </div>
+
+          {WIDGET_GROUPS.map((group) => (
+            <div key={group.title} className="dash-settings-group">
+              <h4>{group.title}</h4>
+              <div className="dash-settings-tiles">
+                {group.ids.map((id) => (
+                  <label key={id} className={`dash-settings-tile ${draft.widgets[id] ? 'is-on' : ''}`}>
+                    <input
+                      type="checkbox"
+                      checked={draft.widgets[id]}
+                      onChange={(e) =>
+                        setDraft({
+                          ...draft,
+                          widgets: { ...draft.widgets, [id]: e.target.checked },
+                        })
+                      }
+                    />
+                    <span className="dash-settings-tile-title">{WIDGET_LABELS[id]}</span>
+                    <span className="dash-settings-tile-hint">{WIDGET_HINTS[id]}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ))}
         </section>
 
         <section className="dash-settings-section">
           <h3>Umbrales de alerta</h3>
           <div className="dash-settings-fields">
             <label>
-              <span>Críticas máx. (alerta si hay más)</span>
+              <span>Críticas máx.</span>
+              <em>Alerta si hay más que este número</em>
               <input
                 type="number"
                 min={0}
@@ -105,6 +135,7 @@ export const DashboardSettings: React.FC<DashboardSettingsProps> = ({ config, on
             </label>
             <label>
               <span>Altas máx.</span>
+              <em>Alerta si hay más altas abiertas</em>
               <input
                 type="number"
                 min={0}
@@ -119,6 +150,7 @@ export const DashboardSettings: React.FC<DashboardSettingsProps> = ({ config, on
             </label>
             <label>
               <span>Hallazgos abiertos máx.</span>
+              <em>Total activos antes de marcar en rojo</em>
               <input
                 type="number"
                 min={0}
@@ -132,7 +164,8 @@ export const DashboardSettings: React.FC<DashboardSettingsProps> = ({ config, on
               />
             </label>
             <label>
-              <span>Health score mín. (alerta si baja)</span>
+              <span>Health score mín.</span>
+              <em>Alerta si la puntuación baja de este valor</em>
               <input
                 type="number"
                 min={0}

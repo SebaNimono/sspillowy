@@ -165,9 +165,25 @@ export function healthAlert(score: number, min: number): MetricAlert {
 }
 
 export const ALERT_COLORS: Record<MetricAlert, string> = {
-  ok: '#1a7f37',
-  warn: '#bf8700',
-  danger: '#cf222e',
+  ok: '#3d9a5f',
+  warn: '#c69026',
+  danger: '#d4535c',
+};
+
+/** Tonos pastel para gráficos del dashboard (menos “3D”, más planos). */
+export const PASTEL_SEVERITY: Record<string, string> = {
+  CRITICAL: '#e8a0a8',
+  HIGH: '#e8b89a',
+  MEDIUM: '#e6d09a',
+  LOW: '#9dbfe8',
+  INFO: '#c5cad1',
+};
+
+export const PASTEL_GATE: Record<string, string> = {
+  PASSED: '#8fd4a8',
+  BLOCKED: '#e8a0a8',
+  BYPASSED: '#c4a8e8',
+  OTHER: '#c5cad1',
 };
 
 export const WIDGET_LABELS: Record<DashboardWidgetId, string> = {
@@ -184,3 +200,24 @@ export const WIDGET_LABELS: Record<DashboardWidgetId, string> = {
   heatmap: 'Mapa de calor',
   audit: 'Bitácora',
 };
+
+export const WIDGET_HINTS: Record<DashboardWidgetId, string> = {
+  kpis: 'Indicadores clave arriba del tablero',
+  trend: 'Área apilada de hallazgos por día',
+  gates: 'Donut de aprobado / bloqueado / bypass',
+  health: 'Puntuación global y desglose',
+  sla: 'Hallazgos dentro o fuera de plazo',
+  aging: 'Antigüedad de lo que sigue abierto',
+  topRepos: 'Repos ordenados por riesgo',
+  topComponents: 'Archivos o paquetes más afectados',
+  triage: 'Embudo de estados HITL',
+  engines: 'Matriz motor × severidad',
+  heatmap: 'Actividad de hallazgos en el calendario',
+  audit: 'Últimos eventos del espacio',
+};
+
+export const WIDGET_GROUPS: { title: string; ids: DashboardWidgetId[] }[] = [
+  { title: 'Resumen', ids: ['kpis', 'health', 'gates', 'sla'] },
+  { title: 'Tendencias', ids: ['trend', 'aging', 'heatmap'] },
+  { title: 'Detalle', ids: ['topRepos', 'topComponents', 'triage', 'engines', 'audit'] },
+];

@@ -17,6 +17,7 @@ import {
   updateDashboardView,
 } from '../api/client';
 import { DashboardPage } from './DashboardPage';
+import PageSkeleton from '../components/PageSkeleton';
 import '../styles/dashlist.css';
 
 interface PageProps {
@@ -190,7 +191,7 @@ export const RiskPosturePage: React.FC<PageProps> = (props) => {
     return (
       <div>
         <Header title="Risk Posture" subtitle="" onNavigate={onNavigate} {...headerProps} />
-        <div className="card dl-none">Abriendo dashboard…</div>
+        <PageSkeleton variant="dashboard" />
       </div>
     );
   }
@@ -275,6 +276,9 @@ export const RiskPosturePage: React.FC<PageProps> = (props) => {
           )}
 
           <section className="card dl-table-card">
+            {!loaded ? (
+              <PageSkeleton variant="table" rows={5} embedded />
+            ) : (
             <table className="dl-table">
               <thead>
                 <tr>
@@ -361,6 +365,7 @@ export const RiskPosturePage: React.FC<PageProps> = (props) => {
                 ))}
               </tbody>
             </table>
+            )}
             {loaded && !showGeneral && filtered.length === 0 && (
               <div className="dl-none">
                 {filter === 'starred' ? 'Marca un dashboard con la estrella para tenerlo a mano.' : 'No hay dashboards que coincidan.'}

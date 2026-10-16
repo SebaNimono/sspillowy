@@ -21,6 +21,7 @@ import { ExecCompare, ExecTone, ExecutiveData, Repository, fetchExecutive, fetch
 import { SEVERITY_COLOR, SEVERITY_LABEL } from '../utils/findingGroups';
 import { formatDateTime } from '../utils/formatDateTime';
 import { usePillowPageContext } from '../config/pillowContext';
+import PageSkeleton from '../components/PageSkeleton';
 import '../styles/velocity.css';
 import '../styles/executive.css';
 
@@ -230,12 +231,7 @@ export const ExecutivePage: React.FC<PageProps> = ({ onNavigate, ...headerProps 
         </button>
       </div>
 
-      {!data && !error && (
-        <div className="card vl-empty">
-          <RefreshCw size={22} className="vl-spin" />
-          <p>Preparando el resumen…</p>
-        </div>
-      )}
+      {!data && !error && <PageSkeleton variant="dashboard" />}
 
       {error && <div className="card vl-empty vl-error">{error}</div>}
 

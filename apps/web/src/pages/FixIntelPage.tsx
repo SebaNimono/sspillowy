@@ -9,6 +9,7 @@ import { formatFilePath } from '../utils/formatFilePath';
 import { formatDateTime } from '../utils/formatDateTime';
 import { usePillowPageContext } from '../config/pillowContext';
 import { focusSecretFinding } from '../config/secretProviders';
+import PageSkeleton from '../components/PageSkeleton';
 import '../styles/fixintel.css';
 
 interface PageProps {
@@ -211,12 +212,7 @@ export const FixIntelPage: React.FC<PageProps> = ({ onNavigate, ...headerProps }
         {...headerProps}
       />
 
-      {!loaded && (
-        <div className="card fi-empty">
-          <RefreshCw size={22} className="fi-spin" />
-          <p>Preparando la cola de corrección…</p>
-        </div>
-      )}
+      {!loaded && <PageSkeleton variant="cards" rows={4} />}
 
       {error && <div className="card fi-empty fi-error">{error}</div>}
 

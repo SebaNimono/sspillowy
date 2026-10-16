@@ -20,6 +20,7 @@ import { SEVERITY_COLOR, SEVERITY_LABEL } from '../utils/findingGroups';
 import { formatDateTime } from '../utils/formatDateTime';
 import { formatFilePath } from '../utils/formatFilePath';
 import { usePillowPageContext } from '../config/pillowContext';
+import PageSkeleton from '../components/PageSkeleton';
 import '../styles/secrets.css';
 
 interface PageProps {
@@ -194,10 +195,7 @@ export const SecretsPage: React.FC<PageProps> = ({ onNavigate, ...headerProps })
       />
 
       {!loaded ? (
-        <div className="card sm-empty">
-          <RefreshCw size={22} className="sm-spin" />
-          <p>Cargando secretos…</p>
-        </div>
+        <PageSkeleton variant="cards" rows={4} />
       ) : (
       <>
       <div className="sm-kpis">

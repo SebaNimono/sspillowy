@@ -30,6 +30,7 @@ import { buildGrafanaDashboard } from '../config/grafanaDashboard';
 import { usePillowPageContext } from '../config/pillowContext';
 import { formatDateTime } from '../utils/formatDateTime';
 import { timeAgo } from '../utils/timeAgo';
+import PageSkeleton from '../components/PageSkeleton';
 import '../styles/velocity.css';
 import '../styles/observability.css';
 
@@ -231,7 +232,7 @@ export const ObservabilityPage: React.FC<PageProps> = ({ onNavigate, ...headerPr
       </div>
 
       {error && <div className="card ob-error">{error}</div>}
-      {!data && loading && <div className="card ob-empty">Midiendo la plataforma…</div>}
+      {!data && loading && <PageSkeleton variant="dashboard" />}
 
       {data && (
         <>

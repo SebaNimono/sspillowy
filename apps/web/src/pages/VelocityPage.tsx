@@ -17,6 +17,7 @@ import { Repository, VelocityData, fetchRepositories, fetchVelocity } from '../a
 import { SEVERITY_COLOR, SEVERITY_LABEL } from '../utils/findingGroups';
 import { formatDateTime } from '../utils/formatDateTime';
 import { usePillowPageContext } from '../config/pillowContext';
+import PageSkeleton from '../components/PageSkeleton';
 import '../styles/velocity.css';
 
 interface PageProps {
@@ -182,12 +183,7 @@ export const VelocityPage: React.FC<PageProps> = ({ onNavigate, ...headerProps }
         {data && <span className="vl-updated">Calculado {formatDateTime(data.generated_at)}</span>}
       </div>
 
-      {!data && !error && (
-        <div className="card vl-empty">
-          <RefreshCw size={22} className="vl-spin" />
-          <p>Calculando la velocidad de tu equipo…</p>
-        </div>
-      )}
+      {!data && !error && <PageSkeleton variant="dashboard" />}
 
       {error && <div className="card vl-empty vl-error">{error}</div>}
 

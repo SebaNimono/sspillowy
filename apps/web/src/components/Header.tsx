@@ -4,6 +4,7 @@ import { SidebarState } from './Sidebar';
 import { fetchNotifications, NotificationItem } from '../api/client';
 import { useI18n } from '../i18n/I18nProvider';
 import { Locale } from '../i18n';
+import { APP_VERSION } from '../config/version';
 
 interface HeaderProps {
   title: string;
@@ -143,6 +144,10 @@ export const Header: React.FC<HeaderProps> = ({
           <Smartphone size={13} color="#1a7f37" />
           <span>{t('header.pulseSync')}</span>
         </div>
+
+        <span className="app-version" title={`Hub sspillowy v${APP_VERSION}`}>
+          v{APP_VERSION}
+        </span>
 
         <div style={{ position: 'relative' }}>
           <button

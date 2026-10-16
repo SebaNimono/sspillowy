@@ -35,6 +35,7 @@ import {
 import { formatDateTime } from '../utils/formatDateTime';
 import { usePillowPageContext } from '../config/pillowContext';
 import { useI18n } from '../i18n/I18nProvider';
+import PageSkeleton from '../components/PageSkeleton';
 import '../styles/compliance.css';
 
 interface PageProps {
@@ -289,7 +290,7 @@ export const ReportsPage: React.FC<PageProps> = ({
         </div>
       )}
 
-      {loading && !data && <div className="card cp-empty">Evaluando controles…</div>}
+      {loading && !data && <PageSkeleton variant="panel" rows={6} />}
 
       {data && view === 'frameworks' && (
         <>

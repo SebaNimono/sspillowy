@@ -1,0 +1,153 @@
+/* Carga uniforme estilo YouTube: barras grises con brillo suave. */
+
+.sk {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.sk.is-embedded {
+  padding: 0.85rem 1.25rem;
+}
+
+.sk-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  padding: 1.1rem 1.25rem;
+}
+
+.sk-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.sk-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.sk-bar,
+.sk-circle {
+  background: linear-gradient(90deg, #d8dde3 0%, #eef1f4 40%, #d8dde3 80%);
+  background-size: 200% 100%;
+  animation: sk-shimmer 1.25s linear infinite;
+}
+
+.sk-bar {
+  height: 12px;
+  border-radius: 0;
+}
+
+.sk-bar.is-lg {
+  height: 18px;
+}
+
+.sk-bar.is-sm {
+  height: 10px;
+}
+
+.sk-bar.is-xl {
+  height: 28px;
+}
+
+.sk-bar.w-20 {
+  width: 20%;
+}
+
+.sk-bar.w-30 {
+  width: 30%;
+}
+
+.sk-bar.w-40 {
+  width: 40%;
+}
+
+.sk-bar.w-50 {
+  width: 50%;
+}
+
+.sk-bar.w-60 {
+  width: 60%;
+}
+
+.sk-bar.w-70 {
+  width: 70%;
+}
+
+.sk-bar.w-80 {
+  width: 80%;
+}
+
+.sk-bar.w-100 {
+  width: 100%;
+}
+
+.sk-circle {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.sk-circle.is-sm {
+  width: 28px;
+  height: 28px;
+}
+
+.sk-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.65rem;
+}
+
+.sk-grid > .sk-card {
+  padding: 0.85rem 0.95rem;
+}
+
+.sk-table {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.sk-table-head,
+.sk-table-row {
+  display: grid;
+  grid-template-columns: 1.1fr 0.7fr 1.4fr 0.8fr 0.8fr;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+@media (max-width: 800px) {
+  .sk-table-head,
+  .sk-table-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .sk-table-head > :nth-child(n + 3),
+  .sk-table-row > :nth-child(n + 3) {
+    display: none;
+  }
+}
+
+@keyframes sk-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sk-bar,
+  .sk-circle {
+    animation: none;
+    background: #d8dde3;
+  }
+}

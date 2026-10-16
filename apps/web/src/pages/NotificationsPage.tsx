@@ -3,6 +3,7 @@ import { Header } from '../components/Header';
 import { SidebarState } from '../components/Sidebar';
 import { NotificationItem, fetchNotifications, markAllNotificationsRead, markNotificationRead } from '../api/client';
 import { ApiOfflineBanner } from '../components/ApiOfflineBanner';
+import PageSkeleton from '../components/PageSkeleton';
 import { Bell, CheckCheck, KeyRound, ShieldAlert, Sliders, Sparkles, Smartphone, Radar } from 'lucide-react';
 import { useI18n } from '../i18n/I18nProvider';
 
@@ -16,6 +17,8 @@ interface PageProps {
   onGoToSite?: () => void;
   onNotificationsChange?: () => void;
 }
+
+const MIN_SKELETON_MS = 480;
 
 const typeIcon = (type: NotificationItem['type']) => {
   switch (type) {
@@ -48,24 +51,34 @@ export const NotificationsPage: React.FC<PageProps> = ({
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [filter, setFilter] = useState<'all' | 'unread' | 'critical'>('all');
   const [apiOffline, setApiOffline] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    const started = Date.now();
+    setLoading(true);
 
-  const load = () => {
     fetchNotifications()
       .then((data) => {
+        if (cancelled) return;
         setApiOffline(false);
         setItems(data || []);
       })
       .catch(() => {
+        if (cancelled) return;
         setApiOffline(true);
         setItems([]);
       })
-      .finally(() => setLoaded(true));
-  };
+      .finally(() => {
+        const wait = Math.max(0, MIN_SKELETON_MS - (Date.now() - started));
+        window.setTimeout(() => {
+          if (!cancelled) setLoading(false);
+        }, wait);
+      });
 
-  useEffect(() => {
-    load();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const visible = items.filter((item) => {
@@ -81,7 +94,7 @@ export const NotificationsPage: React.FC<PageProps> = ({
       } catch {
         // local
       }
-      setItems(items.map((n) => (n.id === item.id ? { ...n, read: true } : n)));
+      setItems((prev) => prev.map((n) => (n.id === item.id ? { ...n, read: true } : n)));
       onNotificationsChange?.();
     }
     if (item.finding_id && onNavigate) onNavigate('findings');
@@ -93,7 +106,7 @@ export const NotificationsPage: React.FC<PageProps> = ({
     } catch {
       // local
     }
-    setItems(items.map((n) => ({ ...n, read: true })));
+    setItems((prev) => prev.map((n) => ({ ...n, read: true })));
     onNotificationsChange?.();
   };
 
@@ -120,12 +133,13 @@ export const NotificationsPage: React.FC<PageProps> = ({
               key={key}
               className={filter === key ? 'btn btn-primary' : 'btn btn-secondary'}
               onClick={() => setFilter(key)}
+              disabled={loading}
             >
               {key === 'all' ? 'Todas' : key === 'unread' ? 'No leídas' : 'Críticas'}
             </button>
           ))}
           <div style={{ marginLeft: 'auto' }}>
-            <button className="btn btn-secondary" onClick={handleReadAll}>
+            <button className="btn btn-secondary" onClick={handleReadAll} disabled={loading || items.length === 0}>
               <CheckCheck size={14} />
               <span>Marcar todas como leídas</span>
             </button>
@@ -137,11 +151,13 @@ export const NotificationsPage: React.FC<PageProps> = ({
         <div className="card-header">
           <div className="card-title">
             <Bell size={20} color="#0969da" />
-            <span>Eventos ({visible.length})</span>
+            <span>{loading ? 'Eventos' : `Eventos (${visible.length})`}</span>
           </div>
         </div>
 
-        {loaded && visible.length === 0 && (
+        {loading ? (
+          <PageSkeleton variant="list" rows={7} embedded />
+        ) : visible.length === 0 ? (
           <div className="empty-state">
             <Bell size={28} color="#656d76" />
             <h3>
@@ -157,33 +173,35 @@ export const NotificationsPage: React.FC<PageProps> = ({
                 : 'Cambia el filtro para ver el resto.'}
             </p>
           </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {visible.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => handleRead(item)}
+                className={`notif-row ${item.read ? '' : 'unread'}`}
+              >
+                <div className="notif-icon">{typeIcon(item.type)}</div>
+                <div style={{ flex: 1, textAlign: 'left', minWidth: 0 }}>
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                    {!item.read && <span className="unread-dot" />}
+                    <span style={{ fontWeight: 600, fontSize: '0.9rem', color: '#1f2328' }}>{item.title}</span>
+                    <span
+                      className={`badge ${item.severity === 'CRITICAL' ? 'badge-critical' : item.severity === 'HIGH' ? 'badge-high' : 'badge-low'}`}
+                    >
+                      {item.severity}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: '#656d76', marginTop: '0.2rem' }}>{item.message}</div>
+                  <div style={{ fontSize: '0.7rem', color: '#8c959f', marginTop: '0.25rem', fontFamily: 'var(--font-mono)' }}>
+                    {item.type} · {new Date(item.created_at).toLocaleString('es-CL')}
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
         )}
-
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          {visible.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => handleRead(item)}
-              className={`notif-row ${item.read ? '' : 'unread'}`}
-            >
-              <div className="notif-icon">{typeIcon(item.type)}</div>
-              <div style={{ flex: 1, textAlign: 'left', minWidth: 0 }}>
-                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                  {!item.read && <span className="unread-dot" />}
-                  <span style={{ fontWeight: 600, fontSize: '0.9rem', color: '#1f2328' }}>{item.title}</span>
-                  <span className={`badge ${item.severity === 'CRITICAL' ? 'badge-critical' : item.severity === 'HIGH' ? 'badge-high' : 'badge-low'}`}>
-                    {item.severity}
-                  </span>
-                </div>
-                <div style={{ fontSize: '0.8rem', color: '#656d76', marginTop: '0.2rem' }}>{item.message}</div>
-                <div style={{ fontSize: '0.7rem', color: '#8c959f', marginTop: '0.25rem', fontFamily: 'var(--font-mono)' }}>
-                  {item.type} · {new Date(item.created_at).toLocaleString('es-CL')}
-                </div>
-              </div>
-            </button>
-          ))}
-        </div>
       </div>
     </div>
   );

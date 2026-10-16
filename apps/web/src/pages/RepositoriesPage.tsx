@@ -18,6 +18,7 @@ import { FolderGit2, Plus, Play, GitBranch, RefreshCw, Trash2, Webhook, Pencil, 
 import { useI18n } from '../i18n/I18nProvider';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { AddRepoModal, EditRepoModal } from '../components/RepoModals';
+import PageSkeleton from '../components/PageSkeleton';
 import { GithubWebhookPanel } from '../components/ConnectionPanels';
 import { PROVIDER_LABEL, ProviderLogo } from '../components/ProviderLogo';
 
@@ -530,10 +531,7 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
         </div>
 
         {loading ? (
-          <div style={{ color: '#656d76', padding: '2rem', textAlign: 'center' }}>
-            <RefreshCw size={20} className="spin" style={{ marginBottom: '0.5rem' }} />
-            <div>{t('common.loading')}</div>
-          </div>
+          <PageSkeleton variant="table" rows={5} embedded />
         ) : repos.length === 0 ? (
           <div className="empty-state">
             <FolderGit2 size={32} color="#656d76" />

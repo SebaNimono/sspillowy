@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Header } from '../components/Header';
 import { SidebarState } from '../components/Sidebar';
 import { Toast, ToastMessage } from '../components/Toast';
+import PageSkeleton from '../components/PageSkeleton';
 import { Finding, TRACE_REF_KEY, fetchFindings, updateFindingStatus, clearFindings } from '../api/client';
 import {
   ShieldAlert,
@@ -456,7 +457,7 @@ export const FindingsPage: React.FC<PageProps> = ({
         </div>
 
         {loading ? (
-          <div className="fm-empty">{t('findings.loading')}</div>
+          <PageSkeleton variant="table" rows={7} embedded />
         ) : findings.length === 0 ? (
           <div className="fm-empty">Sin hallazgos. Ejecute un escaneo desde Repositorios.</div>
         ) : filtered.length === 0 ? (

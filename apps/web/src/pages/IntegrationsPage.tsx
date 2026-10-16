@@ -14,6 +14,7 @@ import {
   fetchIntegrations,
   testChatIntegration,
 } from '../api/client';
+import PageSkeleton from '../components/PageSkeleton';
 import '../styles/integrations.css';
 
 interface IntegrationsPageProps {
@@ -321,7 +322,7 @@ export const IntegrationsPage: React.FC<IntegrationsPageProps> = ({ onNavigate, 
       />
 
       {error && !data && <div className="ig-empty">{error}</div>}
-      {!data && !error && <div className="ig-empty">Cargando integraciones…</div>}
+      {!data && !error && <PageSkeleton variant="cards" rows={5} />}
 
       {data && (
         <>

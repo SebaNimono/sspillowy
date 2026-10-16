@@ -7,6 +7,7 @@ import { SbomComponent, SbomRepository, downloadCycloneDx, fetchSbom } from '../
 import { SEVERITY_COLOR, SEVERITY_LABEL, SEVERITY_RANK, Severity } from '../utils/findingGroups';
 import { formatDateTime } from '../utils/formatDateTime';
 import { usePillowPageContext } from '../config/pillowContext';
+import PageSkeleton from '../components/PageSkeleton';
 import '../styles/sbom.css';
 
 interface PageProps {
@@ -235,12 +236,7 @@ export const SbomPage: React.FC<PageProps> = ({ onNavigate, ...headerProps }) =>
         {...headerProps}
       />
 
-      {!loaded && (
-        <div className="card sb-empty">
-          <RefreshCw size={22} className="sb-spin" />
-          <p>Cargando inventario de dependencias…</p>
-        </div>
-      )}
+      {!loaded && <PageSkeleton variant="cards" rows={4} />}
 
       {loaded && error && <div className="card sb-empty sb-error">{error}</div>}
 

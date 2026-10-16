@@ -23,6 +23,7 @@ import { HeatmapCalendar } from '../components/HeatmapCalendar';
 import { AnimatedNumber } from '../components/AnimatedNumber';
 import { DashboardSettings } from '../components/DashboardSettings';
 import { PillowWidgetBoard } from '../components/PillowWidgetBoard';
+import PageSkeleton from '../components/PageSkeleton';
 import { useI18n } from '../i18n/I18nProvider';
 import {
   DashboardStats,
@@ -40,8 +41,11 @@ import {
 } from '../api/client';
 import {
   ALERT_COLORS,
+  PASTEL_GATE,
+  PASTEL_SEVERITY,
   DEFAULT_DASHBOARD_CONFIG,
   DashboardConfig,
+  MetricAlert,
   healthAlert,
   loadDashboardConfig,
   metricAlert,
@@ -56,7 +60,6 @@ import {
 import { usePillowPageContext } from '../config/pillowContext';
 import {
   SEVERITIES,
-  SEVERITY_COLOR,
   SEVERITY_LABEL,
   SLA_DAYS,
   Severity,
@@ -137,25 +140,25 @@ const ENGINES: { key: Finding['engine']; label: string }[] = [
 type GateKey = 'PASSED' | 'BLOCKED' | 'BYPASSED' | 'OTHER';
 
 const GATE_META: Record<GateKey, { label: string; color: string }> = {
-  PASSED: { label: 'Aprobado', color: '#1a7f37' },
-  BLOCKED: { label: 'Bloqueado', color: '#cf222e' },
-  BYPASSED: { label: 'Bypass CISO', color: '#8250df' },
-  OTHER: { label: 'Sin gate', color: '#8c959f' },
+  PASSED: { label: 'Aprobado', color: PASTEL_GATE.PASSED },
+  BLOCKED: { label: 'Bloqueado', color: PASTEL_GATE.BLOCKED },
+  BYPASSED: { label: 'Bypass CISO', color: PASTEL_GATE.BYPASSED },
+  OTHER: { label: 'Sin gate', color: PASTEL_GATE.OTHER },
 };
 
 const STATUS_FUNNEL: { key: Finding['status']; label: string; color: string }[] = [
-  { key: 'OPEN', label: 'Abiertos', color: '#cf222e' },
-  { key: 'IN_REVIEW', label: 'En revisión', color: '#0969da' },
-  { key: 'FIXED', label: 'Corregidos', color: '#1a7f37' },
-  { key: 'FALSE_POSITIVE', label: 'Falsos positivos', color: '#6e7781' },
-  { key: 'ACCEPTED_RISK', label: 'Riesgo aceptado', color: '#9a6700' },
+  { key: 'OPEN', label: 'Abiertos', color: '#e8a0a8' },
+  { key: 'IN_REVIEW', label: 'En revisión', color: '#9dbfe8' },
+  { key: 'FIXED', label: 'Corregidos', color: '#8fd4a8' },
+  { key: 'FALSE_POSITIVE', label: 'Falsos positivos', color: '#c5cad1' },
+  { key: 'ACCEPTED_RISK', label: 'Riesgo aceptado', color: '#e6d09a' },
 ];
 
 const AGE_BUCKETS = [
-  { label: '0–7 d', min: 0, max: 7, color: '#1a7f37' },
-  { label: '8–30 d', min: 8, max: 30, color: '#bf8700' },
-  { label: '31–90 d', min: 31, max: 90, color: '#bc4c00' },
-  { label: '+90 d', min: 91, max: Infinity, color: '#cf222e' },
+  { label: '0–7 d', min: 0, max: 7, color: '#8fd4a8' },
+  { label: '8–30 d', min: 8, max: 30, color: '#e6d09a' },
+  { label: '31–90 d', min: 31, max: 90, color: '#e8b89a' },
+  { label: '+90 d', min: 91, max: Infinity, color: '#e8a0a8' },
 ];
 
 const TREND_SEVERITIES: Severity[] = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
@@ -265,10 +268,10 @@ const Widget: React.FC<{
 }> = ({ title, icon, span, chip, onOpen, children }) => (
   <motion.section
     className={`card dw-widget dw-span-${span}`}
-    initial={{ opacity: 0, y: 10 }}
-    whileInView={{ opacity: 1, y: 0 }}
+    initial={{ opacity: 0 }}
+    whileInView={{ opacity: 1 }}
     viewport={{ once: true }}
-    transition={{ duration: 0.35 }}
+    transition={{ duration: 0.28 }}
   >
     <header className="dw-head">
       <div className="card-title">
@@ -605,12 +608,28 @@ export const DashboardPage: React.FC<PageProps> = ({
   const healthColor = ALERT_COLORS[healthLevel];
   const openAlert = metricAlert(active.length, thresholds.open_max);
 
-  const kpis = [
+  const criticalAlert = metricAlert(derived.sevActive.CRITICAL, thresholds.critical_max);
+  const slaAlert: MetricAlert = derived.breached ? 'danger' : 'ok';
+  const gateAlert: MetricAlert =
+    derived.passRate === null ? 'warn' : derived.passRate >= 70 ? 'ok' : 'danger';
+
+  const kpis: {
+    id: string;
+    label: string;
+    value: number | null;
+    suffix?: string;
+    color: string;
+    tone: MetricAlert | 'info';
+    spark: number[];
+    foot: React.ReactNode;
+    hint: string;
+  }[] = [
     {
       id: 'active',
       label: 'Hallazgos activos',
       value: active.length,
       color: ALERT_COLORS[openAlert],
+      tone: openAlert,
       spark: derived.series.map((d) => d.total),
       foot: <Delta value={derived.detectedDelta} />,
       hint: `${derived.detected} detectados en ${range} días`,
@@ -619,7 +638,8 @@ export const DashboardPage: React.FC<PageProps> = ({
       id: 'critical',
       label: 'Críticos activos',
       value: derived.sevActive.CRITICAL,
-      color: ALERT_COLORS[metricAlert(derived.sevActive.CRITICAL, thresholds.critical_max)],
+      color: ALERT_COLORS[criticalAlert],
+      tone: criticalAlert,
       spark: derived.series.map((d) => d.CRITICAL),
       foot: <span className="dw-delta dw-delta--flat">umbral ≤ {thresholds.critical_max}</span>,
       hint: `${derived.sevActive.HIGH} altos · ${derived.sevActive.MEDIUM} medios`,
@@ -628,7 +648,8 @@ export const DashboardPage: React.FC<PageProps> = ({
       id: 'sla',
       label: 'Fuera de plazo',
       value: derived.breached,
-      color: derived.breached ? ALERT_COLORS.danger : ALERT_COLORS.ok,
+      color: ALERT_COLORS[slaAlert],
+      tone: slaAlert,
       spark: [],
       foot: <span className="dw-delta dw-delta--flat">{slaCompliance}% cumple SLA</span>,
       hint: `plazo crítico ${SLA_DAYS.CRITICAL} d · alto ${SLA_DAYS.HIGH} d`,
@@ -638,7 +659,8 @@ export const DashboardPage: React.FC<PageProps> = ({
       label: 'Gate aprobado',
       value: derived.passRate === null ? null : Math.round(derived.passRate),
       suffix: '%',
-      color: derived.passRate === null ? '#8c959f' : derived.passRate >= 70 ? ALERT_COLORS.ok : ALERT_COLORS.danger,
+      color: derived.passRate === null ? '#8c959f' : ALERT_COLORS[gateAlert],
+      tone: gateAlert,
       spark: [],
       foot: <Delta value={derived.passDelta} suffix=" pp" goodWhenUp />,
       hint: `${derived.gateCounts.BLOCKED} bloqueos en ${range} días`,
@@ -647,7 +669,8 @@ export const DashboardPage: React.FC<PageProps> = ({
       id: 'scans',
       label: 'Escaneos',
       value: derived.scansCount,
-      color: '#0969da',
+      color: '#5b8fd4',
+      tone: 'info',
       spark: derived.series.map((d) => d.scans),
       foot: <Delta value={derived.scansDelta} goodWhenUp />,
       hint: `${resolvedStats.monitored_repos} repos monitoreados`,
@@ -727,11 +750,7 @@ export const DashboardPage: React.FC<PageProps> = ({
         </div>
       </div>
 
-      {loading && (
-        <div className="dash-empty">
-          <p>Cargando métricas…</p>
-        </div>
-      )}
+      {loading && <PageSkeleton variant="dashboard" />}
 
       {!loading && loadError && (
         <div className="dash-empty dash-empty--warn">
@@ -747,10 +766,10 @@ export const DashboardPage: React.FC<PageProps> = ({
             kpis.map((k) => (
               <motion.section
                 key={k.id}
-                className="card dw-kpi"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
+                className={`card dw-kpi dw-kpi--${k.tone}`}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.25 }}
               >
                 <span className="dw-kpi-label">{k.label}</span>
                 <div className="dw-kpi-row">
@@ -787,10 +806,10 @@ export const DashboardPage: React.FC<PageProps> = ({
                           dataKey={sev}
                           name={SEVERITY_LABEL[sev]}
                           stackId="sev"
-                          stroke={SEVERITY_COLOR[sev]}
-                          fill={SEVERITY_COLOR[sev]}
-                          fillOpacity={0.25}
-                          strokeWidth={1.75}
+                          stroke={PASTEL_SEVERITY[sev]}
+                          fill={PASTEL_SEVERITY[sev]}
+                          fillOpacity={0.55}
+                          strokeWidth={1.25}
                         />
                       ))}
                     </AreaChart>
@@ -926,7 +945,7 @@ export const DashboardPage: React.FC<PageProps> = ({
                 <div className="dash-severity">
                   {TREND_SEVERITIES.map((s) => (
                     <div key={s} className="dash-severity-row">
-                      <span style={{ background: SEVERITY_COLOR[s] }} />
+                      <span style={{ background: PASTEL_SEVERITY[s] }} />
                       <em>{SEVERITY_LABEL[s]}</em>
                       <b>{derived.sevActive[s]}</b>
                     </div>
@@ -945,8 +964,8 @@ export const DashboardPage: React.FC<PageProps> = ({
                       <div className="dw-toplist-top">
                         <span className="dw-toplist-name">{r.name}</span>
                         <span className="dw-toplist-meta">
-                          {r.counts.CRITICAL ? <em style={{ color: SEVERITY_COLOR.CRITICAL }}>{r.counts.CRITICAL} C</em> : null}
-                          {r.counts.HIGH ? <em style={{ color: SEVERITY_COLOR.HIGH }}>{r.counts.HIGH} A</em> : null}
+                          {r.counts.CRITICAL ? <em style={{ color: PASTEL_SEVERITY.CRITICAL }}>{r.counts.CRITICAL} C</em> : null}
+                          {r.counts.HIGH ? <em style={{ color: PASTEL_SEVERITY.HIGH }}>{r.counts.HIGH} A</em> : null}
                           <b>{r.score}</b>
                         </span>
                       </div>
@@ -1042,8 +1061,8 @@ export const DashboardPage: React.FC<PageProps> = ({
                               key={s}
                               className="dw-matrix-cell"
                               style={{
-                                background: v ? `color-mix(in srgb, ${SEVERITY_COLOR[s]} ${Math.round(alpha * 100)}%, #ffffff)` : undefined,
-                                color: alpha > 0.45 ? '#ffffff' : v ? SEVERITY_COLOR[s] : '#afb8c1',
+                                background: v ? `color-mix(in srgb, ${PASTEL_SEVERITY[s]} ${Math.round(alpha * 100)}%, #ffffff)` : undefined,
+                                color: alpha > 0.55 ? '#1f2328' : v ? PASTEL_SEVERITY[s] : '#afb8c1',
                               }}
                             >
                               {v || '·'}

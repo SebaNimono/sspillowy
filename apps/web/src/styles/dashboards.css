@@ -172,6 +172,29 @@
   gap: 0.2rem;
   padding: 0.95rem 1.1rem;
   min-width: 0;
+  border: 1px solid #e6ebf0;
+  background: #f7f9fb;
+  box-shadow: none;
+}
+
+.dw-kpi--ok {
+  background: #f0faf3;
+  border-color: #cfe9d8;
+}
+
+.dw-kpi--warn {
+  background: #fbf7ee;
+  border-color: #ead9b0;
+}
+
+.dw-kpi--danger {
+  background: #fbf1f2;
+  border-color: #ecc4c8;
+}
+
+.dw-kpi--info {
+  background: #f1f6fb;
+  border-color: #c9daf0;
 }
 
 .dw-kpi-label {
@@ -225,15 +248,18 @@
   font-weight: 600;
 }
 
-.dw-delta--good { color: #1a7f37; }
-.dw-delta--bad { color: #cf222e; }
+.dw-delta--good { color: #3d9a5f; }
+.dw-delta--bad { color: #d4535c; }
 .dw-delta--flat { color: #8c959f; }
 
-.dw-widget {
+.dw-widget.card {
   display: flex;
   flex-direction: column;
   min-width: 0;
   overflow: hidden;
+  background: #fafbfc;
+  border-color: #e6ebf0;
+  box-shadow: none;
 }
 
 .dw-head {
@@ -400,7 +426,7 @@
   display: block;
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, #bc4c00, #cf222e);
+  background: #e8b89a;
 }
 
 .dw-funnel {
