@@ -30,6 +30,7 @@ import { buildGrafanaDashboard } from '../config/grafanaDashboard';
 import { usePillowPageContext } from '../config/pillowContext';
 import { formatDateTime } from '../utils/formatDateTime';
 import { timeAgo } from '../utils/timeAgo';
+import { useI18n } from '../i18n/I18nProvider';
 import PageSkeleton from '../components/PageSkeleton';
 import '../styles/velocity.css';
 import '../styles/observability.css';
@@ -95,6 +96,7 @@ function download(name: string, content: string) {
 }
 
 export const ObservabilityPage: React.FC<PageProps> = ({ onNavigate, ...headerProps }) => {
+  const { t } = useI18n();
   const [range, setRange] = useState<ObsRange>(() => {
     const saved = localStorage.getItem(RANGE_KEY) as ObsRange | null;
     return RANGES.some((r) => r.id === saved) ? (saved as ObsRange) : '24h';
@@ -200,12 +202,8 @@ export const ObservabilityPage: React.FC<PageProps> = ({ onNavigate, ...headerPr
   return (
     <div className="ob-page">
       <Header
-        title="Observabilidad"
-        subtitle={
-          data && !data.platform_view
-            ? 'La disponibilidad de tus aplicaciones y la salud de tus análisis de seguridad.'
-            : 'La salud de SSPILLOWY y de su pipeline de seguridad: disponibilidad, tiempos de respuesta, análisis y objetivos de servicio.'
-        }
+        title={t('pages.observability.title')}
+        subtitle={t('pages.observability.subtitle')}
         onNavigate={onNavigate}
         {...headerProps}
       />

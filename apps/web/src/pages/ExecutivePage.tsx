@@ -21,6 +21,7 @@ import { ExecCompare, ExecTone, ExecutiveData, Repository, fetchExecutive, fetch
 import { SEVERITY_COLOR, SEVERITY_LABEL } from '../utils/findingGroups';
 import { formatDateTime } from '../utils/formatDateTime';
 import { usePillowPageContext } from '../config/pillowContext';
+import { useI18n } from '../i18n/I18nProvider';
 import PageSkeleton from '../components/PageSkeleton';
 import '../styles/velocity.css';
 import '../styles/executive.css';
@@ -90,6 +91,7 @@ function Trend({ c, lowerIsBetter = false, format }: { c: ExecCompare; lowerIsBe
 }
 
 export const ExecutivePage: React.FC<PageProps> = ({ onNavigate, ...headerProps }) => {
+  const { t } = useI18n();
   const [range, setRange] = useState<number>(() => {
     const saved = Number(localStorage.getItem(RANGE_KEY));
     return RANGES.some((r) => r.days === saved) ? saved : 30;
@@ -195,8 +197,8 @@ export const ExecutivePage: React.FC<PageProps> = ({ onNavigate, ...headerProps 
   return (
     <div className="ex-page">
       <Header
-        title="Resumen ejecutivo"
-        subtitle="El estado de la seguridad en una página y sin tecnicismos: cómo estamos, hacia dónde vamos y qué decisiones hacen falta."
+        title={t('pages.executive.title')}
+        subtitle={t('pages.executive.subtitle')}
         onNavigate={onNavigate}
         {...headerProps}
       />

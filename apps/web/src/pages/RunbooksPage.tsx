@@ -25,6 +25,7 @@ import { formatDateTime } from '../utils/formatDateTime';
 import { timeAgo } from '../utils/timeAgo';
 import PageSkeleton from '../components/PageSkeleton';
 import { usePillowPageContext } from '../config/pillowContext';
+import { useI18n } from '../i18n/I18nProvider';
 import '../styles/runbooks.css';
 
 interface PageProps {
@@ -67,6 +68,7 @@ function actionChip(a: Runbook['actions'][number]): string {
 }
 
 export const RunbooksPage: React.FC<PageProps> = ({ onNavigate, ...headerProps }) => {
+  const { t } = useI18n();
   const [runbooks, setRunbooks] = useState<Runbook[]>([]);
   const [executions, setExecutions] = useState<RunbookExecution[]>([]);
   const [meta, setMeta] = useState<{ email_ready: boolean; security_team: string[] }>({ email_ready: false, security_team: [] });
@@ -236,8 +238,8 @@ export const RunbooksPage: React.FC<PageProps> = ({ onNavigate, ...headerProps }
     <div>
       <Toast toast={toast} onClose={() => setToast(null)} />
       <Header
-        title="Automatizaciones"
-        subtitle="Respuestas automáticas: cuando pasa algo en un análisis, SSPILLOWY avisa, asigna o actúa por ti."
+        title={t('pages.runbooks.title')}
+        subtitle={t('pages.runbooks.subtitle')}
         onNavigate={onNavigate}
         {...headerProps}
       />

@@ -203,7 +203,7 @@ export const SecurityGatesPage: React.FC<PageProps> = ({ onNavigate, ...headerPr
       <Toast toast={toast} onClose={() => setToast(null)} />
       <Header
         title={t('pages.gates.title')}
-        subtitle="Decide qué problemas de seguridad impiden desplegar"
+        subtitle={t('pages.gates.subtitle')}
         onNavigate={onNavigate}
         {...headerProps}
       />

@@ -5,6 +5,7 @@ import { SidebarState } from '../components/Sidebar';
 import { Toast, ToastMessage } from '../components/Toast';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { DashboardViewModal } from '../components/DashboardViewModal';
+import { useI18n } from '../i18n/I18nProvider';
 import { timeAgo } from '../utils/timeAgo';
 import {
   DashboardView,
@@ -51,6 +52,7 @@ function loadRecent(userKey: string): RecentEntry[] {
 }
 
 export const RiskPosturePage: React.FC<PageProps> = (props) => {
+  const { t } = useI18n();
   const { onNavigate, ...headerProps } = props;
   const userKey = props.user?.email?.toLowerCase() ?? 'anon';
   const [views, setViews] = useState<DashboardView[]>([]);
@@ -190,7 +192,7 @@ export const RiskPosturePage: React.FC<PageProps> = (props) => {
   if (!loaded && selected && selected !== GENERAL_ID) {
     return (
       <div>
-        <Header title="Risk Posture" subtitle="" onNavigate={onNavigate} {...headerProps} />
+        <Header title={t('pages.riskPosture.title')} subtitle="" onNavigate={onNavigate} {...headerProps} />
         <PageSkeleton variant="dashboard" />
       </div>
     );
@@ -210,24 +212,24 @@ export const RiskPosturePage: React.FC<PageProps> = (props) => {
 
   const scopeText = (v: DashboardView) =>
     v.repository_names.length === 0
-      ? 'Toda la organización'
+      ? t('dashboard.orgWide')
       : v.repository_names.length <= 2
         ? v.repository_names.join(', ')
         : `${v.repository_names.slice(0, 2).join(', ')} +${v.repository_names.length - 2}`;
 
   const lists: { id: ListFilter; label: string; icon: React.ReactNode }[] = [
-    { id: 'all', label: 'Todos', icon: <LayoutDashboard size={14} /> },
-    { id: 'starred', label: 'Favoritos', icon: <Star size={14} /> },
-    { id: 'mine', label: 'Creados por mí', icon: <Pencil size={14} /> },
-    { id: 'team', label: 'Del equipo', icon: <Users size={14} /> },
+    { id: 'all', label: t('dashboard.listAll'), icon: <LayoutDashboard size={14} /> },
+    { id: 'starred', label: t('dashboard.listStarred'), icon: <Star size={14} /> },
+    { id: 'mine', label: t('dashboard.listMine'), icon: <Pencil size={14} /> },
+    { id: 'team', label: t('dashboard.listTeam'), icon: <Users size={14} /> },
   ];
 
   return (
     <div onClick={() => setMenuFor(null)}>
       <Toast toast={toast} onClose={() => setToast(null)} />
       <Header
-        title="Risk Posture"
-        subtitle="Tus dashboards de seguridad: el General de toda la organización y los que crees por producto, equipo o cliente."
+        title={t('pages.riskPosture.title')}
+        subtitle={t('pages.riskPosture.subtitle')}
         onNavigate={onNavigate}
         {...headerProps}
       />
@@ -235,11 +237,11 @@ export const RiskPosturePage: React.FC<PageProps> = (props) => {
       <div className="dl-top">
         <label className="dl-search dl-search--wide">
           <Search size={14} />
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar por nombre, descripción o repositorio" />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('dashboard.listSearch')} />
         </label>
         <button type="button" className="btn btn-primary dl-new" onClick={() => setEditing('new')}>
           <Plus size={15} />
-          <span>Nuevo dashboard</span>
+          <span>{t('dashboard.listNew')}</span>
         </button>
       </div>
 
@@ -262,13 +264,13 @@ export const RiskPosturePage: React.FC<PageProps> = (props) => {
         <div className="dl-main">
           {recentCards.length > 0 && filter === 'all' && !query.trim() && (
             <section>
-              <h3 className="dl-h">Vistos recientemente</h3>
+              <h3 className="dl-h">{t('dashboard.listRecent')}</h3>
               <div className="dl-recent">
                 {recentCards.map(({ entry, view }) => (
                   <button key={entry.id} type="button" className="dl-card" onClick={() => open(entry.id)}>
-                    <strong>{view ? view.name : 'General'}</strong>
-                    <span>{view ? scopeText(view) : 'Toda la organización'}</span>
-                    <em>Visto {timeAgo(entry.at)}</em>
+                    <strong>{view ? view.name : t('dashboard.listGeneral')}</strong>
+                    <span>{view ? scopeText(view) : t('dashboard.orgWide')}</span>
+                    <em>{t('dashboard.listViewed', { ago: timeAgo(entry.at) })}</em>
                   </button>
                 ))}
               </div>
@@ -283,11 +285,11 @@ export const RiskPosturePage: React.FC<PageProps> = (props) => {
               <thead>
                 <tr>
                   <th />
-                  <th>Nombre</th>
-                  <th>Alcance</th>
-                  <th>Periodo</th>
-                  <th>Autor</th>
-                  <th>Modificado</th>
+                  <th>{t('dashboard.listColName')}</th>
+                  <th>{t('dashboard.listColScope')}</th>
+                  <th>{t('dashboard.listColPeriod')}</th>
+                  <th>{t('dashboard.listColAuthor')}</th>
+                  <th>{t('dashboard.listColModified')}</th>
                   <th />
                 </tr>
               </thead>
@@ -298,17 +300,17 @@ export const RiskPosturePage: React.FC<PageProps> = (props) => {
                       <LayoutDashboard size={15} className="dl-general-icon" />
                     </td>
                     <td>
-                      <strong className="dl-name">General</strong>
-                      <span className="dl-desc">La vista de toda la organización. Siempre disponible.</span>
+                      <strong className="dl-name">{t('dashboard.listGeneral')}</strong>
+                      <span className="dl-desc">{t('dashboard.listGeneralDesc')}</span>
                     </td>
                     <td>
-                      <span className="dl-scope">Toda la organización</span>
+                      <span className="dl-scope">{t('dashboard.orgWide')}</span>
                     </td>
                     <td className="dl-muted">—</td>
                     <td className="dl-muted">SSPILLOWY</td>
                     <td className="dl-muted">—</td>
                     <td>
-                      <span className="dl-badge">Predeterminado</span>
+                      <span className="dl-badge">{t('dashboard.listDefault')}</span>
                     </td>
                   </tr>
                 )}
@@ -319,7 +321,7 @@ export const RiskPosturePage: React.FC<PageProps> = (props) => {
                         type="button"
                         className={`dl-star ${v.starred ? 'is-on' : ''}`}
                         onClick={() => star(v)}
-                        aria-label={v.starred ? 'Quitar de favoritos' : 'Marcar como favorito'}
+                        aria-label={t('dashboard.listStarred')}
                       >
                         <Star size={15} />
                       </button>
@@ -327,7 +329,7 @@ export const RiskPosturePage: React.FC<PageProps> = (props) => {
                     <td>
                       <strong className="dl-name">
                         {v.name}
-                        {!v.shared && <Lock size={12} className="dl-lock" aria-label="Solo tú lo ves" />}
+                        {!v.shared && <Lock size={12} className="dl-lock" />}
                       </strong>
                       {v.description && <span className="dl-desc">{v.description}</span>}
                     </td>
@@ -336,26 +338,26 @@ export const RiskPosturePage: React.FC<PageProps> = (props) => {
                         {scopeText(v)}
                       </span>
                     </td>
-                    <td className="dl-muted">{v.range_days} días</td>
-                    <td className="dl-muted">{v.owner_email === userKey ? 'Tú' : v.owner_email ?? '—'}</td>
+                    <td className="dl-muted">{t('dashboard.days', { count: v.range_days })}</td>
+                    <td className="dl-muted">{v.owner_email === userKey ? t('dashboard.listYou') : v.owner_email ?? '—'}</td>
                     <td className="dl-muted">{timeAgo(v.updated_at)}</td>
                     <td className="dl-menu-cell" onClick={(e) => e.stopPropagation()}>
-                      <button type="button" className="dl-icon-btn" onClick={() => setMenuFor(menuFor === v.id ? null : v.id)} aria-label="Acciones">
+                      <button type="button" className="dl-icon-btn" onClick={() => setMenuFor(menuFor === v.id ? null : v.id)}>
                         <MoreHorizontal size={16} />
                       </button>
                       {menuFor === v.id && (
                         <div className="dl-menu">
                           {v.can_edit && (
                             <button type="button" onClick={() => { setMenuFor(null); setEditing(v); }}>
-                              <Pencil size={14} /> Editar
+                              <Pencil size={14} /> {t('dashboard.listEdit')}
                             </button>
                           )}
                           <button type="button" onClick={() => duplicate(v)}>
-                            <Copy size={14} /> Duplicar
+                            <Copy size={14} /> {t('dashboard.listDuplicate')}
                           </button>
                           {v.can_edit && (
                             <button type="button" className="is-danger" onClick={() => { setMenuFor(null); setDeleting(v); }}>
-                              <Trash2 size={14} /> Eliminar
+                              <Trash2 size={14} /> {t('dashboard.listDelete')}
                             </button>
                           )}
                         </div>
@@ -368,12 +370,12 @@ export const RiskPosturePage: React.FC<PageProps> = (props) => {
             )}
             {loaded && !showGeneral && filtered.length === 0 && (
               <div className="dl-none">
-                {filter === 'starred' ? 'Marca un dashboard con la estrella para tenerlo a mano.' : 'No hay dashboards que coincidan.'}
+                {filter === 'starred' ? t('dashboard.listEmptyStarred') : t('dashboard.listEmptyMatch')}
               </div>
             )}
             {loaded && views.length === 0 && filter === 'all' && !query.trim() && (
               <div className="dl-hint">
-                Crea un dashboard por producto, equipo o cliente: eliges sus repositorios y verás las mismas métricas solo de ese alcance.
+                {t('dashboard.listHint')}
               </div>
             )}
           </section>

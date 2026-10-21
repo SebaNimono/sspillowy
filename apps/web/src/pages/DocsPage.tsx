@@ -268,8 +268,8 @@ export const DocsPage: React.FC<PageProps> = ({
   return (
     <div>
       <Header
-        title={t('nav.docs')}
-        subtitle="Guía de uso: qué hace cada sección, cómo usarla y en qué casos te sirve"
+        title={t('pages.docs.title')}
+        subtitle={t('pages.docs.subtitle')}
         sidebarState={sidebarState}
         setSidebarState={setSidebarState}
         user={user}

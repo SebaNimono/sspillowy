@@ -17,6 +17,7 @@ import { Repository, VelocityData, fetchRepositories, fetchVelocity } from '../a
 import { SEVERITY_COLOR, SEVERITY_LABEL } from '../utils/findingGroups';
 import { formatDateTime } from '../utils/formatDateTime';
 import { usePillowPageContext } from '../config/pillowContext';
+import { useI18n } from '../i18n/I18nProvider';
 import PageSkeleton from '../components/PageSkeleton';
 import '../styles/velocity.css';
 
@@ -84,6 +85,7 @@ const ChartTooltip: React.FC<{ active?: boolean; label?: string; payload?: { nam
 };
 
 export const VelocityPage: React.FC<PageProps> = ({ onNavigate, ...headerProps }) => {
+  const { t } = useI18n();
   const [range, setRange] = useState<number>(() => {
     const saved = Number(localStorage.getItem(RANGE_KEY));
     return (RANGES as readonly number[]).includes(saved) ? saved : 30;
@@ -155,8 +157,8 @@ export const VelocityPage: React.FC<PageProps> = ({ onNavigate, ...headerProps }
   return (
     <div>
       <Header
-        title="Security Velocity"
-        subtitle="Qué tan rápido detecta, corrige y libera tu equipo, y si la seguridad acompaña ese ritmo o lo frena."
+        title={t('pages.velocity.title')}
+        subtitle={t('pages.velocity.subtitle')}
         onNavigate={onNavigate}
         {...headerProps}
       />

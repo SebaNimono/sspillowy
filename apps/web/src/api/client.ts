@@ -30,9 +30,11 @@ export interface Finding {
   iso_control?: string;
   status: 'OPEN' | 'IN_REVIEW' | 'ACCEPTED_RISK' | 'FIXED' | 'FALSE_POSITIVE' | 'SUPERSEDED';
   ai_triaged: boolean;
+  ai_verdict?: 'LIKELY_REAL' | 'NEEDS_REVIEW' | 'LIKELY_FALSE_POSITIVE' | string | null;
   ai_confidence?: number;
   ai_summary?: string;
   ai_remediation?: string;
+  ai_feedback?: 'ACCEPTED' | 'DISMISSED' | string | null;
   created_at: string;
   first_seen_at?: string | null;
   repository_name?: string | null;

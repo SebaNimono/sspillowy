@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { HeatmapData } from '../api/client';
+import { useI18n } from '../i18n/I18nProvider';
 
 interface HeatmapCalendarProps {
   data: HeatmapData;
@@ -9,6 +10,7 @@ interface HeatmapCalendarProps {
 const LEVEL_COLORS = ['#ebedf0', '#ffc1bc', '#ff8182', '#fa4549', '#82071e'];
 
 export const HeatmapCalendar: React.FC<HeatmapCalendarProps> = ({ data }) => {
+  const { t } = useI18n();
   const [hover, setHover] = useState<{ date: string; count: number } | null>(null);
 
   const weeks: HeatmapData['cells'][] = [];
@@ -37,7 +39,7 @@ export const HeatmapCalendar: React.FC<HeatmapCalendarProps> = ({ data }) => {
                   type="button"
                   className="heatmap-cell"
                   style={{ background: LEVEL_COLORS[cell.level] }}
-                  title={`${cell.date}: ${cell.count} hallazgos`}
+                  title={t('dashboard.heatmapHover', { date: cell.date, count: cell.count })}
                   onMouseEnter={() => setHover({ date: cell.date, count: cell.count })}
                   onMouseLeave={() => setHover(null)}
                   initial={{ opacity: 0, scale: 0.6 }}
@@ -53,14 +55,16 @@ export const HeatmapCalendar: React.FC<HeatmapCalendarProps> = ({ data }) => {
 
       <div className="heatmap-legend">
         <span className="heatmap-legend-label">
-          {hover ? `${hover.date} · ${hover.count} hallazgos` : `${data.total_findings_period} hallazgos en 12 semanas`}
+          {hover
+            ? t('dashboard.heatmapHover', { date: hover.date, count: hover.count })
+            : t('dashboard.heatmapPeriod', { count: data.total_findings_period })}
         </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <span className="heatmap-legend-label">Menos</span>
+          <span className="heatmap-legend-label">{t('dashboard.less')}</span>
           {LEVEL_COLORS.map((color) => (
             <span key={color} className="heatmap-cell" style={{ background: color }} />
           ))}
-          <span className="heatmap-legend-label">Más</span>
+          <span className="heatmap-legend-label">{t('dashboard.more')}</span>
         </div>
       </div>
     </div>

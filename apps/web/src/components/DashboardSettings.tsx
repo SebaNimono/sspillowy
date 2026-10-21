@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { GripVertical, Settings2, X } from 'lucide-react';
+import { useI18n } from '../i18n/I18nProvider';
 import {
   DashboardConfig,
   DashboardWidgetId,
@@ -31,6 +32,7 @@ export const DashboardSettings: React.FC<DashboardSettingsProps> = ({
   arranging = false,
   onArrangingChange,
 }) => {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(config);
   const [dragId, setDragId] = useState<DashboardWidgetId | null>(null);
@@ -67,14 +69,14 @@ export const DashboardSettings: React.FC<DashboardSettingsProps> = ({
           type="button"
           className={`dash-settings-trigger ${arranging ? 'is-active' : ''}`}
           onClick={() => onArrangingChange?.(!arranging)}
-          title="Mover y redimensionar widgets en el tablero"
+          title={t('dashboard.move')}
         >
           <GripVertical size={16} />
-          <span>{arranging ? 'Listo' : 'Mover'}</span>
+          <span>{arranging ? t('dashboard.done') : t('dashboard.move')}</span>
         </button>
-        <button type="button" className="dash-settings-trigger" onClick={openPanel} title="Personalizar dashboard">
+        <button type="button" className="dash-settings-trigger" onClick={openPanel} title={t('dashboard.customize')}>
           <Settings2 size={16} />
-          <span>Personalizar</span>
+          <span>{t('dashboard.customize')}</span>
         </button>
       </>
     );
@@ -90,33 +92,30 @@ export const DashboardSettings: React.FC<DashboardSettingsProps> = ({
       >
         <div className="dash-settings-head">
           <div>
-            <h2 id="dash-settings-title">Personalizar dashboard</h2>
+            <h2 id="dash-settings-title">{t('dashboard.settingsTitle')}</h2>
             <p className="dash-settings-sub">
-              {enabledCount} de {WIDGET_IDS.length} bloques · arrastra para ordenar
+              {t('dashboard.settingsSub', { enabled: enabledCount, total: WIDGET_IDS.length })}
             </p>
           </div>
-          <button type="button" className="dash-settings-close" onClick={() => setOpen(false)} aria-label="Cerrar">
+          <button type="button" className="dash-settings-close" onClick={() => setOpen(false)} aria-label={t('common.cancel')}>
             <X size={18} />
           </button>
         </div>
 
         <p className="dash-settings-lead">
-          Activa bloques, cámbiales el ancho y reordénalos. También puedes usar <strong>Mover</strong> en el tablero para
-          arrastrarlos en vivo.{' '}
-          {persistLocal
-            ? 'Los ajustes quedan en este navegador y en la URL.'
-            : 'Los ajustes se guardan en este dashboard y los ve todo el equipo.'}
+          {t('dashboard.settingsLead')}{' '}
+          {persistLocal ? t('dashboard.settingsLeadLocal') : t('dashboard.settingsLeadTeam')}
         </p>
 
         <section className="dash-settings-section">
           <div className="dash-settings-section-head">
-            <h3>Orden y tamaño</h3>
+            <h3>{t('dashboard.settingsOrderSize')}</h3>
             <div className="dash-settings-bulk">
               <button type="button" onClick={() => setAll(true)}>
-                Todos
+                {t('dashboard.settingsAll')}
               </button>
               <button type="button" onClick={() => setAll(false)}>
-                Ninguno
+                {t('dashboard.settingsNone')}
               </button>
             </div>
           </div>
@@ -156,7 +155,7 @@ export const DashboardSettings: React.FC<DashboardSettingsProps> = ({
                   </span>
                 </label>
                 {item.id === 'kpis' ? (
-                  <span className="dash-settings-span-fixed">Fila completa</span>
+                  <span className="dash-settings-span-fixed">{t('dashboard.settingsFullRow')}</span>
                 ) : (
                   <select
                     className="dash-settings-span"
@@ -168,11 +167,11 @@ export const DashboardSettings: React.FC<DashboardSettingsProps> = ({
                         layout: setLayoutSpan(draft.layout, item.id, Number(e.target.value) as WidgetSpan),
                       })
                     }
-                    aria-label={`Ancho de ${WIDGET_LABELS[item.id]}`}
+                    aria-label={WIDGET_LABELS[item.id]}
                   >
                     {WIDGET_SPAN_OPTIONS.map((opt) => (
                       <option key={opt.span} value={opt.span}>
-                        {opt.label}
+                        {opt.span === 12 ? t('dashboard.settingsSpanWide') : opt.label}
                       </option>
                     ))}
                   </select>
@@ -183,11 +182,11 @@ export const DashboardSettings: React.FC<DashboardSettingsProps> = ({
         </section>
 
         <section className="dash-settings-section">
-          <h3>Umbrales de alerta</h3>
+          <h3>{t('dashboard.settingsThresholds')}</h3>
           <div className="dash-settings-fields">
             <label>
-              <span>Críticas máx.</span>
-              <em>Alerta si hay más que este número</em>
+              <span>{t('dashboard.settingsCritMax')}</span>
+              <em>{t('dashboard.settingsCritHint')}</em>
               <input
                 type="number"
                 min={0}
@@ -201,8 +200,8 @@ export const DashboardSettings: React.FC<DashboardSettingsProps> = ({
               />
             </label>
             <label>
-              <span>Altas máx.</span>
-              <em>Alerta si hay más altas abiertas</em>
+              <span>{t('dashboard.settingsHighMax')}</span>
+              <em>{t('dashboard.settingsHighHint')}</em>
               <input
                 type="number"
                 min={0}
@@ -216,8 +215,8 @@ export const DashboardSettings: React.FC<DashboardSettingsProps> = ({
               />
             </label>
             <label>
-              <span>Hallazgos abiertos máx.</span>
-              <em>Total activos antes de marcar en rojo</em>
+              <span>{t('dashboard.settingsOpenMax')}</span>
+              <em>{t('dashboard.settingsOpenHint')}</em>
               <input
                 type="number"
                 min={0}
@@ -231,8 +230,8 @@ export const DashboardSettings: React.FC<DashboardSettingsProps> = ({
               />
             </label>
             <label>
-              <span>Health score mín.</span>
-              <em>Alerta si la puntuación baja de este valor</em>
+              <span>{t('dashboard.settingsHealthMin')}</span>
+              <em>{t('dashboard.settingsHealthHint')}</em>
               <input
                 type="number"
                 min={0}
@@ -251,17 +250,17 @@ export const DashboardSettings: React.FC<DashboardSettingsProps> = ({
 
         {persistLocal && (
           <p className="dash-settings-query-hint">
-            Ejemplo URL:{' '}
+            URL:{' '}
             <code>?w=kpis,health,heatmap&amp;layout=kpis:12,trend:8,gates:4&amp;crit_max=0</code>
           </p>
         )}
 
         <div className="dash-settings-actions">
           <button type="button" className="btn btn-secondary" onClick={() => setOpen(false)}>
-            Cancelar
+            {t('common.cancel')}
           </button>
           <button type="button" className="btn btn-primary" onClick={apply}>
-            Guardar
+            {t('common.save')}
           </button>
         </div>
       </div>

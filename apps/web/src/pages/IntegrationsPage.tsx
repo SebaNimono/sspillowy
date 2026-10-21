@@ -15,6 +15,7 @@ import {
   testChatIntegration,
 } from '../api/client';
 import PageSkeleton from '../components/PageSkeleton';
+import { useI18n } from '../i18n/I18nProvider';
 import '../styles/integrations.css';
 
 interface IntegrationsPageProps {
@@ -262,6 +263,7 @@ function buildEntries(
 let cached: IntegrationsOverview | null = null;
 
 export const IntegrationsPage: React.FC<IntegrationsPageProps> = ({ onNavigate, ...headerProps }) => {
+  const { t } = useI18n();
   const [data, setDataState] = useState<IntegrationsOverview | null>(cached);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -315,8 +317,8 @@ export const IntegrationsPage: React.FC<IntegrationsPageProps> = ({ onNavigate, 
   return (
     <div>
       <Header
-        title="Integraciones"
-        subtitle="Conecta SSPILLOWY con las herramientas de tu equipo. Cada espacio configura las suyas."
+        title={t('pages.integrations.title')}
+        subtitle={t('pages.integrations.subtitle')}
         onNavigate={onNavigate}
         {...headerProps}
       />

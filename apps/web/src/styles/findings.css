@@ -9,27 +9,44 @@
 
 .fm-summary-card {
   --sev: #0969da;
+  position: relative;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 0.1rem;
-  padding: 0.75rem 0.9rem;
+  gap: 0.15rem;
+  padding: 0.85rem 1rem;
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: 10px;
   cursor: pointer;
   text-align: left;
   font: inherit;
-  transition: box-shadow 0.15s ease, background 0.15s ease;
+  box-shadow: 0 1px 2px rgba(31, 35, 40, 0.04);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.fm-summary-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--sev);
+  opacity: 0.85;
 }
 
 .fm-summary-card:hover:not(.is-static) {
-  box-shadow: 0 3px 8px rgba(31, 35, 40, 0.08);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(31, 35, 40, 0.08);
+  border-color: color-mix(in srgb, var(--sev) 45%, var(--border-default));
 }
 
 .fm-summary-card.is-active {
   background: color-mix(in srgb, var(--sev) 8%, #ffffff);
   border-color: var(--sev);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--sev) 20%, transparent);
 }
 
 .fm-summary-card.is-static {
@@ -291,4 +308,77 @@
   color: #656d76;
   display: grid;
   gap: 0.25rem;
+}
+
+.fm-ai-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.fm-ai-pill--fp {
+  background: #f3f0ff;
+  color: #6e40c9;
+  border-color: #d8b9ff;
+}
+
+.fm-ai-pill--real {
+  background: #ffebe9;
+  color: #cf222e;
+  border-color: #ff818266;
+}
+
+.fm-ai-pill--review {
+  background: #fff8c5;
+  color: #9a6700;
+  border-color: #d4a72c66;
+}
+
+.fm-triage-box {
+  margin-top: 1rem;
+  padding: 0.85rem 1rem;
+  background: #f8fafc;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+}
+
+.fm-triage-label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #1f2328;
+  margin-bottom: 0.35rem;
+}
+
+.fm-triage-input {
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  font: inherit;
+  font-size: 0.82rem;
+  color: #1f2328;
+  background: #ffffff;
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.fm-triage-input:focus {
+  border-color: #0969da;
+  box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.12);
+}
+
+.fm-triage-hint {
+  margin-top: 0.4rem;
+  font-size: 0.72rem;
+  color: #656d76;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
 }

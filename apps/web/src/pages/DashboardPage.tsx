@@ -68,7 +68,6 @@ import {
 import { usePillowPageContext } from '../config/pillowContext';
 import {
   SEVERITIES,
-  SEVERITY_LABEL,
   SLA_DAYS,
   Severity,
   ageDays,
@@ -155,19 +154,19 @@ const GATE_META: Record<GateKey, { label: string; color: string }> = {
   OTHER: { label: 'Sin gate', color: PASTEL_GATE.OTHER },
 };
 
-const STATUS_FUNNEL: { key: Finding['status']; label: string; color: string }[] = [
-  { key: 'OPEN', label: 'Abiertos', color: '#e8a0a8' },
-  { key: 'IN_REVIEW', label: 'En revisión', color: '#9dbfe8' },
-  { key: 'FIXED', label: 'Corregidos', color: '#8fd4a8' },
-  { key: 'FALSE_POSITIVE', label: 'Falsos positivos', color: '#c5cad1' },
-  { key: 'ACCEPTED_RISK', label: 'Riesgo aceptado', color: '#e6d09a' },
+const STATUS_FUNNEL: { key: Finding['status']; color: string }[] = [
+  { key: 'OPEN', color: '#e5484d' },
+  { key: 'IN_REVIEW', color: '#3b82f6' },
+  { key: 'FIXED', color: '#2da44e' },
+  { key: 'FALSE_POSITIVE', color: '#64748b' },
+  { key: 'ACCEPTED_RISK', color: '#eab308' },
 ];
 
 const AGE_BUCKETS = [
-  { label: '0–7 d', min: 0, max: 7, color: '#8fd4a8' },
-  { label: '8–30 d', min: 8, max: 30, color: '#e6d09a' },
-  { label: '31–90 d', min: 31, max: 90, color: '#e8b89a' },
-  { label: '+90 d', min: 91, max: Infinity, color: '#e8a0a8' },
+  { label: '0–7 d', min: 0, max: 7, color: '#2da44e' },
+  { label: '8–30 d', min: 8, max: 30, color: '#eab308' },
+  { label: '31–90 d', min: 31, max: 90, color: '#f76b15' },
+  { label: '+90 d', min: 91, max: Infinity, color: '#e5484d' },
 ];
 
 const TREND_SEVERITIES: Severity[] = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
@@ -254,15 +253,16 @@ const Sparkline: React.FC<{ data: number[]; color: string; id: string }> = ({ da
 };
 
 const Delta: React.FC<{ value: number | null; suffix?: string; goodWhenUp?: boolean }> = ({ value, suffix = '%', goodWhenUp = false }) => {
-  if (value === null || !Number.isFinite(value)) return <span className="dw-delta dw-delta--flat">sin periodo previo</span>;
-  if (Math.round(value) === 0) return <span className="dw-delta dw-delta--flat">= periodo previo</span>;
+  const { t } = useI18n();
+  if (value === null || !Number.isFinite(value)) return <span className="dw-delta dw-delta--flat">{t('dashboard.noPrevPeriod')}</span>;
+  if (Math.round(value) === 0) return <span className="dw-delta dw-delta--flat">{t('dashboard.samePrevPeriod')}</span>;
   const up = value > 0;
   const good = up === goodWhenUp;
   return (
     <span className={`dw-delta ${good ? 'dw-delta--good' : 'dw-delta--bad'}`}>
       {up ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
       {Math.abs(Math.round(value))}
-      {suffix} vs periodo previo
+      {suffix} {t('dashboard.vsPrevPeriod')}
     </span>
   );
 };
@@ -297,114 +297,116 @@ const Widget: React.FC<{
   onDragOver,
   onDrop,
   onSpanChange,
-}) => (
-  <motion.section
-    className={`card dw-widget dw-span-${span}${arranging ? ' is-arranging' : ''}${dragOver ? ' is-drag-over' : ''}`}
-    initial={{ opacity: 0 }}
-    whileInView={{ opacity: 1 }}
-    viewport={{ once: true }}
-    transition={{ duration: 0.28 }}
-    onDragOver={arranging ? onDragOver : undefined}
-    onDrop={arranging ? onDrop : undefined}
-  >
-    <header className="dw-head">
-      <div className="card-title">
-        {icon}
-        <span>{title}</span>
-      </div>
-      <div className="dw-head-right">
-        {arranging && widgetId && (
-          <div className="dw-arrange">
-            <button
-              type="button"
-              className="dw-drag-handle"
-              draggable
-              onDragStart={onDragStart}
-              onDragEnd={onDragEnd}
-              title="Arrastrar para mover"
-              aria-label={`Mover ${title}`}
-            >
-              <GripVertical size={14} />
-            </button>
-            {widgetId !== 'kpis' && (
-              <select
-                className="dw-span-select"
-                value={span}
-                onChange={(e) => onSpanChange?.(Number(e.target.value) as WidgetSpan)}
-                aria-label={`Ancho de ${title}`}
+}) => {
+  const { t } = useI18n();
+  return (
+    <motion.section
+      className={`card dw-widget dw-span-${span}${arranging ? ' is-arranging' : ''}${dragOver ? ' is-drag-over' : ''}`}
+      initial={{ opacity: 0 }}
+      whileInView={{ opacity: 1 }}
+      viewport={{ once: true }}
+      transition={{ duration: 0.28 }}
+      onDragOver={arranging ? onDragOver : undefined}
+      onDrop={arranging ? onDrop : undefined}
+    >
+      <header className="dw-head">
+        <div className="card-title">
+          {icon}
+          <span>{title}</span>
+        </div>
+        <div className="dw-head-right">
+          {arranging && widgetId && (
+            <div className="dw-arrange">
+              <button
+                type="button"
+                className="dw-drag-handle"
+                draggable
+                onDragStart={onDragStart}
+                onDragEnd={onDragEnd}
+                title={t('dashboard.move')}
+                aria-label={title}
               >
-                {WIDGET_SPAN_OPTIONS.map((opt) => (
-                  <option key={opt.span} value={opt.span}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-        )}
-        {!arranging && chip}
-        {!arranging && onOpen && (
-          <button type="button" className="dw-link" onClick={onOpen}>
-            Ver hallazgos →
-          </button>
-        )}
-      </div>
-    </header>
-    <div className="dw-body">{children}</div>
-  </motion.section>
-);
+                <GripVertical size={14} />
+              </button>
+              {widgetId !== 'kpis' && (
+                <select
+                  className="dw-span-select"
+                  value={span}
+                  onChange={(e) => onSpanChange?.(Number(e.target.value) as WidgetSpan)}
+                  aria-label={title}
+                >
+                  {WIDGET_SPAN_OPTIONS.map((opt) => (
+                    <option key={opt.span} value={opt.span}>
+                      {opt.span === 12 ? t('dashboard.settingsSpanWide') : opt.label}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
+          {!arranging && chip}
+          {!arranging && onOpen && (
+            <button type="button" className="dw-link" onClick={onOpen}>
+              {t('dashboard.viewFindings')}
+            </button>
+          )}
+        </div>
+      </header>
+      <div className="dw-body">{children}</div>
+    </motion.section>
+  );
+};
 
 const Empty: React.FC<{ text: string }> = ({ text }) => <p className="dash-panel-empty">{text}</p>;
 
-const START_STEPS = [
-  {
-    title: 'Conecta un repositorio',
-    text: 'Pega la URL de GitHub o GitLab. Solo tú y las personas que invites lo verán.',
-    action: 'Conectar repositorio',
-    tab: 'repositories',
-  },
-  {
-    title: 'Lanza el primer análisis',
-    text: 'Revisamos el código, las dependencias y los secretos expuestos. Tarda unos minutos.',
-    action: 'Ir a escaneos',
-    tab: 'scans',
-  },
-  {
-    title: 'Define tu Security Gate',
-    text: 'Decide cuántos problemas críticos o altos toleras antes de bloquear un despliegue.',
-    action: 'Configurar gate',
-    tab: 'gates',
-  },
-];
-
-const GetStarted: React.FC<{ onNavigate?: (tab: string) => void }> = ({ onNavigate }) => (
-  <div className="ws-start">
-    <Database size={36} color="#8250df" />
-    <h2>Empieza ahora</h2>
-    <p>
-      Tu espacio está vacío. Conecta tu primer repositorio y en minutos verás aquí tus métricas de seguridad. Para trabajar
-      en equipo, invita a tus compañeros desde el selector de espacio en el menú lateral.
-    </p>
-    <ol className="ws-start-steps">
-      {START_STEPS.map((s, i) => (
-        <li key={s.tab}>
-          <span className="ws-start-num">{i + 1}</span>
-          <div>
-            <strong>{s.title}</strong>
-            <p>{s.text}</p>
-            <button
-              type="button"
-              className={i === 0 ? 'btn btn-primary' : 'btn btn-secondary'}
-              onClick={() => onNavigate?.(s.tab)}
-            >
-              {s.action}
-            </button>
-          </div>
-        </li>
-      ))}
-    </ol>
-  </div>
-);
+const GetStarted: React.FC<{ onNavigate?: (tab: string) => void }> = ({ onNavigate }) => {
+  const { t } = useI18n();
+  const steps = [
+    {
+      title: t('dashboard.step1Title'),
+      text: t('dashboard.step1Text'),
+      action: t('dashboard.step1Action'),
+      tab: 'repositories',
+    },
+    {
+      title: t('dashboard.step2Title'),
+      text: t('dashboard.step2Text'),
+      action: t('dashboard.step2Action'),
+      tab: 'scans',
+    },
+    {
+      title: t('dashboard.step3Title'),
+      text: t('dashboard.step3Text'),
+      action: t('dashboard.step3Action'),
+      tab: 'gates',
+    },
+  ];
+  return (
+    <div className="ws-start">
+      <Database size={36} color="#8250df" />
+      <h2>{t('dashboard.startTitle')}</h2>
+      <p>{t('dashboard.startDesc')}</p>
+      <ol className="ws-start-steps">
+        {steps.map((s, i) => (
+          <li key={s.tab}>
+            <span className="ws-start-num">{i + 1}</span>
+            <div>
+              <strong>{s.title}</strong>
+              <p>{s.text}</p>
+              <button
+                type="button"
+                className={i === 0 ? 'btn btn-primary' : 'btn btn-secondary'}
+                onClick={() => onNavigate?.(s.tab)}
+              >
+                {s.action}
+              </button>
+            </div>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+};
 
 export const DashboardPage: React.FC<PageProps> = ({
   sidebarState,
@@ -599,17 +601,17 @@ export const DashboardPage: React.FC<PageProps> = ({
   const slaData = useMemo(
     () =>
       TREND_SEVERITIES.map((sev) => {
-        const row = { name: SEVERITY_LABEL[sev], 'En plazo': 0, 'Por vencer': 0, Vencido: 0 };
+        const row = { name: t(`severity.${sev}`), ok: 0, due: 0, breached: 0 };
         for (const f of active) {
           if (f.severity !== sev) continue;
           const st = slaState(f, now);
-          if (st === 'ok') row['En plazo'] += 1;
-          else if (st === 'due') row['Por vencer'] += 1;
-          else if (st === 'breached') row.Vencido += 1;
+          if (st === 'ok') row.ok += 1;
+          else if (st === 'due') row.due += 1;
+          else if (st === 'breached') row.breached += 1;
         }
         return row;
       }),
-    [active, now],
+    [active, now, t],
   );
   const slaCompliance = active.length
     ? Math.round(((active.length - derived.breached) / active.length) * 100)
@@ -651,13 +653,18 @@ export const DashboardPage: React.FC<PageProps> = ({
     [active, now],
   );
 
+  const falsePositivesCount = useMemo(
+    () => findings.filter((f) => f.status === 'FALSE_POSITIVE').length,
+    [findings],
+  );
+
   const funnel = useMemo(() => {
     const total = findings.length || 1;
     return STATUS_FUNNEL.map((s) => {
       const value = findings.filter((f) => f.status === s.key).length;
-      return { ...s, value, pct: Math.round((value / total) * 100) };
+      return { ...s, label: t(`status.${s.key}`), value, pct: Math.round((value / total) * 100) };
     });
-  }, [findings]);
+  }, [findings, t]);
   const triaged = findings.length ? Math.round((findings.filter((f) => f.status !== 'OPEN').length / findings.length) * 100) : 0;
 
   const engineMatrix = useMemo(() => {
@@ -692,59 +699,69 @@ export const DashboardPage: React.FC<PageProps> = ({
   }[] = [
     {
       id: 'active',
-      label: 'Hallazgos activos',
+      label: t('dashboard.kpiActive'),
       value: active.length,
       color: ALERT_COLORS[openAlert],
       tone: openAlert,
       spark: derived.series.map((d) => d.total),
       foot: <Delta value={derived.detectedDelta} />,
-      hint: `${derived.detected} detectados en ${range} días`,
+      hint:
+        falsePositivesCount > 0
+          ? `${t('dashboard.kpiDetectedInDays', { count: derived.detected, days: range })} · ${t('dashboard.kpiFalsePositives', { count: falsePositivesCount })}`
+          : t('dashboard.kpiDetectedInDays', { count: derived.detected, days: range }),
     },
     {
       id: 'critical',
-      label: 'Críticos activos',
+      label: t('dashboard.kpiCritical'),
       value: derived.sevActive.CRITICAL,
       color: ALERT_COLORS[criticalAlert],
       tone: criticalAlert,
       spark: derived.series.map((d) => d.CRITICAL),
-      foot: <span className="dw-delta dw-delta--flat">umbral ≤ {thresholds.critical_max}</span>,
-      hint: `${derived.sevActive.HIGH} altos · ${derived.sevActive.MEDIUM} medios`,
+      foot: <span className="dw-delta dw-delta--flat">{t('dashboard.kpiThresholdLe', { max: thresholds.critical_max })}</span>,
+      hint: t('dashboard.kpiHighsMediums', { high: derived.sevActive.HIGH, medium: derived.sevActive.MEDIUM }),
     },
     {
       id: 'sla',
-      label: 'Fuera de plazo',
+      label: t('dashboard.kpiSla'),
       value: derived.breached,
       color: ALERT_COLORS[slaAlert],
       tone: slaAlert,
       spark: [],
-      foot: <span className="dw-delta dw-delta--flat">{slaCompliance}% cumple SLA</span>,
-      hint: `plazo crítico ${SLA_DAYS.CRITICAL} d · alto ${SLA_DAYS.HIGH} d`,
+      foot: <span className="dw-delta dw-delta--flat">{t('dashboard.kpiSlaCompliant', { pct: slaCompliance })}</span>,
+      hint: t('dashboard.kpiSlaHint', { crit: SLA_DAYS.CRITICAL, high: SLA_DAYS.HIGH }),
     },
     {
       id: 'gate',
-      label: 'Gate aprobado',
+      label: t('dashboard.kpiGate'),
       value: derived.passRate === null ? null : Math.round(derived.passRate),
       suffix: '%',
       color: derived.passRate === null ? '#8c959f' : ALERT_COLORS[gateAlert],
       tone: gateAlert,
       spark: [],
       foot: <Delta value={derived.passDelta} suffix=" pp" goodWhenUp />,
-      hint: `${derived.gateCounts.BLOCKED} bloqueos en ${range} días`,
+      hint: t('dashboard.kpiGateBlocks', { count: derived.gateCounts.BLOCKED, days: range }),
     },
     {
       id: 'scans',
-      label: 'Escaneos',
+      label: t('dashboard.kpiScans'),
       value: derived.scansCount,
-      color: '#5b8fd4',
+      color: '#0969da',
       tone: 'info',
       spark: derived.series.map((d) => d.scans),
       foot: <Delta value={derived.scansDelta} goodWhenUp />,
-      hint: `${resolvedStats.monitored_repos} repos monitoreados`,
+      hint: t('dashboard.kpiMonitoredRepos', { count: resolvedStats.monitored_repos }),
     },
   ];
 
+  const gateLabels: Record<GateKey, string> = {
+    PASSED: t('dashboard.gatePassed'),
+    BLOCKED: t('dashboard.gateBlocked'),
+    BYPASSED: t('dashboard.gateBypassed'),
+    OTHER: t('dashboard.gateOther'),
+  };
+
   const gatePie = (Object.keys(GATE_META) as GateKey[])
-    .map((k) => ({ name: GATE_META[k].label, value: derived.gateCounts[k], fill: GATE_META[k].color }))
+    .map((k) => ({ name: gateLabels[k], value: derived.gateCounts[k], fill: GATE_META[k].color }))
     .filter((d) => d.value > 0);
 
   const handleRemovePillowWidget = (id: string) => {
@@ -756,16 +773,16 @@ export const DashboardPage: React.FC<PageProps> = ({
   };
 
   const scopeLabel = !view?.repository_names.length
-    ? 'Toda la organización'
+    ? t('dashboard.orgWide')
     : view.repository_names.length <= 2
       ? view.repository_names.join(', ')
-      : `${view.repository_names.length} repositorios`;
+      : t('dashboard.reposScope', { count: view.repository_names.length });
 
   return (
     <div className="dash">
       <Header
         title={view ? view.name : t('pages.dashboard.title')}
-        subtitle={view ? view.description || `Dashboard de ${scopeLabel.toLowerCase()}.` : t('pages.dashboard.subtitle')}
+        subtitle={view ? view.description || t('dashboard.dashboardOf', { scope: scopeLabel.toLowerCase() }) : t('pages.dashboard.subtitle')}
         healthScore={dataReady ? resolvedStats.overall_health_score : undefined}
         sidebarState={sidebarState}
         setSidebarState={setSidebarState}
@@ -778,30 +795,30 @@ export const DashboardPage: React.FC<PageProps> = ({
 
       <div className="dw-toolbar">
         {onOpenList && (
-          <button type="button" className="dw-tool-btn" onClick={onOpenList} title="Ver todos los dashboards">
+          <button type="button" className="dw-tool-btn" onClick={onOpenList} title={t('dashboard.viewAllDashboards')}>
             <LayoutGrid size={14} />
-            <span>Dashboards</span>
+            <span>{t('dashboard.dashboardsBtn')}</span>
           </button>
         )}
-        <span className="dw-scope" title={view?.repository_names.join(', ') || 'Todos los repositorios'}>
+        <span className="dw-scope" title={view?.repository_names.join(', ') || t('dashboard.orgWide')}>
           <FolderGit2 size={13} />
           {scopeLabel}
         </span>
-        <div className="dw-range" role="group" aria-label="Rango de tiempo">
+        <div className="dw-range" role="group">
           {RANGES.map((r) => (
             <button key={r} type="button" className={range === r ? 'is-active' : ''} onClick={() => changeRange(r)}>
-              {r} días
+              {t('dashboard.days', { count: r })}
             </button>
           ))}
         </div>
         <button type="button" className="dw-tool-btn" onClick={load} disabled={refreshing}>
           <RefreshCw size={14} className={refreshing ? 'dw-spin' : ''} />
-          <span>Actualizar</span>
+          <span>{t('dashboard.refresh')}</span>
         </button>
         <label className={`dw-live ${autoRefresh ? 'is-on' : ''}`}>
           <input type="checkbox" checked={autoRefresh} onChange={(e) => setAutoRefresh(e.target.checked)} />
           <span className="dw-live-dot" />
-          <span>En vivo (60 s)</span>
+          <span>{t('dashboard.live')}</span>
         </label>
         {updatedAt && (
           <span className="dw-updated">
@@ -810,7 +827,9 @@ export const DashboardPage: React.FC<PageProps> = ({
         )}
         <div className="dw-toolbar-right">
           {!loading && dataReady && (
-            <span className={`dash-status-pill dash-status-pill--${openAlert}`}>{active.length} hallazgos activos</span>
+            <span className={`dash-status-pill dash-status-pill--${openAlert}`}>
+              {t('dashboard.activeFindingsPill', { count: active.length })}
+            </span>
           )}
           <DashboardSettings
             config={config}
@@ -833,10 +852,7 @@ export const DashboardPage: React.FC<PageProps> = ({
       {!loading && !dataReady && <GetStarted onNavigate={onNavigate} />}
 
       {!loading && dataReady && arranging && (
-        <p className="dw-arrange-hint">
-          Arrastra el asa de cada bloque para reordenarlo y usa el selector de ancho. Pulsa <strong>Listo</strong> cuando
-          termines.
-        </p>
+        <p className="dw-arrange-hint">{t('dashboard.arrangeHint')}</p>
       )}
 
       {!loading && dataReady && (
@@ -882,7 +898,7 @@ export const DashboardPage: React.FC<PageProps> = ({
                         draggable
                         onDragStart={() => setDragId('kpis')}
                         onDragEnd={() => setDragId(null)}
-                        title="Arrastrar fila de KPIs"
+                        title="KPIs"
                       >
                         <GripVertical size={14} />
                       </button>
@@ -917,10 +933,10 @@ export const DashboardPage: React.FC<PageProps> = ({
               return (
                 <Widget
                   key="trend"
-                  title={`Detección por severidad · ${range} días`}
+                  title={t('dashboard.wTrendTitle', { days: range })}
                   icon={<Activity size={18} color="#8250df" />}
                   span={item.span}
-                  chip={<span className="dash-chip">{derived.detected} detectados</span>}
+                  chip={<span className="dash-chip">{t('dashboard.wTrendChip', { count: derived.detected })}</span>}
                   {...dragProps}
                 >
                   {derived.series.some((d) => d.total > 0) ? (
@@ -936,19 +952,19 @@ export const DashboardPage: React.FC<PageProps> = ({
                               key={sev}
                               type="monotone"
                               dataKey={sev}
-                              name={SEVERITY_LABEL[sev]}
+                              name={t(`severity.${sev}`)}
                               stackId="sev"
                               stroke={PASTEL_SEVERITY[sev]}
                               fill={PASTEL_SEVERITY[sev]}
-                              fillOpacity={0.55}
-                              strokeWidth={1.25}
+                              fillOpacity={0.5}
+                              strokeWidth={1.75}
                             />
                           ))}
                         </AreaChart>
                       </ResponsiveContainer>
                     </div>
                   ) : (
-                    <Empty text={`Sin escaneos con hallazgos en los últimos ${range} días.`} />
+                    <Empty text={t('dashboard.wTrendEmpty', { days: range })} />
                   )}
                 </Widget>
               );
@@ -958,10 +974,10 @@ export const DashboardPage: React.FC<PageProps> = ({
               return (
                 <Widget
                   key="gates"
-                  title="Security Gate"
+                  title={t('dashboard.wGateTitle')}
                   icon={<GitPullRequest size={18} color="#1a7f37" />}
                   span={item.span}
-                  chip={<span className="dash-chip">{range} días</span>}
+                  chip={<span className="dash-chip">{t('dashboard.days', { count: range })}</span>}
                   {...dragProps}
                 >
                   {gatePie.length ? (
@@ -979,7 +995,7 @@ export const DashboardPage: React.FC<PageProps> = ({
                         </ResponsiveContainer>
                         <div className="dw-donut-center">
                           <b>{derived.passRate === null ? '—' : `${Math.round(derived.passRate)}%`}</b>
-                          <span>aprobado</span>
+                          <span>{t('dashboard.wGateApproved')}</span>
                         </div>
                       </div>
                       <ul className="dw-legend">
@@ -993,7 +1009,7 @@ export const DashboardPage: React.FC<PageProps> = ({
                       </ul>
                     </div>
                   ) : (
-                    <Empty text="Sin escaneos evaluados por el gate en este rango." />
+                    <Empty text={t('dashboard.wGateEmpty')} />
                   )}
                 </Widget>
               );
@@ -1003,10 +1019,10 @@ export const DashboardPage: React.FC<PageProps> = ({
               return (
                 <Widget
                   key="sla"
-                  title="Cumplimiento de plazos (SLA)"
+                  title={t('dashboard.wSlaTitle')}
                   icon={<Timer size={18} color="#bf8700" />}
                   span={item.span}
-                  chip={<span className={`dash-chip dash-chip--${slaCompliance >= 90 ? 'ok' : slaCompliance >= 70 ? 'warn' : 'danger'}`}>{slaCompliance}% en plazo</span>}
+                  chip={<span className={`dash-chip dash-chip--${slaCompliance >= 90 ? 'ok' : slaCompliance >= 70 ? 'warn' : 'danger'}`}>{t('dashboard.wSlaChip', { pct: slaCompliance })}</span>}
                   onOpen={goFindings}
                   {...dragProps}
                 >
@@ -1017,20 +1033,25 @@ export const DashboardPage: React.FC<PageProps> = ({
                           <BarChart data={slaData} layout="vertical" barSize={16} margin={{ left: 4, right: 12 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#eaeef2" horizontal={false} />
                             <XAxis type="number" allowDecimals={false} tick={{ fill: '#656d76', fontSize: 11 }} axisLine={false} tickLine={false} />
-                            <YAxis type="category" dataKey="name" tick={{ fill: '#656d76', fontSize: 12 }} axisLine={false} tickLine={false} width={60} />
+                            <YAxis type="category" dataKey="name" tick={{ fill: '#656d76', fontSize: 12 }} axisLine={false} tickLine={false} width={66} />
                             <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(9,105,218,0.05)' }} />
-                            <Bar dataKey="En plazo" stackId="s" fill="#8fd4a8" />
-                            <Bar dataKey="Por vencer" stackId="s" fill="#e6d09a" />
-                            <Bar dataKey="Vencido" stackId="s" fill="#e8a0a8" radius={[0, 4, 4, 0]} />
+                            <Bar dataKey="ok" name={t('sla.ok')} stackId="s" fill="#2da44e" />
+                            <Bar dataKey="due" name={t('sla.due')} stackId="s" fill="#eab308" />
+                            <Bar dataKey="breached" name={t('sla.breached')} stackId="s" fill="#e5484d" radius={[0, 4, 4, 0]} />
                           </BarChart>
                         </ResponsiveContainer>
                       </div>
                       <p className="dw-foot">
-                        Plazos: crítico {SLA_DAYS.CRITICAL} d · alto {SLA_DAYS.HIGH} d · medio {SLA_DAYS.MEDIUM} d · bajo {SLA_DAYS.LOW} d
+                        {t('dashboard.wSlaFoot', {
+                          crit: SLA_DAYS.CRITICAL,
+                          high: SLA_DAYS.HIGH,
+                          med: SLA_DAYS.MEDIUM,
+                          low: SLA_DAYS.LOW,
+                        })}
                       </p>
                     </>
                   ) : (
-                    <Empty text="No hay hallazgos activos. Todo en plazo." />
+                    <Empty text={t('dashboard.wSlaEmpty')} />
                   )}
                 </Widget>
               );
@@ -1038,7 +1059,7 @@ export const DashboardPage: React.FC<PageProps> = ({
 
             if (item.id === 'aging') {
               return (
-                <Widget key="aging" title="Antigüedad de hallazgos activos" icon={<Hourglass size={18} color="#bc4c00" />} span={item.span} {...dragProps}>
+                <Widget key="aging" title={t('dashboard.wAgingTitle')} icon={<Hourglass size={18} color="#bc4c00" />} span={item.span} {...dragProps}>
                   {active.length ? (
                     <div className="dash-chart" style={{ height: 210 }}>
                       <ResponsiveContainer width="100%" height="100%">
@@ -1047,7 +1068,7 @@ export const DashboardPage: React.FC<PageProps> = ({
                           <XAxis dataKey="name" tick={{ fill: '#656d76', fontSize: 11 }} axisLine={false} tickLine={false} />
                           <YAxis allowDecimals={false} tick={{ fill: '#656d76', fontSize: 11 }} axisLine={false} tickLine={false} width={28} />
                           <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(9,105,218,0.05)' }} />
-                          <Bar dataKey="hallazgos" radius={[5, 5, 0, 0]}>
+                          <Bar dataKey="hallazgos" name={t('dashboard.wAgingBar')} radius={[5, 5, 0, 0]}>
                             {agingData.map((d) => (
                               <Cell key={d.name} fill={d.fill} />
                             ))}
@@ -1056,7 +1077,7 @@ export const DashboardPage: React.FC<PageProps> = ({
                       </ResponsiveContainer>
                     </div>
                   ) : (
-                    <Empty text="Sin hallazgos activos." />
+                    <Empty text={t('dashboard.wAgingEmpty')} />
                   )}
                 </Widget>
               );
@@ -1066,10 +1087,10 @@ export const DashboardPage: React.FC<PageProps> = ({
               return (
                 <Widget
                   key="health"
-                  title="Health Score"
+                  title={t('dashboard.wHealthTitle')}
                   icon={<ShieldCheck size={18} color={healthColor} />}
                   span={item.span}
-                  chip={<span className={`dash-chip dash-chip--${healthLevel}`}>mín. {thresholds.health_min}</span>}
+                  chip={<span className={`dash-chip dash-chip--${healthLevel}`}>{t('dashboard.wHealthChip', { min: thresholds.health_min })}</span>}
                   {...dragProps}
                 >
                   <div className="dash-health">
@@ -1097,7 +1118,7 @@ export const DashboardPage: React.FC<PageProps> = ({
                       {TREND_SEVERITIES.map((s) => (
                         <div key={s} className="dash-severity-row">
                           <span style={{ background: PASTEL_SEVERITY[s] }} />
-                          <em>{SEVERITY_LABEL[s]}</em>
+                          <em>{t(`severity.${s}`)}</em>
                           <b>{derived.sevActive[s]}</b>
                         </div>
                       ))}
@@ -1109,7 +1130,7 @@ export const DashboardPage: React.FC<PageProps> = ({
 
             if (item.id === 'topRepos') {
               return (
-                <Widget key="topRepos" title="Repos con más riesgo" icon={<Trophy size={18} color="#cf222e" />} span={item.span} onOpen={goFindings} {...dragProps}>
+                <Widget key="topRepos" title={t('dashboard.wTopReposTitle')} icon={<Trophy size={18} color="#cf222e" />} span={item.span} onOpen={goFindings} {...dragProps}>
                   {topRepos.length ? (
                     <ol className="dw-toplist">
                       {topRepos.map((r) => (
@@ -1118,7 +1139,7 @@ export const DashboardPage: React.FC<PageProps> = ({
                             <span className="dw-toplist-name">{r.name}</span>
                             <span className="dw-toplist-meta">
                               {r.counts.CRITICAL ? <em style={{ color: PASTEL_SEVERITY.CRITICAL }}>{r.counts.CRITICAL} C</em> : null}
-                              {r.counts.HIGH ? <em style={{ color: PASTEL_SEVERITY.HIGH }}>{r.counts.HIGH} A</em> : null}
+                              {r.counts.HIGH ? <em style={{ color: PASTEL_SEVERITY.HIGH }}>{r.counts.HIGH} H</em> : null}
                               <b>{r.score}</b>
                             </span>
                           </div>
@@ -1129,16 +1150,16 @@ export const DashboardPage: React.FC<PageProps> = ({
                       ))}
                     </ol>
                   ) : (
-                    <Empty text="Ningún repo con hallazgos activos." />
+                    <Empty text={t('dashboard.wTopReposEmpty')} />
                   )}
-                  <p className="dw-foot">Riesgo = 10×crítico + 5×alto + 2×medio + bajo</p>
+                  <p className="dw-foot">{t('dashboard.wTopReposFoot')}</p>
                 </Widget>
               );
             }
 
             if (item.id === 'topComponents') {
               return (
-                <Widget key="topComponents" title="Componentes más vulnerables" icon={<Package size={18} color="#9a6700" />} span={item.span} onOpen={goFindings} {...dragProps}>
+                <Widget key="topComponents" title={t('dashboard.wTopCompTitle')} icon={<Package size={18} color="#9a6700" />} span={item.span} onOpen={goFindings} {...dragProps}>
                   {topComponents.length ? (
                     <ol className="dw-toplist">
                       {topComponents.map((c) => (
@@ -1153,13 +1174,13 @@ export const DashboardPage: React.FC<PageProps> = ({
                             </span>
                           </div>
                           <div className="dw-toplist-sub">
-                            {c.fixVersion ? `→ actualizar a ${c.fixVersion}` : c.repositoryName}
+                            {c.fixVersion ? t('dashboard.wTopCompUpdate', { ver: c.fixVersion }) : c.repositoryName}
                           </div>
                         </li>
                       ))}
                     </ol>
                   ) : (
-                    <Empty text="Sin componentes vulnerables activos." />
+                    <Empty text={t('dashboard.wTopCompEmpty')} />
                   )}
                 </Widget>
               );
@@ -1169,10 +1190,11 @@ export const DashboardPage: React.FC<PageProps> = ({
               return (
                 <Widget
                   key="triage"
-                  title="Embudo de triage HITL"
+                  title={t('dashboard.wTriageTitle')}
                   icon={<FunnelIcon size={18} color="#0969da" />}
                   span={item.span}
-                  chip={<span className="dash-chip">{triaged}% triado</span>}
+                  chip={<span className="dash-chip">{t('dashboard.wTriageChip', { pct: triaged })}</span>}
+                  onOpen={goFindings}
                   {...dragProps}
                 >
                   {findings.length ? (
@@ -1188,7 +1210,7 @@ export const DashboardPage: React.FC<PageProps> = ({
                       ))}
                     </div>
                   ) : (
-                    <Empty text="Sin hallazgos para triar." />
+                    <Empty text={t('dashboard.wTriageEmpty')} />
                   )}
                 </Widget>
               );
@@ -1196,16 +1218,16 @@ export const DashboardPage: React.FC<PageProps> = ({
 
             if (item.id === 'engines') {
               return (
-                <Widget key="engines" title="Motor × severidad (activos)" icon={<Layers size={18} color="#0969da" />} span={item.span} onOpen={goFindings} {...dragProps}>
+                <Widget key="engines" title={t('dashboard.wEnginesTitle')} icon={<Layers size={18} color="#0969da" />} span={item.span} onOpen={goFindings} {...dragProps}>
                   <div className="dw-matrix-wrap">
                     <table className="dw-matrix">
                       <thead>
                         <tr>
-                          <th>Motor</th>
+                          <th>{t('dashboard.wEnginesCol')}</th>
                           {TREND_SEVERITIES.map((s) => (
-                            <th key={s}>{SEVERITY_LABEL[s]}</th>
+                            <th key={s}>{t(`severity.${s}`)}</th>
                           ))}
-                          <th>Total</th>
+                          <th>{t('dashboard.wEnginesTotal')}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1244,16 +1266,16 @@ export const DashboardPage: React.FC<PageProps> = ({
               return (
                 <Widget
                   key="heatmap"
-                  title="Mapa de calor (12 semanas)"
+                  title={t('dashboard.wHeatmapTitle')}
                   icon={<Flame size={18} color="#cf222e" />}
                   span={item.span}
-                  chip={<span className="dash-chip">{heatmap.total_findings_period} hallazgos</span>}
+                  chip={<span className="dash-chip">{t('dashboard.wHeatmapChip', { count: heatmap.total_findings_period })}</span>}
                   {...dragProps}
                 >
                   {heatmap.cells.length > 0 && heatmap.total_findings_period > 0 ? (
                     <HeatmapCalendar data={heatmap} />
                   ) : (
-                    <Empty text="Sin actividad registrada en las últimas 12 semanas." />
+                    <Empty text={t('dashboard.wHeatmapEmpty')} />
                   )}
                 </Widget>
               );
@@ -1263,10 +1285,10 @@ export const DashboardPage: React.FC<PageProps> = ({
               return (
                 <Widget
                   key="audit"
-                  title="Bitácora de eventos"
+                  title={t('dashboard.wAuditTitle')}
                   icon={<Terminal size={18} color="#0969da" />}
                   span={item.span}
-                  chip={<span className="dash-chip">últimos {Math.min(events.length, 8)}</span>}
+                  chip={<span className="dash-chip">{t('dashboard.wAuditChip', { count: Math.min(events.length, 8) })}</span>}
                   {...dragProps}
                 >
                   {events.length ? (
@@ -1288,7 +1310,7 @@ export const DashboardPage: React.FC<PageProps> = ({
                       })}
                     </div>
                   ) : (
-                    <Empty text="La bitácora se llenará cuando registres repos, escaneos o cambios HITL." />
+                    <Empty text={t('dashboard.wAuditEmpty')} />
                   )}
                 </Widget>
               );
@@ -1303,11 +1325,10 @@ export const DashboardPage: React.FC<PageProps> = ({
         <div className="dw-alert">
           <AlertOctagon size={16} />
           <span>
-            {derived.sevActive.CRITICAL} críticos activos superan el umbral ({thresholds.critical_max}). Revisa la matriz de
-            hallazgos.
+            {t('dashboard.critAlert', { count: derived.sevActive.CRITICAL, max: thresholds.critical_max })}
           </span>
           <button type="button" className="btn btn-secondary fm-btn-sm" onClick={goFindings}>
-            Ir a la matriz
+            {t('dashboard.goToMatrix')}
           </button>
         </div>
       )}

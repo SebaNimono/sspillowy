@@ -10,6 +10,7 @@ import {
   renameWorkspace,
   switchWorkspace,
 } from '../api/client';
+import { useI18n } from '../i18n/I18nProvider';
 import '../styles/workspaces.css';
 
 type AssignableRole = Exclude<WorkspaceRole, 'owner'>;
@@ -22,6 +23,7 @@ const ROLE_HELP: Record<WorkspaceRole, string> = {
 };
 
 export const WorkspaceSwitcher: React.FC<{ collapsed: boolean }> = ({ collapsed }) => {
+  const { t } = useI18n();
   const [data, setData] = useState<WorkspaceOverview | null>(null);
   const [open, setOpen] = useState(false);
   const [managing, setManaging] = useState(false);
@@ -72,7 +74,7 @@ export const WorkspaceSwitcher: React.FC<{ collapsed: boolean }> = ({ collapsed 
 
       {open && (
         <div className="ws-menu" role="menu">
-          <div className="ws-menu-label">Tus espacios</div>
+          <div className="ws-menu-label">{t('workspace.yourSpaces')}</div>
           {data.workspaces.map((w) => (
             <button
               key={w.id}
@@ -85,7 +87,7 @@ export const WorkspaceSwitcher: React.FC<{ collapsed: boolean }> = ({ collapsed 
               <span className="ws-menu-text">
                 <span>{w.name}</span>
                 <small>
-                  {w.role_label} · {w.repositories} {w.repositories === 1 ? 'repositorio' : 'repositorios'}
+                  {w.role_label} · {w.repositories} {w.repositories === 1 ? t('workspace.repoSingular') : t('workspace.repoPlural')}
                 </small>
               </span>
               {w.id === current.id && <Check size={15} />}
@@ -103,7 +105,7 @@ export const WorkspaceSwitcher: React.FC<{ collapsed: boolean }> = ({ collapsed 
           >
             <Users size={15} />
             <span className="ws-menu-text">
-              <span>{current.can_manage ? 'Personas y acceso' : 'Ver quién tiene acceso'}</span>
+              <span>{current.can_manage ? t('workspace.peopleAccess') : t('workspace.viewAccess')}</span>
             </span>
           </button>
         </div>

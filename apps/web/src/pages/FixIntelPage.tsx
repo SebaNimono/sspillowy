@@ -9,6 +9,7 @@ import { formatFilePath } from '../utils/formatFilePath';
 import { formatDateTime } from '../utils/formatDateTime';
 import { usePillowPageContext } from '../config/pillowContext';
 import { focusSecretFinding } from '../config/secretProviders';
+import { useI18n } from '../i18n/I18nProvider';
 import PageSkeleton from '../components/PageSkeleton';
 import '../styles/fixintel.css';
 
@@ -57,6 +58,7 @@ const sevLabel = (sev: string) => SEVERITY_LABEL[sev as Severity] ?? sev;
 const PAGE_SIZE = 60;
 
 export const FixIntelPage: React.FC<PageProps> = ({ onNavigate, ...headerProps }) => {
+  const { t } = useI18n();
   const [data, setData] = useState<FixIntelQueue | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -206,8 +208,8 @@ export const FixIntelPage: React.FC<PageProps> = ({ onNavigate, ...headerProps }
     <div>
       <Toast toast={toast} onClose={() => setToast(null)} />
       <Header
-        title="Fix Intelligence"
-        subtitle="Qué corregir primero y cómo hacerlo: prioridad explicada y análisis de Pillow, con la decisión final siempre en tus manos."
+        title={t('pages.fixIntel.title')}
+        subtitle={t('pages.fixIntel.subtitle')}
         onNavigate={onNavigate}
         {...headerProps}
       />

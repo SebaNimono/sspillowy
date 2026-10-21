@@ -20,6 +20,7 @@ import { SEVERITY_COLOR, SEVERITY_LABEL } from '../utils/findingGroups';
 import { formatDateTime } from '../utils/formatDateTime';
 import { formatFilePath } from '../utils/formatFilePath';
 import { usePillowPageContext } from '../config/pillowContext';
+import { useI18n } from '../i18n/I18nProvider';
 import PageSkeleton from '../components/PageSkeleton';
 import '../styles/secrets.css';
 
@@ -52,6 +53,7 @@ const ageLabel = (iso: string | null) => {
 };
 
 export const SecretsPage: React.FC<PageProps> = ({ onNavigate, ...headerProps }) => {
+  const { t } = useI18n();
   const [items, setItems] = useState<SecretIncident[]>([]);
   const [loading, setLoading] = useState(true);
   const [loaded, setLoaded] = useState(false);
@@ -188,8 +190,8 @@ export const SecretsPage: React.FC<PageProps> = ({ onNavigate, ...headerProps })
     <div>
       <Toast toast={toast} onClose={() => setToast(null)} />
       <Header
-        title="Secret Management"
-        subtitle="Responde a cada credencial filtrada: rotar, revocar, limpiar el historial y verificar."
+        title={t('pages.secrets.title')}
+        subtitle={t('pages.secrets.subtitle')}
         onNavigate={onNavigate}
         {...headerProps}
       />

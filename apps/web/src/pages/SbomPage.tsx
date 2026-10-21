@@ -7,6 +7,7 @@ import { SbomComponent, SbomRepository, downloadCycloneDx, fetchSbom } from '../
 import { SEVERITY_COLOR, SEVERITY_LABEL, SEVERITY_RANK, Severity } from '../utils/findingGroups';
 import { formatDateTime } from '../utils/formatDateTime';
 import { usePillowPageContext } from '../config/pillowContext';
+import { useI18n } from '../i18n/I18nProvider';
 import PageSkeleton from '../components/PageSkeleton';
 import '../styles/sbom.css';
 
@@ -66,6 +67,7 @@ interface PackageGroup {
 const PAGE_SIZE = 80;
 
 export const SbomPage: React.FC<PageProps> = ({ onNavigate, ...headerProps }) => {
+  const { t } = useI18n();
   const [repos, setRepos] = useState<SbomRepository[]>([]);
   const [components, setComponents] = useState<SbomComponent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -230,8 +232,8 @@ export const SbomPage: React.FC<PageProps> = ({ onNavigate, ...headerProps }) =>
     <div>
       <Toast toast={toast} onClose={() => setToast(null)} />
       <Header
-        title="Supply Chain & SBOM"
-        subtitle="Inventario vivo de las librerías que usa cada repositorio, con su versión, licencia y riesgo."
+        title={t('pages.sbom.title')}
+        subtitle={t('pages.sbom.subtitle')}
         onNavigate={onNavigate}
         {...headerProps}
       />

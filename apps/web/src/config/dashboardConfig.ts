@@ -271,25 +271,25 @@ export function healthAlert(score: number, min: number): MetricAlert {
 }
 
 export const ALERT_COLORS: Record<MetricAlert, string> = {
-  ok: '#3d9a5f',
-  warn: '#c69026',
-  danger: '#d4535c',
+  ok: '#1a7f37',
+  warn: '#bf8700',
+  danger: '#cf222e',
 };
 
-/** Tonos pastel para gráficos del dashboard (menos “3D”, más planos). */
+/** Paleta de alto contraste y claridad para gráficos del dashboard. */
 export const PASTEL_SEVERITY: Record<string, string> = {
-  CRITICAL: '#e8a0a8',
-  HIGH: '#e8b89a',
-  MEDIUM: '#e6d09a',
-  LOW: '#9dbfe8',
-  INFO: '#c5cad1',
+  CRITICAL: '#e5484d',
+  HIGH: '#f76b15',
+  MEDIUM: '#eab308',
+  LOW: '#3b82f6',
+  INFO: '#8c959f',
 };
 
 export const PASTEL_GATE: Record<string, string> = {
-  PASSED: '#8fd4a8',
-  BLOCKED: '#e8a0a8',
-  BYPASSED: '#c4a8e8',
-  OTHER: '#c5cad1',
+  PASSED: '#2da44e',
+  BLOCKED: '#e5484d',
+  BYPASSED: '#8250df',
+  OTHER: '#94a3b8',
 };
 
 export const WIDGET_LABELS: Record<DashboardWidgetId, string> = {

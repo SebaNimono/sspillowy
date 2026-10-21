@@ -48,9 +48,11 @@ class FindingResponse(FindingBase):
     scan_id: str
     status: FindingStatus = FindingStatus.OPEN
     ai_triaged: bool = False
+    ai_verdict: Optional[str] = None
     ai_confidence: Optional[float] = None
     ai_summary: Optional[str] = None
     ai_remediation: Optional[str] = None
+    ai_feedback: Optional[str] = None
     created_at: datetime
     first_seen_at: Optional[datetime] = None
     repository_name: Optional[str] = None

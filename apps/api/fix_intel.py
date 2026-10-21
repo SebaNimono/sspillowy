@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 from database import SessionLocal, db_ping
 from models import AuditEvent, Finding, Repository
 from pillow_agent import PILLOW_DAILY_CREDITS, _consume_credit, _get_quota, call_gemini
-from semgrep_scan import ACTIVE_STATUSES, _refresh_repo_counters
+from semgrep_scan import ACTIVE_STATUSES, _refresh_repo_counters, relative_file_path
 from workspaces import WorkspaceCtx, require_ws, require_ws_write
 
 router = APIRouter(prefix="/api/v1/fix-intel", tags=["Fix Intelligence"])
@@ -175,7 +175,7 @@ def _audit(db, action: str, target: str, detail: str, actor: str, finding_id: st
 
 
 def finding_fingerprint(f: Finding) -> str:
-    path = (f.file_path or "").replace("\\", "/").lstrip("./")
+    path = (relative_file_path(f.file_path) or "").replace("\\", "/").lstrip("./")
     return f"{(f.engine or '').lower()}|{f.title or ''}|{path}"
 
 
@@ -183,6 +183,8 @@ def carry_forward_triage(db, *, repo_id: str, scan_id: str) -> int:
     """Copia triaje IA y decisiones (falso positivo, riesgo aceptado) de escaneos anteriores al nuevo.
 
     Sin esto cada re-escaneo crea filas nuevas y se pierde el trabajo de triaje ya hecho.
+    Además marca como SUPERSEDED las filas previas de Falso Positivo / Riesgo Aceptado que fueron
+    reemplazadas en el nuevo escaneo para no duplicarlas en la matriz.
     """
     new_rows = (
         db.query(Finding)
@@ -196,6 +198,7 @@ def carry_forward_triage(db, *, repo_id: str, scan_id: str) -> int:
         .filter(
             Finding.repository_id == repo_id,
             Finding.scan_id != scan_id,
+            Finding.status != "SUPERSEDED",
             (Finding.ai_triaged.is_(True)) | (Finding.status.in_(["FALSE_POSITIVE", "ACCEPTED_RISK"])),
         )
         .order_by(Finding.created_at.desc())
@@ -203,12 +206,17 @@ def carry_forward_triage(db, *, repo_id: str, scan_id: str) -> int:
         .all()
     )
     latest: dict[str, Finding] = {}
+    by_fp: dict[str, list[Finding]] = {}
     for p in prior_rows:
-        latest.setdefault(finding_fingerprint(p), p)
+        fp = finding_fingerprint(p)
+        latest.setdefault(fp, p)
+        by_fp.setdefault(fp, []).append(p)
 
     carried = 0
+    superseded_fps: set[str] = set()
     for f in new_rows:
-        prev = latest.get(finding_fingerprint(f))
+        fp = finding_fingerprint(f)
+        prev = latest.get(fp)
         if not prev:
             continue
         if prev.ai_triaged:
@@ -221,9 +229,15 @@ def carry_forward_triage(db, *, repo_id: str, scan_id: str) -> int:
             f.ai_feedback = prev.ai_feedback
         if prev.status in ("FALSE_POSITIVE", "ACCEPTED_RISK") and f.status in ACTIVE_STATUSES:
             f.status = prev.status
+            superseded_fps.add(fp)
         elif prev.ai_feedback == "ACCEPTED" and prev.ai_verdict in ("LIKELY_REAL", "NEEDS_REVIEW"):
             f.status = "IN_REVIEW"
         carried += 1
+
+    for fp in superseded_fps:
+        for old in by_fp.get(fp, []):
+            if old.status in ("FALSE_POSITIVE", "ACCEPTED_RISK"):
+                old.status = "SUPERSEDED"
     return carried
 
 

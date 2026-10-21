@@ -42,6 +42,7 @@ import { usePillowPageContext } from '../config/pillowContext';
 import { SEVERITY_COLOR, SEVERITY_LABEL, Severity } from '../utils/findingGroups';
 import { formatDateTime } from '../utils/formatDateTime';
 import { timeAgo } from '../utils/timeAgo';
+import { useI18n } from '../i18n/I18nProvider';
 import '../styles/velocity.css';
 import '../styles/traceability.css';
 
@@ -819,6 +820,7 @@ const EventsView: React.FC<{ onOpenFinding: (key: string) => void }> = ({ onOpen
 };
 
 export const TraceabilityPage: React.FC<PageProps> = ({ onNavigate, ...headerProps }) => {
+  const { t } = useI18n();
   const [initialRef] = useState<string | null>(() => {
     try {
       const ref = localStorage.getItem(TRACE_REF_KEY);
@@ -834,8 +836,8 @@ export const TraceabilityPage: React.FC<PageProps> = ({ onNavigate, ...headerPro
   return (
     <div className="tr-page">
       <Header
-        title="Trazabilidad"
-        subtitle="La historia completa de cada hallazgo y la bitácora de quién hizo qué, lista para auditorías."
+        title={t('pages.traceability.title')}
+        subtitle={t('pages.traceability.subtitle')}
         onNavigate={onNavigate}
         {...headerProps}
       />

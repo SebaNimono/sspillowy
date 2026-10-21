@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Activity, Bell, Smartphone, Menu, ChevronRight, LogOut, Globe, Languages } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Activity, Bell, Smartphone, Menu, ChevronRight, LogOut, Globe, Languages, Check } from 'lucide-react';
 import { SidebarState } from './Sidebar';
 import { fetchNotifications, NotificationItem } from '../api/client';
 import { useI18n } from '../i18n/I18nProvider';
@@ -37,12 +37,26 @@ export const Header: React.FC<HeaderProps> = ({
   const [showNotifMenu, setShowNotifMenu] = useState(false);
   const [showLangMenu, setShowLangMenu] = useState(false);
   const [preview, setPreview] = useState<NotificationItem[]>([]);
+  const actionsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchNotifications()
       .then((data) => setPreview((data || []).slice(0, 4)))
       .catch(() => setPreview([]));
   }, [unreadCount]);
+
+  useEffect(() => {
+    if (!showLangMenu && !showNotifMenu && !showProfileMenu) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (actionsRef.current && !actionsRef.current.contains(e.target as Node)) {
+        setShowLangMenu(false);
+        setShowNotifMenu(false);
+        setShowProfileMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [showLangMenu, showNotifMenu, showProfileMenu]);
 
   return (
     <header className="top-bar">
@@ -106,7 +120,7 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flexShrink: 0, whiteSpace: 'nowrap' }}>
+      <div ref={actionsRef} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexShrink: 0, whiteSpace: 'nowrap' }}>
         {typeof healthScore === 'number' && (
         <div
           style={{
@@ -172,17 +186,21 @@ export const Header: React.FC<HeaderProps> = ({
                   onClick={() => { setLocale(code as Locale); setShowLangMenu(false); }}
                   style={{
                     width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
                     textAlign: 'left',
                     padding: '0.5rem 0.75rem',
                     border: 'none',
                     background: code === locale ? '#ddf4ff' : 'transparent',
-                    color: '#1f2328',
+                    color: code === locale ? '#0969da' : '#1f2328',
                     fontSize: '0.8rem',
                     fontWeight: code === locale ? 700 : 500,
                     cursor: 'pointer',
                   }}
                 >
-                  {t(`lang.${code}`)}
+                  <span>{t(`lang.${code}`)}</span>
+                  {code === locale && <Check size={14} color="#0969da" />}
                 </button>
               ))}
             </div>
@@ -213,17 +231,23 @@ export const Header: React.FC<HeaderProps> = ({
                   {t('header.viewAll')}
                 </button>
               </div>
-              {preview.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => { setShowNotifMenu(false); onNavigate?.(item.finding_id ? 'findings' : 'notifications'); }}
-                  className="notif-preview"
-                >
-                  <div style={{ fontWeight: 600, fontSize: '0.8rem', color: '#1f2328' }}>{item.title}</div>
-                  <div style={{ fontSize: '0.72rem', color: '#656d76', marginTop: '0.15rem' }}>{item.message}</div>
-                </button>
-              ))}
+              {preview.length === 0 ? (
+                <div style={{ padding: '0.85rem', fontSize: '0.78rem', color: '#656d76', textAlign: 'center' }}>
+                  {t('header.noNotifications')}
+                </div>
+              ) : (
+                preview.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => { setShowNotifMenu(false); onNavigate?.(item.finding_id ? 'findings' : 'notifications'); }}
+                    className="notif-preview"
+                  >
+                    <div style={{ fontWeight: 600, fontSize: '0.8rem', color: '#1f2328', whiteSpace: 'normal' }}>{item.title}</div>
+                    <div style={{ fontSize: '0.72rem', color: '#656d76', marginTop: '0.15rem', whiteSpace: 'normal' }}>{item.message}</div>
+                  </button>
+                ))
+              )}
             </div>
           )}
         </div>
