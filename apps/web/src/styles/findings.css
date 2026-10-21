@@ -2,51 +2,38 @@
 
 .fm-summary {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-  gap: 0.75rem;
-  margin-bottom: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(125px, 1fr));
+  gap: 0.65rem;
+  margin-bottom: 0.85rem;
 }
 
 .fm-summary-card {
   --sev: #0969da;
-  position: relative;
-  overflow: hidden;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 0.15rem;
-  padding: 0.85rem 1rem;
-  background: var(--bg-surface);
+  gap: 0.1rem;
+  padding: 0.7rem 0.85rem;
+  background: #ffffff;
   border: 1px solid var(--border-default);
-  border-radius: 10px;
+  border-left: 3px solid var(--sev);
+  border-radius: 8px;
   cursor: pointer;
   text-align: left;
   font: inherit;
-  box-shadow: 0 1px 2px rgba(31, 35, 40, 0.04);
-  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease, border-color 0.15s ease;
-}
-
-.fm-summary-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: var(--sev);
-  opacity: 0.85;
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 .fm-summary-card:hover:not(.is-static) {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(31, 35, 40, 0.08);
-  border-color: color-mix(in srgb, var(--sev) 45%, var(--border-default));
+  background: #f6f8fa;
+  border-color: #afb8c1;
+  border-left-color: var(--sev);
 }
 
 .fm-summary-card.is-active {
-  background: color-mix(in srgb, var(--sev) 8%, #ffffff);
+  background: color-mix(in srgb, var(--sev) 7%, #ffffff);
   border-color: var(--sev);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--sev) 20%, transparent);
+  border-left-width: 3px;
 }
 
 .fm-summary-card.is-static {

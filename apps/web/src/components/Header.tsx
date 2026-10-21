@@ -120,7 +120,7 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      <div ref={actionsRef} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexShrink: 0, whiteSpace: 'nowrap' }}>
+      <div ref={actionsRef} className="top-bar-actions" style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', flexShrink: 0, flexWrap: 'wrap' }}>
         {typeof healthScore === 'number' && (
         <div
           style={{

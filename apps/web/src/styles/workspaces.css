@@ -2,26 +2,28 @@
 
 .ws-switcher {
   position: relative;
-  margin: -0.35rem 0 0.25rem;
+  margin: 0 0 0.2rem;
 }
 
 .ws-current {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.5rem 0.6rem;
-  border: 1px solid #2d334a;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.03);
+  gap: 0.55rem;
+  padding: 0.42rem 0.55rem;
+  border: 1px solid #2b3148;
+  border-radius: 6px;
+  background: #212538;
   color: #e6e8f2;
   font: inherit;
   cursor: pointer;
   text-align: left;
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 .ws-current:hover {
-  background: rgba(255, 255, 255, 0.07);
+  background: #272c42;
+  border-color: #3a4260;
 }
 
 .ws-current svg {
@@ -34,33 +36,34 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  line-height: 1.25;
+  line-height: 1.2;
 }
 
 .ws-current-text strong {
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .ws-current-text small {
-  font-size: 0.7rem;
-  color: #9499b8;
+  font-size: 0.68rem;
+  color: #8b93b0;
 }
 
 .ws-avatar {
   flex: 0 0 auto;
-  width: 28px;
-  height: 28px;
-  border-radius: 7px;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-weight: 700;
-  font-size: 0.85rem;
-  color: #ffffff;
-  background: linear-gradient(135deg, #8250df, #0969da);
+  font-size: 0.78rem;
+  color: #58a6ff;
+  background: #171a29;
+  border: 1px solid #343c59;
 }
 
 .ws-avatar.small {

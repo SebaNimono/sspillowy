@@ -352,7 +352,7 @@ const AppShell: React.FC = () => {
   const getMarginLeft = () => {
     switch (sidebarState) {
       case 'expanded':
-        return '268px';
+        return '256px';
       case 'collapsed':
         return '56px';
       case 'hidden':

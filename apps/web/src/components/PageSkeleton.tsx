@@ -20,15 +20,15 @@ function shell(embedded: boolean, extra = '') {
 
 function ListSkeleton({ rows, embedded = false }: { rows: number; embedded?: boolean }) {
   return (
-    <div className={shell(embedded)} role="status" aria-label="Cargando">
+    <div className={shell(embedded, 'sk-list')} role="status" aria-label="Cargando">
       {Array.from({ length: rows }, (_, i) => (
         <div key={i} className="sk-row">
           <div className="sk-circle is-sm" />
           <div className="sk-col">
-            <Bar className={`is-lg ${i % 3 === 0 ? 'w-50' : i % 3 === 1 ? 'w-70' : 'w-40'}`} />
+            <Bar className={`is-md ${i % 3 === 0 ? 'w-50' : i % 3 === 1 ? 'w-60' : 'w-40'}`} />
             <Bar className={`is-sm ${i % 2 === 0 ? 'w-80' : 'w-60'}`} />
           </div>
-          <Bar className="w-20 is-sm" />
+          <Bar className="w-15 is-sm" />
         </div>
       ))}
     </div>
@@ -39,18 +39,18 @@ function TableSkeleton({ rows, embedded = false }: { rows: number; embedded?: bo
   return (
     <div className={shell(embedded, 'sk-table')} role="status" aria-label="Cargando">
       <div className="sk-table-head">
-        <Bar className="w-60 is-sm" />
         <Bar className="w-50 is-sm" />
-        <Bar className="w-70 is-sm" />
+        <Bar className="w-60 is-sm" />
         <Bar className="w-40 is-sm" />
+        <Bar className="w-50 is-sm" />
         <Bar className="w-40 is-sm" />
       </div>
       {Array.from({ length: rows }, (_, i) => (
         <div key={i} className="sk-table-row">
-          <Bar className={i % 2 === 0 ? 'w-70' : 'w-50'} />
+          <Bar className={i % 2 === 0 ? 'w-60' : 'w-50'} />
           <Bar className="w-40" />
-          <Bar className={i % 3 === 0 ? 'w-80' : 'w-60'} />
-          <Bar className="w-50" />
+          <Bar className={i % 3 === 0 ? 'w-70' : 'w-50'} />
+          <Bar className="w-40" />
           <Bar className="w-30" />
         </div>
       ))}
@@ -59,15 +59,18 @@ function TableSkeleton({ rows, embedded = false }: { rows: number; embedded?: bo
 }
 
 function CardsSkeleton({ rows }: { rows: number }) {
-  const n = Math.max(3, Math.min(rows, 6));
+  const n = Math.max(3, Math.min(rows, 5));
   return (
     <div className="sk" role="status" aria-label="Cargando">
       <div className="sk-grid">
         {Array.from({ length: n }, (_, i) => (
-          <div key={i} className="sk-card">
+          <div key={i} className="sk-card sk-kpi">
             <Bar className="w-50 is-sm" />
-            <Bar className="w-40 is-xl" />
-            <Bar className="w-70 is-sm" />
+            <div className="sk-kpi-mid">
+              <Bar className="w-35 is-xl" />
+              <Bar className="w-30 is-md" />
+            </div>
+            <Bar className="w-65 is-xs" />
           </div>
         ))}
       </div>
@@ -89,31 +92,14 @@ function PanelSkeleton({ rows }: { rows: number }) {
         </div>
         <div className="sk-grid">
           {Array.from({ length: 4 }, (_, i) => (
-            <div key={i}>
+            <div key={i} className="sk-stat-inline">
               <Bar className="w-50 is-sm" />
-              <Bar className="w-30 is-xl" />
+              <Bar className="w-35 is-xl" />
             </div>
           ))}
         </div>
       </div>
-      <div className="sk sk-card sk-table">
-        <div className="sk-table-head">
-          <Bar className="w-60 is-sm" />
-          <Bar className="w-50 is-sm" />
-          <Bar className="w-70 is-sm" />
-          <Bar className="w-40 is-sm" />
-          <Bar className="w-40 is-sm" />
-        </div>
-        {Array.from({ length: rows }, (_, i) => (
-          <div key={i} className="sk-table-row">
-            <Bar className={i % 2 === 0 ? 'w-70' : 'w-50'} />
-            <Bar className="w-40" />
-            <Bar className={i % 3 === 0 ? 'w-80' : 'w-60'} />
-            <Bar className="w-50" />
-            <Bar className="w-30" />
-          </div>
-        ))}
-      </div>
+      <TableSkeleton rows={rows} />
     </div>
   );
 }
@@ -121,29 +107,52 @@ function PanelSkeleton({ rows }: { rows: number }) {
 function DashboardSkeleton() {
   return (
     <div className="sk" role="status" aria-label="Cargando">
-      <div className="sk-grid">
-        {Array.from({ length: 4 }, (_, i) => (
-          <div key={i} className="sk-card">
-            <Bar className="w-50 is-sm" />
-            <Bar className="w-40 is-xl" />
-            <Bar className="w-70 is-sm" />
-          </div>
-        ))}
-      </div>
-      <div className="sk-card">
-        <Bar className="w-40 is-lg" />
-        <Bar className="w-100 is-xl" />
-        <Bar className="w-100 is-xl" />
-        <Bar className="w-80 is-xl" />
-      </div>
-      <div className="sk-card">
-        <Bar className="w-50 is-lg" />
+      <div className="sk-grid sk-grid-5">
         {Array.from({ length: 5 }, (_, i) => (
-          <div key={i} className="sk-row">
-            <Bar className="w-70" />
-            <Bar className="w-20" />
+          <div key={i} className="sk-card sk-kpi">
+            <Bar className="w-55 is-xs" />
+            <div className="sk-kpi-mid">
+              <Bar className="w-35 is-xl" />
+              <Bar className="w-35 is-md" />
+            </div>
+            <Bar className="w-70 is-xs" />
           </div>
         ))}
+      </div>
+      <div className="sk-split">
+        <div className="sk-card sk-widget">
+          <div className="sk-widget-head">
+            <Bar className="w-45 is-md" />
+            <Bar className="w-15 is-sm" />
+          </div>
+          <div className="sk-chart-bars">
+            {Array.from({ length: 12 }, (_, i) => (
+              <div
+                key={i}
+                className="sk-bar sk-vbar"
+                style={{ height: `${32 + ((i * 23) % 58)}%` }}
+              />
+            ))}
+          </div>
+          <Bar className="w-60 is-xs" />
+        </div>
+        <div className="sk-card sk-widget">
+          <div className="sk-widget-head">
+            <Bar className="w-50 is-md" />
+            <Bar className="w-20 is-sm" />
+          </div>
+          <div className="sk-list-compact">
+            {Array.from({ length: 4 }, (_, i) => (
+              <div key={i} className="sk-row">
+                <div className="sk-col">
+                  <Bar className={i % 2 === 0 ? 'w-70 is-sm' : 'w-55 is-sm'} />
+                  <Bar className="w-90 is-xs" />
+                </div>
+                <Bar className="w-15 is-sm" />
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
