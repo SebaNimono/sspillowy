@@ -184,7 +184,12 @@ export const ScansPage: React.FC<PageProps> = ({
         </span>
       );
     }
-    if (scan.status === 'FAILED') return <span className="badge badge-critical">Falló</span>;
+    if (scan.status === 'FAILED')
+      return (
+        <span className="badge badge-critical" title={scan.progress_detail || undefined}>
+          Falló
+        </span>
+      );
     return <span className="badge badge-low">Completado</span>;
   };
 
@@ -393,6 +398,11 @@ export const ScansPage: React.FC<PageProps> = ({
                           <small className="sc-id" title={scan.id}>
                             {scan.id.slice(0, 8)}…
                           </small>
+                          {scan.status === 'FAILED' && scan.progress_detail && (
+                            <small style={{ color: '#cf222e', fontSize: '0.72rem', maxWidth: '320px', lineHeight: 1.3 }}>
+                              {scan.progress_detail}
+                            </small>
+                          )}
                         </div>
                       </td>
                       <td className="sc-hide-sm">

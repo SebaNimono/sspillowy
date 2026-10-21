@@ -13,10 +13,9 @@
   flex-direction: column;
   align-items: flex-start;
   gap: 0.1rem;
-  padding: 0.7rem 0.85rem;
+  padding: 0.75rem 0.9rem;
   background: #ffffff;
   border: 1px solid var(--border-default);
-  border-left: 3px solid var(--sev);
   border-radius: 8px;
   cursor: pointer;
   text-align: left;
@@ -27,13 +26,11 @@
 .fm-summary-card:hover:not(.is-static) {
   background: #f6f8fa;
   border-color: #afb8c1;
-  border-left-color: var(--sev);
 }
 
 .fm-summary-card.is-active {
-  background: color-mix(in srgb, var(--sev) 7%, #ffffff);
+  background: color-mix(in srgb, var(--sev) 6%, #ffffff);
   border-color: var(--sev);
-  border-left-width: 3px;
 }
 
 .fm-summary-card.is-static {

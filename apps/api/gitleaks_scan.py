@@ -77,9 +77,12 @@ def run_gitleaks(target: Path, timeout: int = 180) -> list[dict]:
             f"[extend]\nuseDefault = true\n\n[allowlist]\ndescription = \"sspillowy excludes\"\npaths = [\n  {paths}\n]\n",
             encoding="utf-8",
         )
-        cmd.extend(["--config", str(config)])
+        cmd_with_cfg = [*cmd, "--config", str(config)]
         try:
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+            proc = subprocess.run(cmd_with_cfg, capture_output=True, text=True, timeout=timeout)
+            if proc.returncode not in (0, 1):
+                # Fallback sin --config si la versión de gitleaks rechaza el bloque [extend]
+                proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
         finally:
             config.unlink(missing_ok=True)
 

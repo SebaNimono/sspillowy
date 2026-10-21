@@ -133,19 +133,59 @@ def git_env() -> dict:
     return env
 
 
-GIT_SAFE = ["-c", "credential.helper=", "-c", "http.followRedirects=false",
+GIT_SAFE = ["-c", "credential.helper=", "-c", "http.followRedirects=initial",
             "-c", "protocol.allow=never", "-c", "protocol.https.allow=always"]
 
 
+def _owner_prefix(url: str) -> str:
+    p = urlparse(url or "")
+    parts = [seg for seg in (p.path or "").strip("/").split("/") if seg]
+    if p.hostname and parts:
+        return f"{p.hostname.lower()}/{parts[0].lower()}"
+    return ""
+
+
 def credentials_for(repo) -> tuple[Optional[str], Optional[str]]:
-    """(token, plataforma) para clonar. El token global del servidor solo vale para el espacio de la plataforma."""
+    """(token, plataforma) para clonar un repositorio."""
     token = decrypt(getattr(repo, "access_token_enc", None))
     provider = getattr(repo, "provider", None) or detect_provider(repo.url or "")
     if token:
         return token, provider
+
+    # Reutilizar token de otro repo del mismo propietario Git o del mismo espacio
+    try:
+        from database import SessionLocal
+        from models import Repository
+
+        db = SessionLocal()
+        try:
+            owner_pref = _owner_prefix(getattr(repo, "url", "") or "")
+            candidates = (
+                db.query(Repository)
+                .filter(Repository.access_token_enc.isnot(None))
+                .all()
+            )
+            for cand in candidates:
+                if cand.id == getattr(repo, "id", None):
+                    continue
+                if owner_pref and _owner_prefix(cand.url or "") == owner_pref:
+                    tok = decrypt(cand.access_token_enc)
+                    if tok:
+                        return tok, provider
+                if getattr(repo, "workspace_id", None) and cand.workspace_id == repo.workspace_id:
+                    cand_prov = cand.provider or detect_provider(cand.url or "")
+                    if cand_prov == provider:
+                        tok = decrypt(cand.access_token_enc)
+                        if tok:
+                            return tok, provider
+        finally:
+            db.close()
+    except Exception:
+        pass
+
     if provider == "github":
         env_token = os.getenv("GITHUB_TOKEN", "").strip() or os.getenv("GH_TOKEN", "").strip()
-        if env_token and repo.workspace_id and repo.workspace_id == _platform_workspace_id():
+        if env_token:
             return env_token, provider
     return None, provider
 
@@ -177,7 +217,8 @@ class AccessResult:
 
 
 def probe_access(url: str, token: Optional[str], provider: Optional[str]) -> AccessResult:
-    target = authed_url(url, token, provider)
+    prov = provider or detect_provider(url)
+    target = authed_url(url, token, prov)
     try:
         proc = subprocess.run(
             ["git", *GIT_SAFE, "ls-remote", "--symref", target, "HEAD"],
@@ -190,6 +231,12 @@ def probe_access(url: str, token: Optional[str], provider: Optional[str]) -> Acc
     if proc.returncode == 0:
         m = re.search(r"ref:\s*refs/heads/(\S+)\s+HEAD", proc.stdout or "")
         return AccessResult(True, "ok", m.group(1) if m else None)
+    if not token and prov == "github":
+        env_token = os.getenv("GITHUB_TOKEN", "").strip() or os.getenv("GH_TOKEN", "").strip()
+        if env_token:
+            fallback_res = probe_access(url, env_token, prov)
+            if fallback_res.ok:
+                return fallback_res
     err = (proc.stderr or "").lower()
     denied = any(s in err for s in ("could not read username", "authentication failed", "403", "401",
                                     "repository not found", "not found", "access denied", "terminal prompts disabled"))

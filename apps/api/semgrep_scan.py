@@ -48,13 +48,14 @@ def _clone_repo(
 ) -> None:
     from repo_access import GIT_SAFE, authed_url, git_env
 
-    clone_url = _normalize_clone_url(url)
+    base_url = _normalize_clone_url(url)
     # Sin TTY en Railway: git no debe pedir usuario/contraseña interactivo
     env = git_env()
-    if token and clone_url.startswith("https://"):
-        clone_url = authed_url(clone_url, token, provider)
+    authed = authed_url(base_url, token, provider) if (token and base_url.startswith("https://")) else base_url
 
-    def _run(branch_name: str) -> subprocess.CompletedProcess[str]:
+    def _run(target_url: str, branch_name: str | None) -> subprocess.CompletedProcess[str]:
+        if dest.exists():
+            shutil.rmtree(dest, ignore_errors=True)
         cmd = [
             "git",
             *GIT_SAFE,
@@ -63,22 +64,27 @@ def _clone_repo(
             "clone",
             "--depth",
             "1",
-            "--single-branch",
-            "--branch",
-            branch_name or "main",
-            clone_url,
-            str(dest),
         ]
+        if branch_name:
+            cmd.extend(["--single-branch", "--branch", branch_name])
+        cmd.extend([target_url, str(dest)])
         return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=env)
 
-    if dest.exists():
-        shutil.rmtree(dest, ignore_errors=True)
+    def _try_url(target_url: str) -> subprocess.CompletedProcess[str]:
+        proc = _run(target_url, branch or "main")
+        if proc.returncode != 0 and branch and branch != "main":
+            proc = _run(target_url, "main")
+        if proc.returncode != 0:
+            # Fallback sin --branch (por ej. si la rama por defecto es master/develop o repo vacío)
+            proc = _run(target_url, None)
+        return proc
 
-    proc = _run(branch or "main")
-    if proc.returncode != 0 and branch and branch != "main":
-        if dest.exists():
-            shutil.rmtree(dest, ignore_errors=True)
-        proc = _run("main")
+    proc = _try_url(authed)
+    if proc.returncode != 0 and authed != base_url:
+        # Si el token global no tiene permisos para este repo pero el repo es público, reintentar sin token
+        proc_no_tok = _try_url(base_url)
+        if proc_no_tok.returncode == 0:
+            proc = proc_no_tok
 
     if proc.returncode != 0:
         err = (proc.stderr or proc.stdout or "clone failed").strip()
@@ -145,21 +151,32 @@ def _run_semgrep(target: Path, timeout: int = 300) -> list[dict]:
         "build",
         ".git",
     ]
-    cmd = ["semgrep", "scan"]
-    for cfg in configs:
-        cmd.extend(["--config", cfg])
-    cmd += [
-        "--json",
-        "--quiet",
-        "--metrics",
-        "off",
-        "-o",
-        str(out_file),
-    ]
-    for ex in excludes:
-        cmd.extend(["--exclude", ex])
-    cmd.append(str(target))
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    needs_registry = any(c.startswith(("p/", "r/", "https://")) or c == "auto" for c in configs)
+    def _build_cmd(metrics_mode: str) -> list[str]:
+        c = ["semgrep", "scan"]
+        for cfg in configs:
+            c.extend(["--config", cfg])
+        c += [
+            "--json",
+            "--quiet",
+            "--metrics",
+            metrics_mode,
+            "-o",
+            str(out_file),
+        ]
+        for ex in excludes:
+            c.extend(["--exclude", ex])
+        c.append(str(target))
+        return c
+
+    proc = subprocess.run(
+        _build_cmd("on" if needs_registry else "off"),
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+    if not out_file.exists() and not proc.stdout.strip().startswith("{"):
+        proc = subprocess.run(_build_cmd("on"), capture_output=True, text=True, timeout=timeout)
     # Semgrep puede devolver 0 (ok) o 1 (hallazgos); ambos son válidos si hay JSON
     payload = ""
     if out_file.exists():

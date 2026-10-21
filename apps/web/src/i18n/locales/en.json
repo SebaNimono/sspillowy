@@ -402,6 +402,7 @@
     "loading": "Loading...",
     "confirm": "Confirm",
     "delete": "Delete",
-    "processing": "Processing…"
+    "processing": "Processing…",
+    "error": "Error"
   }
 }

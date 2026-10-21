@@ -256,7 +256,10 @@ def _refresh_repo_counters(db, repo: Repository) -> None:
 
 
 def _repo_out(repo: Repository) -> RepositoryResponse:
-    return RepositoryResponse.model_validate(repo)
+    out = RepositoryResponse.model_validate(repo)
+    if not out.provider:
+        out = out.model_copy(update={"provider": detect_provider(repo.url or "")})
+    return out
 
 
 def _display_file_path(path: str | None) -> str | None:

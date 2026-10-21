@@ -402,6 +402,7 @@
     "loading": "Chargement...",
     "confirm": "Confirmer",
     "delete": "Supprimer",
-    "processing": "Traitement…"
+    "processing": "Traitement…",
+    "error": "Erreur"
   }
 }

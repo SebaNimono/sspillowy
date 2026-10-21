@@ -207,7 +207,7 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
         id: Date.now().toString(),
         type: 'error',
         title: t('repos.scanFailed', { name: repoName }),
-        message: t('repos.scanFailedMsg'),
+        message: scan?.progress_detail || t('repos.scanFailedMsg'),
       });
     } else {
       setToast({

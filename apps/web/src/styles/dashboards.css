@@ -189,24 +189,14 @@
   min-width: 0;
   margin-bottom: 0;
   border: 1px solid var(--border-default);
-  border-left: 3px solid #8c959f;
   background: #ffffff;
 }
 
-.dw-kpi--ok {
-  border-left-color: #1a7f37;
-}
-
-.dw-kpi--warn {
-  border-left-color: #d97706;
-}
-
-.dw-kpi--danger {
-  border-left-color: #cf222e;
-}
-
+.dw-kpi--ok,
+.dw-kpi--warn,
+.dw-kpi--danger,
 .dw-kpi--info {
-  border-left-color: #0969da;
+  border-color: var(--border-default);
 }
 
 .dw-kpi-label {

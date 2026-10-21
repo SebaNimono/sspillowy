@@ -118,7 +118,7 @@ const SlaBadge: React.FC<{ state: SlaState; days?: number }> = ({ state, days })
       <Clock size={12} />
       {t(`sla.${state}`)}
       {days !== undefined && state !== 'closed'
-        ? ` · ${days >= 0 ? `${days}d` : t('sla.overdueDays', { d: -days })}`
+        ? ` · ${days >= 0 ? `${days}d` : t('sla.overdueDays', { days: -days })}`
         : ''}
     </span>
   );
@@ -284,10 +284,11 @@ export const FindingsPage: React.FC<PageProps> = ({
       if (packageOf(f)?.fix) fixable += 1;
     }
     const fpCount = findings.filter((f) => f.status === 'FALSE_POSITIVE' || f.status === 'ACCEPTED_RISK').length;
+    const acceptedRiskCount = findings.filter((f) => f.status === 'ACCEPTED_RISK').length;
     const aiFpCount = findings.filter(
       (f) => (f.status === 'OPEN' || f.status === 'IN_REVIEW') && isCandidateFalsePositive(f),
     ).length;
-    return { bySev, breached, fixable, fpCount, aiFpCount, total: base.length };
+    return { bySev, breached, fixable, fpCount, acceptedRiskCount, aiFpCount, total: base.length };
   }, [findings, selectedStatus, now]);
 
   const pillowContext = useMemo(
@@ -451,7 +452,7 @@ export const FindingsPage: React.FC<PageProps> = ({
           >
             <span className="fm-summary-label">{t(`severity.${s}`)}</span>
             <span className="fm-summary-value">{summary.bySev[s]}</span>
-            <span className="fm-summary-hint">{t('findings.slaTargetDays', { d: SLA_DAYS[s] })}</span>
+            <span className="fm-summary-hint">{t('findings.slaTargetDays', { days: SLA_DAYS[s] })}</span>
           </button>
         ))}
         <button
@@ -490,7 +491,7 @@ export const FindingsPage: React.FC<PageProps> = ({
         >
           <span className="fm-summary-label">{t('findings.fpTitle')}</span>
           <span className="fm-summary-value">{summary.fpCount}</span>
-          <span className="fm-summary-hint">{t('findings.fpHint')}</span>
+          <span className="fm-summary-hint">{t('findings.fpHint', { risk: summary.acceptedRiskCount })}</span>
         </button>
       </div>
 
@@ -510,7 +511,7 @@ export const FindingsPage: React.FC<PageProps> = ({
         </div>
 
         <select value={selectedRepo} onChange={(e) => setSelectedRepo(e.target.value)} className="filter-select">
-          <option value="all">{t('dashboard.allRepos')}</option>
+          <option value="all">{t('findings.allRepos')}</option>
           {repos.map((r) => (
             <option key={r} value={r}>
               {r}
@@ -563,8 +564,8 @@ export const FindingsPage: React.FC<PageProps> = ({
             <ShieldAlert size={20} color="#0969da" />
             <span>
               {view === 'grouped'
-                ? t('findings.groupsAndFindings', { g: groups.length, f: filtered.length })
-                : t('findings.findingsCountHeader', { f: filtered.length })}
+                ? t('findings.groupsAndFindings', { groups: groups.length, findings: filtered.length })
+                : t('findings.findingsCountHeader', { count: filtered.length })}
             </span>
           </div>
           <button
@@ -617,7 +618,7 @@ export const FindingsPage: React.FC<PageProps> = ({
                           <div className="fm-sub">
                             {g.kind === 'package' && g.fixVersion ? (
                               <span className="fm-fix">
-                                <ArrowUpCircle size={12} /> {t('findings.updateTo', { v: g.fixVersion })}
+                                <ArrowUpCircle size={12} /> {t('findings.updateTo', { ver: g.fixVersion })}
                               </span>
                             ) : (
                               g.sublabel.slice(0, 140)
@@ -644,9 +645,9 @@ export const FindingsPage: React.FC<PageProps> = ({
                           <td colSpan={7}>
                             <div className="fm-bulk">
                               <span>
-                                {t('findings.activeInGroup', { n: g.activeCount })}
+                                {t('findings.activeInGroup', { count: g.activeCount })}
                                 {g.kind === 'package' && g.fixVersion
-                                  ? ` · ${t('findings.singleUpdateFixes', { v: g.fixVersion, n: g.findings.length })}`
+                                  ? ` · ${t('findings.singleUpdateFixes', { ver: g.fixVersion, count: g.findings.length })}`
                                   : ''}
                               </span>
                               <div className="fm-bulk-actions">
@@ -724,8 +725,8 @@ export const FindingsPage: React.FC<PageProps> = ({
           <div className="fm-more">
             <button className="btn btn-secondary" onClick={() => setVisible((v) => v + PAGE_SIZE)}>
               {t('findings.showMore', {
-                n: PAGE_SIZE,
-                rem: (view === 'grouped' ? groups.length : filtered.length) - visible,
+                step: PAGE_SIZE,
+                remaining: (view === 'grouped' ? groups.length : filtered.length) - visible,
               })}
             </button>
           </div>
@@ -775,19 +776,19 @@ export const FindingsPage: React.FC<PageProps> = ({
                 </span>
               </div>
               <div className="fm-detail-grid">
-                <div><strong>{t('findings.repoLabel')}:</strong> {activeFinding.repository_name || activeFinding.repository_id}</div>
+                <div><strong>{t('findings.repoLabel')}</strong> {activeFinding.repository_name || activeFinding.repository_id}</div>
                 <div>
-                  <strong>{t('findings.detectedLabel')}:</strong> {formatDateTime(activeFinding.created_at)} (
-                  {t('findings.daysOld', { d: ageDays(activeFinding, now) })})
+                  <strong>{t('findings.detectedLabel')}</strong> {formatDateTime(activeFinding.created_at)} (
+                  {t('findings.daysOld', { days: ageDays(activeFinding, now) })})
                 </div>
                 <div>
-                  <strong>{t('findings.slaPolicyLabel')}:</strong>{' '}
+                  <strong>{t('findings.slaPolicyLabel')}</strong>{' '}
                   {t('findings.slaPolicyText', {
-                    d: SLA_DAYS[activeFinding.severity],
+                    days: SLA_DAYS[activeFinding.severity],
                     sev: t(`severity.${activeFinding.severity}`).toLowerCase(),
                   })}
                 </div>
-                <div><strong>{t('findings.originLabel')}:</strong> {activeFinding.triggered_by || 'web_hub'}</div>
+                <div><strong>{t('findings.originLabel')}</strong> {activeFinding.triggered_by || 'web_hub'}</div>
                 {activeFinding.cwe ? <div><strong>CWE:</strong> {activeFinding.cwe}</div> : null}
                 {activeFinding.iso_control ? <div><strong>ISO 27001:</strong> {activeFinding.iso_control}</div> : null}
               </div>
