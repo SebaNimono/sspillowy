@@ -126,18 +126,21 @@ export const NotificationsPage: React.FC<PageProps> = ({
 
       {apiOffline && <ApiOfflineBanner />}
 
-      <div className="card" style={{ padding: '1rem 1.5rem', marginBottom: '1.5rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-          {(['all', 'unread', 'critical'] as const).map((key) => (
-            <button
-              key={key}
-              className={filter === key ? 'btn btn-primary' : 'btn btn-secondary'}
-              onClick={() => setFilter(key)}
-              disabled={loading}
-            >
-              {key === 'all' ? 'Todas' : key === 'unread' ? 'No leídas' : 'Críticas'}
-            </button>
-          ))}
+      <div className="card" style={{ padding: '0.75rem 1rem', marginBottom: '0.9rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+          <div className="vl-ranges" role="group" aria-label="Filtro de notificaciones">
+            {(['all', 'unread', 'critical'] as const).map((key) => (
+              <button
+                key={key}
+                type="button"
+                className={`vl-range ${filter === key ? 'is-active' : ''}`}
+                onClick={() => setFilter(key)}
+                disabled={loading}
+              >
+                {key === 'all' ? 'Todas' : key === 'unread' ? 'No leídas' : 'Críticas'}
+              </button>
+            ))}
+          </div>
           <div style={{ marginLeft: 'auto' }}>
             <button className="btn btn-secondary" onClick={handleReadAll} disabled={loading || items.length === 0}>
               <CheckCheck size={14} />
