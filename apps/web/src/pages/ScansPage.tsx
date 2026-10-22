@@ -4,7 +4,20 @@ import { SidebarState } from '../components/Sidebar';
 import { Toast, ToastMessage } from '../components/Toast';
 import { ApiOfflineBanner } from '../components/ApiOfflineBanner';
 import { Repository, Scan, fetchRepositories, fetchScans, triggerScan } from '../api/client';
-import { Radar, Play, GitBranch, RefreshCw, Search, ExternalLink } from 'lucide-react';
+import {
+  Radar,
+  Play,
+  GitBranch,
+  RefreshCw,
+  Search,
+  ExternalLink,
+  ChevronDown,
+  ChevronRight,
+  Clock,
+  User,
+  AlertCircle,
+  ShieldCheck,
+} from 'lucide-react';
 import { useI18n } from '../i18n/I18nProvider';
 import PageSkeleton from '../components/PageSkeleton';
 import '../styles/scans.css';
@@ -85,6 +98,16 @@ export const ScansPage: React.FC<PageProps> = ({
   const [gateFilter, setGateFilter] = useState<GateFilter>('all');
   const [repoFilter, setRepoFilter] = useState('all');
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+  const toggleExpanded = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const repoName = useMemo(() => {
     const map = new Map<string, string>();
@@ -198,13 +221,13 @@ export const ScansPage: React.FC<PageProps> = ({
     if (g === 'BLOCKED')
       return (
         <span className="badge badge-critical" title={scan.gate_detail || ''}>
-          Bloqueado
+          Gate: Bloqueado
         </span>
       );
     if (g === 'PASSED')
       return (
         <span className="badge badge-low" title={scan.gate_detail || ''}>
-          Aprobado
+          Gate: Aprobado
         </span>
       );
     if (g === 'BYPASSED')
@@ -214,16 +237,16 @@ export const ScansPage: React.FC<PageProps> = ({
           style={{ background: '#fbefff', color: '#8250df', border: '1px solid #d2a8ff' }}
           title={scan.gate_detail || ''}
         >
-          Excepción
+          Gate: Excepción
         </span>
       );
     if (g === 'SKIPPED')
       return (
         <span className="badge badge-engine" title={scan.gate_detail || ''}>
-          Omitido
+          Gate: Omitido
         </span>
       );
-    return <span style={{ color: '#8c959f', fontSize: '0.8rem' }}>—</span>;
+    return null;
   };
 
   return (
@@ -355,7 +378,7 @@ export const ScansPage: React.FC<PageProps> = ({
         </div>
 
         {loading ? (
-          <PageSkeleton variant="table" rows={6} embedded />
+          <PageSkeleton variant="cards" rows={5} embedded />
         ) : filtered.length === 0 ? (
           <div className="sc-empty">
             <strong>{scans.length === 0 ? 'Aún no hay escaneos' : 'Ningún escaneo coincide con el filtro'}</strong>
@@ -371,93 +394,168 @@ export const ScansPage: React.FC<PageProps> = ({
             )}
           </div>
         ) : (
-          <div className="table-container">
-            <table className="custom-table">
-              <thead>
-                <tr>
-                  <th>Estado</th>
-                  <th>Gate</th>
-                  <th>Repositorio</th>
-                  <th className="sc-hide-sm">Disparador</th>
-                  <th>Rama</th>
-                  <th>Hallazgos</th>
-                  <th>Cuándo</th>
-                  <th>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((scan) => {
-                  const name = repoName.get(scan.repository_id) || 'Repositorio';
-                  return (
-                    <tr key={scan.id}>
-                      <td>{statusBadge(scan)}</td>
-                      <td>{gateBadge(scan)}</td>
-                      <td>
-                        <div className="sc-repo">
-                          <strong>{name}</strong>
-                          <small className="sc-id" title={scan.id}>
-                            {scan.id.slice(0, 8)}…
-                          </small>
-                          {scan.status === 'FAILED' && scan.progress_detail && (
-                            <small style={{ color: '#cf222e', fontSize: '0.72rem', maxWidth: '320px', lineHeight: 1.3 }}>
-                              {scan.progress_detail}
-                            </small>
-                          )}
-                        </div>
-                      </td>
-                      <td className="sc-hide-sm">
-                        <span className="badge badge-engine">{triggerLabel(scan.triggered_by)}</span>
-                      </td>
-                      <td>
+          <div className="sc-list">
+            {filtered.map((scan) => {
+              const name = repoName.get(scan.repository_id) || 'Repositorio';
+              const isOpen = expandedIds.has(scan.id);
+              const hasDetailMessage = Boolean(scan.progress_detail || scan.gate_detail);
+              return (
+                <div
+                  key={scan.id}
+                  className={`sc-item${isOpen ? ' is-open' : ''}${scan.status === 'FAILED' ? ' is-failed' : ''}`}
+                >
+                  <div
+                    className="sc-item-head"
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={isOpen}
+                    onClick={() => toggleExpanded(scan.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        toggleExpanded(scan.id);
+                      }
+                    }}
+                  >
+                    <div className="sc-item-chevron" aria-hidden="true">
+                      {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                    </div>
+
+                    <div className="sc-item-main">
+                      <div className="sc-item-title-row">
+                        <strong className="sc-repo-name">{name}</strong>
                         <span className="badge badge-engine">
                           <GitBranch size={12} style={{ marginRight: 4 }} />
                           {scan.branch}
                         </span>
-                      </td>
-                      <td>
-                        <div className="sc-sev" title={`${scan.total_findings} hallazgos en total`}>
-                          {scan.critical_count > 0 && <span className="c">{scan.critical_count} crit.</span>}
-                          {scan.high_count > 0 && <span className="h">{scan.high_count} altas</span>}
-                          {scan.medium_count > 0 && <span className="m">{scan.medium_count} med.</span>}
-                          {scan.critical_count + scan.high_count + scan.medium_count === 0 && (
-                            <span>{scan.total_findings || 0}</span>
-                          )}
-                        </div>
-                      </td>
-                      <td>
-                        <span className="sc-time" title={new Date(scan.created_at).toLocaleString('es-CL')}>
-                          {relativeTime(scan.created_at)}
+                        <span className="sc-id" title={scan.id}>
+                          #{scan.id.slice(0, 8)}
                         </span>
-                      </td>
-                      <td>
-                        <div className="sc-actions">
-                          {onNavigate && (
-                            <button
-                              type="button"
-                              className="btn btn-secondary"
-                              title="Ver hallazgos de este repositorio"
-                              onClick={() => onNavigate('findings')}
-                            >
-                              <ExternalLink size={13} />
-                              <span>Hallazgos</span>
-                            </button>
-                          )}
+                      </div>
+
+                      <div className="sc-item-badges">
+                        {statusBadge(scan)}
+                        {gateBadge(scan)}
+                        <span className="sc-meta-pill" title={`Disparador: ${scan.triggered_by}`}>
+                          <User size={12} />
+                          <span>{triggerLabel(scan.triggered_by)}</span>
+                        </span>
+                        <span className="sc-meta-pill" title={new Date(scan.created_at).toLocaleString('es-CL')}>
+                          <Clock size={12} />
+                          <span>{relativeTime(scan.created_at)}</span>
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="sc-item-right">
+                      <div className="sc-sev" title={`${scan.total_findings} hallazgos en total`}>
+                        {scan.critical_count > 0 && <span className="c">{scan.critical_count} crit.</span>}
+                        {scan.high_count > 0 && <span className="h">{scan.high_count} altas</span>}
+                        {scan.medium_count > 0 && <span className="m">{scan.medium_count} med.</span>}
+                        {scan.critical_count + scan.high_count + scan.medium_count === 0 && (
+                          <span>{scan.total_findings || 0} hallazgos</span>
+                        )}
+                      </div>
+
+                      <div className="sc-actions" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          onClick={() => toggleExpanded(scan.id)}
+                          title={isOpen ? 'Ocultar detalle' : 'Ver detalle del escaneo'}
+                        >
+                          <span>{isOpen ? 'Ocultar' : hasDetailMessage ? 'Ver detalle' : 'Detalle'}</span>
+                        </button>
+                        {onNavigate && (
                           <button
                             type="button"
                             className="btn btn-secondary"
-                            disabled={busyId === scan.id || scan.status === 'RUNNING'}
-                            onClick={() => handleRetrigger(scan)}
+                            title="Ver hallazgos de este repositorio"
+                            onClick={() => onNavigate('findings')}
                           >
-                            <Play size={13} color="#0969da" />
-                            <span>Re-escanear</span>
+                            <ExternalLink size={13} />
+                            <span>Hallazgos</span>
                           </button>
+                        )}
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          disabled={busyId === scan.id || scan.status === 'RUNNING'}
+                          onClick={() => handleRetrigger(scan)}
+                        >
+                          <Play size={13} color="#0969da" />
+                          <span>Re-escanear</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {isOpen && (
+                    <div className="sc-item-detail">
+                      <div className="sc-detail-grid">
+                        <div className="sc-detail-field">
+                          <span>ID de escaneo</span>
+                          <code>{scan.id}</code>
                         </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                        <div className="sc-detail-field">
+                          <span>Disparado por</span>
+                          <strong>{scan.triggered_by || '—'}</strong>
+                        </div>
+                        <div className="sc-detail-field">
+                          <span>Inicio</span>
+                          <strong>{new Date(scan.created_at).toLocaleString('es-CL')}</strong>
+                        </div>
+                        <div className="sc-detail-field">
+                          <span>Finalizado</span>
+                          <strong>
+                            {scan.completed_at ? new Date(scan.completed_at).toLocaleString('es-CL') : '—'}
+                          </strong>
+                        </div>
+                        <div className="sc-detail-field">
+                          <span>Severidades detectadas</span>
+                          <strong>
+                            {scan.critical_count} crít. · {scan.high_count} altas · {scan.medium_count} med. ·{' '}
+                            {scan.low_count} bajas ({scan.total_findings} total)
+                          </strong>
+                        </div>
+                        <div className="sc-detail-field">
+                          <span>Etapa / Estado</span>
+                          <strong>
+                            {STAGE_LABELS[scan.progress_stage || ''] || scan.progress_stage || scan.status}
+                          </strong>
+                        </div>
+                      </div>
+
+                      {scan.gate_detail && (
+                        <div className="sc-detail-box sc-detail-box--gate">
+                          <div className="sc-detail-box-title">
+                            <ShieldCheck size={14} />
+                            <span>Resultado del Security Gate ({scan.gate_status || 'EVALUADO'})</span>
+                          </div>
+                          <p>{scan.gate_detail}</p>
+                        </div>
+                      )}
+
+                      {scan.progress_detail && (
+                        <div
+                          className={`sc-detail-box ${
+                            scan.status === 'FAILED' ? 'sc-detail-box--error' : 'sc-detail-box--info'
+                          }`}
+                        >
+                          <div className="sc-detail-box-title">
+                            <AlertCircle size={14} />
+                            <span>
+                              {scan.status === 'FAILED' ? 'Detalle del error de ejecución' : 'Detalle de progreso'}
+                            </span>
+                          </div>
+                          <p>{scan.progress_detail}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
