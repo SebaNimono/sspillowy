@@ -1,5 +1,6 @@
 ﻿import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'token_storage.dart';
 
 class AuthInterceptor extends Interceptor {
   final GlobalKey<NavigatorState> navigatorKey;
@@ -7,19 +8,25 @@ class AuthInterceptor extends Interceptor {
   AuthInterceptor({required this.navigatorKey});
 
   @override
+  void onRequest(RequestOptions options, RequestInterceptorHandler handler) async {
+    final token = await TokenStorage.getToken();
+    if (token != null && token.isNotEmpty) {
+      options.headers['Authorization'] = 'Bearer $token';
+    }
+    super.onRequest(options, handler);
+  }
+
+  @override
   void onError(DioException err, ErrorInterceptorHandler handler) async {
     if (err.response?.statusCode == 401) {
-      // 1. Limpiar sesión/token guardado
-      await _clearStoredSession();
+      await TokenStorage.clearToken();
 
-      // 2. Redirigir al Login limpiando la pila de navegación y mostrando mensaje
       final context = navigatorKey.currentContext;
       if (context != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Tu sesión ha expirado. Por favor, inicia sesión nuevamente.'),
+            content: Text('Sesión expirada. Redirigiendo al login...'),
             backgroundColor: Colors.orange,
-            duration: Duration(seconds: 4),
           ),
         );
 
@@ -27,9 +34,5 @@ class AuthInterceptor extends Interceptor {
       }
     }
     super.onError(err, handler);
-  }
-
-  Future<void> _clearStoredSession() async {
-    // Aquí se limpia la sesión local (SharedPreferences / Secure Storage)
   }
 }
