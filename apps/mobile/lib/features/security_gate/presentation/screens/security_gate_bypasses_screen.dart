@@ -30,15 +30,25 @@ class _SecurityGateBypassesScreenState extends State<SecurityGateBypassesScreen>
     });
   }
 
-  void _handleDecision(int index, String action) {
+  Future<void> _handleDecision(int index, String action) async {
     final item = _bypasses[index];
+    final id = item['id'] ?? 'byp-001';
+
+    // Llamada al backend
+    await _bypassService.decideBypass(id, action);
+
     setState(() {
       _bypasses.removeAt(index);
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Solicitud ${item['id'] ?? ''} $action')),
-    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Solicitud $action correctamente y enviada al historial'),
+          backgroundColor: action == 'aprobada' ? Colors.green[700] : Colors.red[700],
+        ),
+      );
+    }
   }
 
   @override
