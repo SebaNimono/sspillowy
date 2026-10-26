@@ -1,6 +1,6 @@
 ﻿import 'package:flutter/material.dart';
+import 'package:dio/dio.dart';
 import '../../../../services/bypass_service.dart';
-import '../../../../services/api_service.dart';
 
 class SecurityGateBypassesScreen extends StatefulWidget {
   const SecurityGateBypassesScreen({Key? key}) : super(key: key);
@@ -16,7 +16,7 @@ class _SecurityGateBypassesScreenState extends State<SecurityGateBypassesScreen>
   @override
   void initState() {
     super.initState();
-    _bypassService = BypassService(ApiService().dio);
+    _bypassService = BypassService(Dio());
     _loadBypasses();
   }
 
@@ -61,7 +61,7 @@ class _SecurityGateBypassesScreenState extends State<SecurityGateBypassesScreen>
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
-                    crossAxisAlignment: CrossAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         item['reason'] ?? 'Sin motivo',
