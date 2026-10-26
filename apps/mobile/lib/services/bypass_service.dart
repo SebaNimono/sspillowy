@@ -3,35 +3,62 @@
 class BypassService {
   final Dio dio;
 
-  BypassService(this.dio);
+  // Reemplaza con la URL base exacta de tu servidor backend Web Hub
+  static const String baseUrl = 'http://localhost:3000';
 
-  Future<List<dynamic>> getBypasses() async {
+  BypassService(Dio dioClient)
+      : dio = dioClient
+          ..options.baseUrl = baseUrl
+          ..options.headers = {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          };
+
+  Future<List<dynamic>> getBypasses({String? workspaceId, String? token}) async {
     try {
-      final response = await dio.get('/api/bypasses');
+      final response = await dio.get(
+        '/api/v1/security-gates/bypasses',
+        options: Options(
+          headers: {
+            if (token != null) 'authorization': 'Bearer $token',
+            if (workspaceId != null) 'X-Workspace-Id': workspaceId,
+          },
+        ),
+      );
       return response.data as List<dynamic>;
     } catch (e) {
-      // Fallback local en caso de desconexión temporal
-      return [
-        {
-          'id': 'byp-001',
-          'reason': 'Prueba de integración Pulse: hotfix urgente en producción',
-          'scope': 'Todo el espacio',
-          'duration': '1 día',
-          'status': 'PENDING',
-        }
-      ];
+      print('Error al obtener bypasses: $e');
+      return [];
     }
   }
 
-  Future<bool> decideBypass(String id, String action) async {
+  Future<bool> decideBypass({
+    required String bypassId,
+    required String action, // 'approve' o 'reject'
+    String? note,
+    String? token,
+    String? sessionId,
+    String? workspaceId,
+  }) async {
     try {
-      // Intenta enviar la decisión al API (ajusta la URL según tu backend)
-      await dio.post('/api/bypasses/$id/decision', data: {'action': action});
-      return true;
+      final endpoint = '/api/v1/security-gates/bypasses/$bypassId/$action';
+      final response = await dio.post(
+        endpoint,
+        data: {
+          'note': note ?? 'Procesado desde la app móvil',
+        },
+        options: Options(
+          headers: {
+            if (token != null) 'authorization': 'Bearer $token',
+            if (sessionId != null) 'X-Session-Id': sessionId,
+            if (workspaceId != null) 'X-Workspace-Id': workspaceId,
+          },
+        ),
+      );
+      return response.statusCode == 200 || response.statusCode == 201;
     } catch (e) {
-      // Si el API backend aún no tiene la ruta lista o da error de red,
-      // retornamos true para permitir la fluidez en la prueba local.
-      return true;
+      print('Error en la API al $action bypass ($bypassId): $e');
+      return false;
     }
   }
 }

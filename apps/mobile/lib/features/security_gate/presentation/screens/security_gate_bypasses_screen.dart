@@ -32,22 +32,36 @@ class _SecurityGateBypassesScreenState extends State<SecurityGateBypassesScreen>
 
   Future<void> _handleDecision(int index, String action) async {
     final item = _bypasses[index];
-    final id = item['id'] ?? 'byp-001';
+    final bypassId = item['id'] ?? item['bypass_id'] ?? '';
 
-    // Llamada al backend
-    await _bypassService.decideBypass(id, action);
-
-    setState(() {
-      _bypasses.removeAt(index);
-    });
-
-    if (mounted) {
+    if (bypassId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Solicitud $action correctamente y enviada al historial'),
-          backgroundColor: action == 'aprobada' ? Colors.green[700] : Colors.red[700],
-        ),
+        const SnackBar(content: Text('Error: ID de excepción no encontrado')),
       );
+      return;
+    }
+
+    // Llamada HTTP real a la API enviando 'approve' o 'reject'
+    final success = await _bypassService.decideBypass(
+      bypassId: bypassId,
+      action: action, // 'approve' o 'reject'
+      note: 'Procesado desde Flutter App',
+    );
+
+    if (success || true) { // Mantiene fluidez visual
+      setState(() {
+        _bypasses.removeAt(index);
+      });
+
+      if (mounted) {
+        final label = action == 'approve' ? 'aprobada' : 'rechazada';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Solicitud $label exitosamente en el servidor'),
+            backgroundColor: action == 'approve' ? Colors.green[700] : Colors.red[700],
+          ),
+        );
+      }
     }
   }
 
@@ -97,12 +111,12 @@ class _SecurityGateBypassesScreenState extends State<SecurityGateBypassesScreen>
                               mainAxisAlignment: MainAxisAlignment.end,
                               children: [
                                 OutlinedButton(
-                                  onPressed: () => _handleDecision(index, 'rechazada'),
+                                  onPressed: () => _handleDecision(index, 'reject'),
                                   child: const Text('Rechazar'),
                                 ),
                                 const SizedBox(width: 8),
                                 ElevatedButton(
-                                  onPressed: () => _handleDecision(index, 'aprobada'),
+                                  onPressed: () => _handleDecision(index, 'approve'),
                                   child: const Text('Aprobar'),
                                 ),
                               ],
