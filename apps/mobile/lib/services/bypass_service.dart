@@ -13,24 +13,9 @@ class BypassService {
             'Accept': 'application/json',
           };
 
-  // Obtiene todas las excepciones (filtrables por estado o workspace)
-  Future<List<dynamic>> getBypasses({
-    String? workspaceId,
-    String? token,
-    String? sessionId,
-  }) async {
+  Future<List<dynamic>> getBypasses() async {
     try {
-      final response = await dio.get(
-        '/api/v1/security-gates/bypasses',
-        options: Options(
-          headers: {
-            if (token != null) 'authorization': 'Bearer $token',
-            if (sessionId != null) 'X-Session-Id': sessionId,
-            if (workspaceId != null) 'X-Workspace-Id': workspaceId,
-          },
-        ),
-      );
-
+      final response = await dio.get('/api/v1/security-gates/bypasses');
       if (response.data is List) {
         return response.data as List<dynamic>;
       } else if (response.data is Map && response.data['data'] != null) {
@@ -38,36 +23,21 @@ class BypassService {
       }
       return [];
     } catch (e) {
-      print('Error al consultar GET /api/v1/security-gates/bypasses: $e');
+      print('Error al obtener bypasses: $e');
       return [];
     }
   }
 
-  // Aprueba o Rechaza la excepción enviando el POST al backend
-  Future<bool> decideBypass({
-    required String bypassId,
-    required String action, // 'approve' o 'reject'
-    String? note,
-    String? token,
-    String? sessionId,
-    String? workspaceId,
-  }) async {
+  Future<bool> decideBypass(String id, String action) async {
     try {
-      final endpoint = '/api/v1/security-gates/bypasses/$bypassId/$action';
+      // Envía 'approve' o 'reject' directamente al backend
       final response = await dio.post(
-        endpoint,
-        data: {'note': note ?? 'Procesado desde la app móvil'},
-        options: Options(
-          headers: {
-            if (token != null) 'authorization': 'Bearer $token',
-            if (sessionId != null) 'X-Session-Id': sessionId,
-            if (workspaceId != null) 'X-Workspace-Id': workspaceId,
-          },
-        ),
+        '/api/v1/security-gates/bypasses/$id/$action',
+        data: {'note': 'Procesado desde la app móvil'},
       );
       return response.statusCode == 200 || response.statusCode == 201;
     } catch (e) {
-      print('Error en la API al $action bypass ($bypassId): $e');
+      print('Error al registrar decisión ($action): $e');
       return false;
     }
   }
