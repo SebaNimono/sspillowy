@@ -73,7 +73,7 @@ class _SecurityGateBypassesScreenState extends State<SecurityGateBypassesScreen>
                       child: Padding(
                         padding: const EdgeInsets.all(16.0),
                         child: Column(
-                          crossAxisAlignment: CrossAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
                               item['reason'] ?? 'Sin motivo',
