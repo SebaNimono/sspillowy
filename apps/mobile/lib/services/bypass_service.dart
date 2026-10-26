@@ -3,8 +3,8 @@
 class BypassService {
   final Dio dio;
 
-  // Reemplaza con la URL base exacta de tu servidor backend Web Hub
-  static const String baseUrl = 'http://localhost:3000';
+  // URL del Web Hub
+  static const String baseUrl = 'https://sspillowy.com';
 
   BypassService(Dio dioClient)
       : dio = dioClient
@@ -25,9 +25,15 @@ class BypassService {
           },
         ),
       );
-      return response.data as List<dynamic>;
+
+      if (response.data is List) {
+        return response.data as List<dynamic>;
+      } else if (response.data is Map && response.data['data'] != null) {
+        return response.data['data'] as List<dynamic>;
+      }
+      return [];
     } catch (e) {
-      print('Error al obtener bypasses: $e');
+      print('Error al consultar GET /api/v1/security-gates/bypasses: $e');
       return [];
     }
   }
@@ -44,9 +50,7 @@ class BypassService {
       final endpoint = '/api/v1/security-gates/bypasses/$bypassId/$action';
       final response = await dio.post(
         endpoint,
-        data: {
-          'note': note ?? 'Procesado desde la app móvil',
-        },
+        data: {'note': note ?? 'Procesado desde la app móvil'},
         options: Options(
           headers: {
             if (token != null) 'authorization': 'Bearer $token',
@@ -57,7 +61,7 @@ class BypassService {
       );
       return response.statusCode == 200 || response.statusCode == 201;
     } catch (e) {
-      print('Error en la API al $action bypass ($bypassId): $e');
+      print('Error al postear decisión ($action): $e');
       return false;
     }
   }
