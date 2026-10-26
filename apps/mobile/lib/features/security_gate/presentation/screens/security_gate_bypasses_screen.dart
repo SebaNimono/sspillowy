@@ -11,7 +11,8 @@ class SecurityGateBypassesScreen extends StatefulWidget {
 
 class _SecurityGateBypassesScreenState extends State<SecurityGateBypassesScreen> {
   late BypassService _bypassService;
-  Future<List<dynamic>>? _bypassesFuture;
+  List<dynamic> _bypasses = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -20,10 +21,24 @@ class _SecurityGateBypassesScreenState extends State<SecurityGateBypassesScreen>
     _loadBypasses();
   }
 
-  void _loadBypasses() {
+  Future<void> _loadBypasses() async {
+    setState(() => _isLoading = true);
+    final data = await _bypassService.getBypasses();
     setState(() {
-      _bypassesFuture = _bypassService.getBypasses();
+      _bypasses = List.from(data);
+      _isLoading = false;
     });
+  }
+
+  void _handleDecision(int index, String action) {
+    final item = _bypasses[index];
+    setState(() {
+      _bypasses.removeAt(index);
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Solicitud ${item['id'] ?? ''} $action')),
+    );
   }
 
   @override
@@ -38,69 +53,56 @@ class _SecurityGateBypassesScreenState extends State<SecurityGateBypassesScreen>
           ),
         ],
       ),
-      body: FutureBuilder<List<dynamic>>(
-        future: _bypassesFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          final list = snapshot.data ?? [];
-          if (list.isEmpty) {
-            return const Center(child: Text('No hay excepciones pendientes.'));
-          }
-
-          return ListView.builder(
-            itemCount: list.length,
-            padding: const EdgeInsets.all(16),
-            itemBuilder: (context, index) {
-              final item = list[index];
-              return Card(
-                elevation: 2,
-                margin: const EdgeInsets.only(bottom: 12),
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        item['reason'] ?? 'Sin motivo',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                      ),
-                      const SizedBox(height: 8),
-                      Text('Ámbito: ${item['scope'] ?? 'Todo el espacio'}'),
-                      Text('Duración: ${item['duration'] ?? '1 día'}'),
-                      const SizedBox(height: 12),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          OutlinedButton(
-                            onPressed: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Solicitud rechazada')),
-                              );
-                            },
-                            child: const Text('Rechazar'),
-                          ),
-                          const SizedBox(width: 8),
-                          ElevatedButton(
-                            onPressed: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Excepción aprobada exitosamente')),
-                              );
-                            },
-                            child: const Text('Aprobar'),
-                          ),
-                        ],
-                      ),
-                    ],
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _bypasses.isEmpty
+              ? const Center(
+                  child: Text(
+                    'No hay excepciones pendientes.',
+                    style: TextStyle(fontSize: 16, color: Colors.grey),
                   ),
+                )
+              : ListView.builder(
+                  itemCount: _bypasses.length,
+                  padding: const EdgeInsets.all(16),
+                  itemBuilder: (context, index) {
+                    final item = _bypasses[index];
+                    return Card(
+                      elevation: 2,
+                      margin: const EdgeInsets.only(bottom: 12),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAlignment.start,
+                          children: [
+                            Text(
+                              item['reason'] ?? 'Sin motivo',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                            ),
+                            const SizedBox(height: 8),
+                            Text('Ámbito: ${item['scope'] ?? 'Todo el espacio'}'),
+                            Text('Duración: ${item['duration'] ?? '1 día'}'),
+                            const SizedBox(height: 12),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                OutlinedButton(
+                                  onPressed: () => _handleDecision(index, 'rechazada'),
+                                  child: const Text('Rechazar'),
+                                ),
+                                const SizedBox(width: 8),
+                                ElevatedButton(
+                                  onPressed: () => _handleDecision(index, 'aprobada'),
+                                  child: const Text('Aprobar'),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
                 ),
-              );
-            },
-          );
-        },
-      ),
     );
   }
 }
