@@ -3,8 +3,7 @@
 class BypassService {
   final Dio dio;
 
-  // URL del Web Hub
-  static const String baseUrl = 'https://sspillowy.com';
+  static const String baseUrl = 'https://api.sspillowy.com';
 
   BypassService(Dio dioClient)
       : dio = dioClient
@@ -14,13 +13,19 @@ class BypassService {
             'Accept': 'application/json',
           };
 
-  Future<List<dynamic>> getBypasses({String? workspaceId, String? token}) async {
+  // Obtiene todas las excepciones (filtrables por estado o workspace)
+  Future<List<dynamic>> getBypasses({
+    String? workspaceId,
+    String? token,
+    String? sessionId,
+  }) async {
     try {
       final response = await dio.get(
         '/api/v1/security-gates/bypasses',
         options: Options(
           headers: {
             if (token != null) 'authorization': 'Bearer $token',
+            if (sessionId != null) 'X-Session-Id': sessionId,
             if (workspaceId != null) 'X-Workspace-Id': workspaceId,
           },
         ),
@@ -38,6 +43,7 @@ class BypassService {
     }
   }
 
+  // Aprueba o Rechaza la excepción enviando el POST al backend
   Future<bool> decideBypass({
     required String bypassId,
     required String action, // 'approve' o 'reject'
@@ -61,7 +67,7 @@ class BypassService {
       );
       return response.statusCode == 200 || response.statusCode == 201;
     } catch (e) {
-      print('Error al postear decisión ($action): $e');
+      print('Error en la API al $action bypass ($bypassId): $e');
       return false;
     }
   }

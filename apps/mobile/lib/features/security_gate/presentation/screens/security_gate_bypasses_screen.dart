@@ -11,54 +11,61 @@ class SecurityGateBypassesScreen extends StatefulWidget {
 
 class _SecurityGateBypassesScreenState extends State<SecurityGateBypassesScreen> {
   late BypassService _bypassService;
-  List<dynamic> _bypasses = [];
+  List<dynamic> _pendingBypasses = [];
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
     _bypassService = BypassService(Dio());
-    _loadBypasses();
+    _fetchBypasses();
   }
 
-  Future<void> _loadBypasses() async {
+  Future<void> _fetchBypasses() async {
     setState(() => _isLoading = true);
-    final data = await _bypassService.getBypasses();
+    final results = await _bypassService.getBypasses();
+    
     setState(() {
-      _bypasses = List.from(data);
+      // Filtramos las pendientes para la pestaña de Bypasses
+      _pendingBypasses = results.where((item) {
+        final status = (item['status'] ?? 'PENDING').toString().toUpperCase();
+        return status == 'PENDING' || status == 'ESPERANDO APROBACIÓN';
+      }).toList();
+      
       _isLoading = false;
     });
   }
 
   Future<void> _handleDecision(int index, String action) async {
-    final item = _bypasses[index];
+    final item = _pendingBypasses[index];
     final bypassId = item['id'] ?? item['bypass_id'] ?? '';
 
-    if (bypassId.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error: ID de excepción no encontrado')),
-      );
-      return;
-    }
-
-    // Llamada HTTP real a la API enviando 'approve' o 'reject'
     final success = await _bypassService.decideBypass(
       bypassId: bypassId,
       action: action, // 'approve' o 'reject'
-      note: 'Procesado desde Flutter App',
+      note: 'Procesado desde la app móvil',
     );
 
-    if (success || true) { // Mantiene fluidez visual
+    if (success) {
       setState(() {
-        _bypasses.removeAt(index);
+        _pendingBypasses.removeAt(index);
       });
 
       if (mounted) {
         final label = action == 'approve' ? 'aprobada' : 'rechazada';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Solicitud $label exitosamente en el servidor'),
+            content: Text('Excepción $label en la base de datos central'),
             backgroundColor: action == 'approve' ? Colors.green[700] : Colors.red[700],
+          ),
+        );
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Error al procesar la decisión en el servidor'),
+            backgroundColor: Colors.redAccent,
           ),
         );
       }
@@ -73,13 +80,13 @@ class _SecurityGateBypassesScreenState extends State<SecurityGateBypassesScreen>
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _loadBypasses,
+            onPressed: _fetchBypasses,
           ),
         ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _bypasses.isEmpty
+          : _pendingBypasses.isEmpty
               ? const Center(
                   child: Text(
                     'No hay excepciones pendientes.',
@@ -87,10 +94,10 @@ class _SecurityGateBypassesScreenState extends State<SecurityGateBypassesScreen>
                   ),
                 )
               : ListView.builder(
-                  itemCount: _bypasses.length,
+                  itemCount: _pendingBypasses.length,
                   padding: const EdgeInsets.all(16),
                   itemBuilder: (context, index) {
-                    final item = _bypasses[index];
+                    final item = _pendingBypasses[index];
                     return Card(
                       elevation: 2,
                       margin: const EdgeInsets.only(bottom: 12),
@@ -100,12 +107,12 @@ class _SecurityGateBypassesScreenState extends State<SecurityGateBypassesScreen>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              item['reason'] ?? 'Sin motivo',
+                              item['reason'] ?? item['scope'] ?? 'Todo el espacio',
                               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                             ),
                             const SizedBox(height: 8),
-                            Text('Ámbito: ${item['scope'] ?? 'Todo el espacio'}'),
-                            Text('Duración: ${item['duration'] ?? '1 día'}'),
+                            Text('Usuario: ${item['user_email'] ?? item['created_by'] ?? 'N/A'}'),
+                            Text('Fecha: ${item['created_at'] ?? 'Reciente'}'),
                             const SizedBox(height: 12),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.end,
