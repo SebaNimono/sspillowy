@@ -24,24 +24,31 @@ class AuthRepository {
       });
 
       if (response.statusCode == 200 && response.data != null) {
-        if (response.data['token'] != null) {
-          await prefs.setString('jwt_token', response.data['token']);
+        final token = response.data['token'] ?? response.data['access_token'];
+        if (token != null && token.toString().isNotEmpty) {
+          await prefs.setString('jwt_token', token.toString());
+        } else {
+          await prefs.setString('jwt_token', 'authenticated_session_$email');
         }
         await prefs.setString('user_email', email);
         await prefs.setBool('is_logged_in', true);
         return true;
+      } else {
+        throw Exception('Credenciales incorrectas o usuario no registrado.');
       }
     } catch (e) {
-      if (email.isNotEmpty && password.isNotEmpty) {
-        await prefs.setString('jwt_token', 'mock_jwt_token_default_session');
+      final regEmail = prefs.getString('registered_email');
+      final regPass = prefs.getString('registered_password');
+
+      if (regEmail != null && regPass != null && email == regEmail && password == regPass) {
+        await prefs.setString('jwt_token', 'offline_session_$email');
         await prefs.setString('user_email', email);
         await prefs.setBool('is_logged_in', true);
         return true;
       }
-      throw Exception('Credenciales incorrectas o usuario no autorizado.');
-    }
 
-    return false;
+      throw Exception('Credenciales inválidas. Verifica tu correo y contraseña.');
+    }
   }
 }
 
@@ -76,7 +83,7 @@ class _SSPillowyAppState extends State<SSPillowyApp> {
 
       if (!mounted) return;
       setState(() {
-        _isLoggedIn = (token != null && token.isNotEmpty) || isLoggedInPref;
+        _isLoggedIn = (token != null && token.isNotEmpty) && isLoggedInPref;
         _isLoading = false;
       });
     } catch (_) {
@@ -165,6 +172,7 @@ class LoginScreenWithTerms extends StatefulWidget {
 class _LoginScreenWithTermsState extends State<LoginScreenWithTerms> {
   bool _obscurePassword = true;
   bool _isLoading = false;
+  String? _inlineLoginError;
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
@@ -197,12 +205,18 @@ class _LoginScreenWithTermsState extends State<LoginScreenWithTerms> {
   Future<void> _openWebUrl(String url) async {
     FocusScope.of(context).unfocus();
     final uri = Uri.parse(url);
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No se pudo abrir la página web.')),
-        );
+    try {
+      bool launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched) {
+        await launchUrl(uri, mode: LaunchMode.platformDefault);
       }
+    } catch (_) {
+      try {
+        await launchUrl(uri, mode: LaunchMode.inAppWebView);
+      } catch (_) {}
     }
   }
 
@@ -210,10 +224,12 @@ class _LoginScreenWithTermsState extends State<LoginScreenWithTerms> {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
 
+    setState(() => _inlineLoginError = null);
+
     if (email.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Ingresa tu correo y/o contraseña')),
-      );
+      setState(() {
+        _inlineLoginError = 'Ingresa tu correo y/o contraseña';
+      });
       return;
     }
 
@@ -222,16 +238,14 @@ class _LoginScreenWithTermsState extends State<LoginScreenWithTerms> {
     try {
       final success = await _authRepository.login(email, password);
       if (success && mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
         widget.onLoginSuccess();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString().replaceAll('Exception: ', '')),
-            backgroundColor: Colors.red.shade800,
-          ),
-        );
+        setState(() {
+          _inlineLoginError = e.toString().replaceAll('Exception: ', '');
+        });
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -317,22 +331,37 @@ class _LoginScreenWithTermsState extends State<LoginScreenWithTerms> {
                       ),
                     ),
                   ),
+                  if (_inlineLoginError != null) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade900.withValues(alpha: 0.4),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: Colors.red.shade700),
+                      ),
+                      child: Text(
+                        _inlineLoginError!,
+                        style: const TextStyle(color: Colors.redAccent, fontSize: 13),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 8),
                   Align(
                     alignment: Alignment.centerRight,
-                    child: TextButton(
-                      style: ButtonStyle(
-                        overlayColor: WidgetStateProperty.all(Colors.transparent),
-                      ),
-                      onPressed: () =>
-                          _openWebUrl('https://sspillowy.com/forgot-password'),
-                      child: const Text(
-                        '¿Olvidaste tu contraseña?',
-                        style: TextStyle(fontSize: 12, color: Color(0xFF38BDF8)),
+                    child: InkWell(
+                      onTap: () => _openWebUrl('https://sspillowy.com/forgot-password'),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+                        child: Text(
+                          '¿Olvidaste tu contraseña?',
+                          style: TextStyle(fontSize: 12, color: Color(0xFF38BDF8), fontWeight: FontWeight.bold),
+                        ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF21262D),
@@ -369,14 +398,16 @@ class _LoginScreenWithTermsState extends State<LoginScreenWithTerms> {
                         '¿No tienes cuenta? ',
                         style: TextStyle(color: Color(0xFF94A3B8)),
                       ),
-                      GestureDetector(
-                        onTap: () =>
-                            _openWebUrl('https://sspillowy.com/register'),
-                        child: const Text(
-                          'Regístrate',
-                          style: TextStyle(
-                            color: Color(0xFF38BDF8),
-                            fontWeight: FontWeight.bold,
+                      InkWell(
+                        onTap: () => _openWebUrl('https://sspillowy.com/register'),
+                        child: const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+                          child: Text(
+                            'Regístrate',
+                            style: TextStyle(
+                              color: Color(0xFF38BDF8),
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       ),
@@ -533,7 +564,7 @@ class _PillowChatScreenState extends State<PillowChatScreen> {
     {
       'role': 'assistant',
       'text':
-          '¡Hola! Soy tu asistente de seguridad Pillow. ¿En qué te puedo ayudar sobre los hallazgos actuales?'
+          '¡Hola! Soy tu asistente de seguridad Pillow IA. ¿En qué te puedo ayudar sobre los hallazgos actuales de tus repositorios?'
     }
   ];
   final TextEditingController _chatController = TextEditingController();
@@ -560,23 +591,31 @@ class _PillowChatScreenState extends State<PillowChatScreen> {
     });
   }
 
-  String _generateLocalIntelligence(String prompt) {
-    final lower = prompt.toLowerCase();
+  String _generateDynamicAIResponse(String prompt) {
+    final lower = prompt.toLowerCase().trim();
     final count = widget.currentScans.length;
 
-    if (count == 0) {
-      return 'Actualmente no hay repositorios con hallazgos pendientes. Todo se encuentra bajo control.';
+    if (lower == 'hola' || lower.contains('buenos dias') || lower.contains('buenas')) {
+      return '¡Hola! Estoy listo para asistirte con el análisis de tus vulnerabilidades. Actualmente tienes $count repositorio(s) vinculado(s). ¿Qué deseas revisar?';
     }
 
-    final criticals = widget.currentScans
-        .where((s) => s.status == 'CRITICAL' || s.status == 'BLOCKED')
-        .toList();
-
-    if (lower.contains('resumen') || lower.contains('total')) {
-      return 'Tienes $count repositorio(s) sincronizado(s). ${criticals.isNotEmpty ? "Hay ${criticals.length} hallazgo(s) crítico(s)." : "No hay bloqueos críticos."}';
+    if (lower.contains('ayuda') || lower.contains('puedes ayudar') || lower.contains('que haces')) {
+      return 'Te puedo ayudar a resumir los hallazgos SAST, evaluar bloqueos en pases a producción, explicar vulnerabilidades CWE o dar sugerencias sobre excepciones temporizadas.';
     }
 
-    return 'Analizando los $count repositorio(s): el estado general es aceptable. Puedes gestionarlos desde la pestaña de Bandeja.';
+    if (lower.contains('resumen') || lower.contains('hallazgos') || lower.contains('estado') || lower.contains('repo')) {
+      if (count == 0) {
+        return 'Tu bandeja está vacía. No hay hallazgos ni vulnerabilidades pendientes registradas en este momento.';
+      }
+      final names = widget.currentScans.map((s) => s.title ?? 'Repo').join(', ');
+      return 'Sincronización activa: $count repositorio(s) [$names]. Puedes seleccionar cualquiera en la pestaña de Bandeja para aplicar excepciones o bloqueos.';
+    }
+
+    if (lower.contains('bypass') || lower.contains('bloqueo') || lower.contains('excepcion')) {
+      return 'Las decisiones HITL tomadas desde la Bandeja se auditan inmediatamente en la pestaña de Historial con su respectiva vigencia.';
+    }
+
+    return 'Entendido. Estoy monitoreando tus $count repositorio(s) sincronizado(s). Si necesitas detalles sobre algún fallo específico o CWE, solo indícamelo.';
   }
 
   Future<void> _sendMessageToAI(String prompt) async {
@@ -591,20 +630,19 @@ class _PillowChatScreenState extends State<PillowChatScreen> {
     _scrollToBottom();
 
     try {
-      final contextData = {
+      final response = await _apiClient.post('/ai/chat', data: {
         'prompt': cleanPrompt,
         'on_duty_status': widget.isOnDuty,
         'scans_count': widget.currentScans.length,
-      };
+      });
 
-      final response = await _apiClient.post('/ai/chat', data: contextData);
       String aiResponse = "";
       if (response.statusCode == 200 && response.data != null) {
         aiResponse = (response.data['reply'] ?? response.data['message'] ?? "").toString();
       }
 
       if (aiResponse.isEmpty) {
-        aiResponse = _generateLocalIntelligence(cleanPrompt);
+        aiResponse = _generateDynamicAIResponse(cleanPrompt);
       }
 
       if (mounted) {
@@ -614,7 +652,7 @@ class _PillowChatScreenState extends State<PillowChatScreen> {
         _scrollToBottom();
       }
     } catch (_) {
-      final fallbackMessage = _generateLocalIntelligence(cleanPrompt);
+      final fallbackMessage = _generateDynamicAIResponse(cleanPrompt);
       if (mounted) {
         setState(() {
           _messages.add({'role': 'assistant', 'text': fallbackMessage});
@@ -1142,6 +1180,11 @@ class _ScanListScreenState extends State<ScanListScreen> {
         title: const Text('Bandeja de Hallazgos'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Recargar Bandeja',
+            onPressed: () => _initScans(),
+          ),
+          IconButton(
             icon: Icon(_sortAscending ? Icons.sort_by_alpha : Icons.sort),
             tooltip: 'Ordenar A-Z / Z-A',
             onPressed: () {
@@ -1409,12 +1452,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _openWebUrl(String url) async {
     final uri = Uri.parse(url);
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No se pudo abrir la página web.')),
-        );
+    try {
+      bool launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched) {
+        await launchUrl(uri, mode: LaunchMode.platformDefault);
       }
+    } catch (_) {
+      try {
+        await launchUrl(uri, mode: LaunchMode.inAppWebView);
+      } catch (_) {}
     }
   }
 
