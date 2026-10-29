@@ -28,23 +28,23 @@ class AuthRepository {
         if (token != null && token.toString().isNotEmpty) {
           await prefs.setString('jwt_token', token.toString());
         } else {
-          await prefs.setString('jwt_token', 'session_$email');
+          await prefs.setString('jwt_token', 'token_$email');
         }
         await prefs.setString('user_email', email);
         await prefs.setBool('is_logged_in', true);
         return true;
-      } else {
-        throw Exception('Ingresa tu correo y/o contraseña');
       }
-    } catch (e) {
-      if (email.isNotEmpty && password.isNotEmpty) {
-        await prefs.setString('jwt_token', 'valid_session_$email');
-        await prefs.setString('user_email', email);
-        await prefs.setBool('is_logged_in', true);
-        return true;
-      }
-      throw Exception('Ingresa tu correo y/o contraseña');
+    } catch (_) {}
+
+    // Unicamente permite sesion si coincide con usuario guardado formalmente
+    final savedEmail = prefs.getString('user_email');
+    final savedToken = prefs.getString('jwt_token');
+    if (savedEmail != null && savedEmail == email && savedToken != null && savedToken.isNotEmpty) {
+      await prefs.setBool('is_logged_in', true);
+      return true;
     }
+
+    throw Exception('Ingresa tu correo y/o contraseña');
   }
 }
 
@@ -216,13 +216,17 @@ class _LoginScreenWithTermsState extends State<LoginScreenWithTerms> {
     }
   }
 
+  bool _isValidEmail(String email) {
+    return RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email);
+  }
+
   Future<void> _handleLogin() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
 
     setState(() => _inlineLoginError = null);
 
-    if (email.isEmpty || password.isEmpty || !email.contains('@')) {
+    if (email.isEmpty || password.isEmpty || !_isValidEmail(email)) {
       setState(() {
         _inlineLoginError = 'Ingresa tu correo y/o contraseña';
       });
@@ -774,12 +778,12 @@ class _ScanListScreenState extends State<ScanListScreen> {
       'summary': s.summary,
       'createdAt': s.createdAt.toIso8601String(),
     }).toList();
-    await prefs.setString('persistent_scans_list_v3', jsonEncode(jsonList));
+    await prefs.setString('persistent_scans_list_v4', jsonEncode(jsonList));
   }
 
   Future<void> _initScans() async {
     final prefs = await SharedPreferences.getInstance();
-    final jsonStr = prefs.getString('persistent_scans_list_v3');
+    final jsonStr = prefs.getString('persistent_scans_list_v4');
 
     if (jsonStr != null) {
       try {
