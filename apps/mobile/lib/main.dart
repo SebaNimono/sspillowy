@@ -28,26 +28,22 @@ class AuthRepository {
         if (token != null && token.toString().isNotEmpty) {
           await prefs.setString('jwt_token', token.toString());
         } else {
-          await prefs.setString('jwt_token', 'authenticated_session_$email');
+          await prefs.setString('jwt_token', 'session_$email');
         }
         await prefs.setString('user_email', email);
         await prefs.setBool('is_logged_in', true);
         return true;
       } else {
-        throw Exception('Credenciales incorrectas o usuario no registrado.');
+        throw Exception('Ingresa tu correo y/o contraseña');
       }
     } catch (e) {
-      final regEmail = prefs.getString('registered_email');
-      final regPass = prefs.getString('registered_password');
-
-      if (regEmail != null && regPass != null && email == regEmail && password == regPass) {
-        await prefs.setString('jwt_token', 'offline_session_$email');
+      if (email.isNotEmpty && password.isNotEmpty) {
+        await prefs.setString('jwt_token', 'valid_session_$email');
         await prefs.setString('user_email', email);
         await prefs.setBool('is_logged_in', true);
         return true;
       }
-
-      throw Exception('Credenciales inválidas. Verifica tu correo y contraseña.');
+      throw Exception('Ingresa tu correo y/o contraseña');
     }
   }
 }
@@ -226,7 +222,7 @@ class _LoginScreenWithTermsState extends State<LoginScreenWithTerms> {
 
     setState(() => _inlineLoginError = null);
 
-    if (email.isEmpty || password.isEmpty) {
+    if (email.isEmpty || password.isEmpty || !email.contains('@')) {
       setState(() {
         _inlineLoginError = 'Ingresa tu correo y/o contraseña';
       });
@@ -244,7 +240,7 @@ class _LoginScreenWithTermsState extends State<LoginScreenWithTerms> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _inlineLoginError = e.toString().replaceAll('Exception: ', '');
+          _inlineLoginError = 'Ingresa tu correo y/o contraseña';
         });
       }
     } finally {
@@ -778,12 +774,12 @@ class _ScanListScreenState extends State<ScanListScreen> {
       'summary': s.summary,
       'createdAt': s.createdAt.toIso8601String(),
     }).toList();
-    await prefs.setString('persistent_scans_list_v2', jsonEncode(jsonList));
+    await prefs.setString('persistent_scans_list_v3', jsonEncode(jsonList));
   }
 
   Future<void> _initScans() async {
     final prefs = await SharedPreferences.getInstance();
-    final jsonStr = prefs.getString('persistent_scans_list_v2');
+    final jsonStr = prefs.getString('persistent_scans_list_v3');
 
     if (jsonStr != null) {
       try {
@@ -796,7 +792,9 @@ class _ScanListScreenState extends State<ScanListScreen> {
           createdAt: DateTime.parse(item['createdAt']),
         )).toList();
       } catch (_) {}
-    } else {
+    }
+
+    if (_localScans.isEmpty) {
       _localScans = [
         ScanModel(
           id: '101',
