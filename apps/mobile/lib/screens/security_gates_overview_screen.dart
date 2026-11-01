@@ -5,7 +5,7 @@ import '../services/overview_service.dart';
 class SecurityGatesOverviewScreen extends StatefulWidget {
   final OverviewService overviewService;
 
-  const SecurityGatesOverviewScreen({Key? key, required this.overviewService}) : super(key: key);
+  const SecurityGatesOverviewScreen({super.key, required this.overviewService});
 
   @override
   State<SecurityGatesOverviewScreen> createState() => _SecurityGatesOverviewScreenState();

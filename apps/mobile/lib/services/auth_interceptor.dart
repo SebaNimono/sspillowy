@@ -22,7 +22,7 @@ class AuthInterceptor extends Interceptor {
       await TokenStorage.clearToken();
 
       final context = navigatorKey.currentContext;
-      if (context != null) {
+      if (context != null && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Sesión expirada. Redirigiendo al login...'),

@@ -6,11 +6,11 @@ class BypassConfirmationDialog extends StatelessWidget {
   final Function(String comment) onConfirm;
 
   const BypassConfirmationDialog({
-    Key? key,
+    super.key,
     required this.action,
     required this.bypassId,
     required this.onConfirm,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

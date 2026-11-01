@@ -6,10 +6,10 @@ class BypassDetailActionsWidget extends StatelessWidget {
   final Function(String action, String comment) onDecisionSubmitted;
 
   const BypassDetailActionsWidget({
-    Key? key,
+    super.key,
     required this.bypassId,
     required this.onDecisionSubmitted,
-  }) : super(key: key);
+  });
 
   void _showDialog(BuildContext context, String action) {
     showDialog(

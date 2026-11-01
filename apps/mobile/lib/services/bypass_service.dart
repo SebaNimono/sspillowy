@@ -33,16 +33,24 @@ class BypassService {
       }
       return [];
     } catch (e) {
-      print('Error GET /bypasses: $e');
       return [];
     }
   }
 
-  Future<bool> decideBypass(String id, String action, {String? token, String? workspaceId, String? sessionId}) async {
+  Future<bool> decideBypass(
+    String id,
+    String action, {
+    String? reason,
+    String? token,
+    String? workspaceId,
+    String? sessionId,
+  }) async {
     try {
       final response = await dio.post(
         '/api/v1/security-gates/bypasses/$id/$action',
-        data: {'note': 'Procesado desde la app móvil'},
+        data: {
+          'note': reason ?? 'Procesado desde la app móvil',
+        },
         options: Options(
           headers: {
             if (token != null) 'Authorization': 'Bearer $token',
@@ -53,8 +61,17 @@ class BypassService {
       );
       return response.statusCode == 200 || response.statusCode == 201;
     } catch (e) {
-      print('Error POST /bypasses/$id/$action: $e');
       return false;
     }
+  }
+
+  /// Método llamado por BypassDetailScreen para aprobar
+  Future<bool> approveBypass(String id, {String? reason, String? token, String? workspaceId, String? sessionId}) async {
+    return decideBypass(id, 'approve', reason: reason, token: token, workspaceId: workspaceId, sessionId: sessionId);
+  }
+
+  /// Método llamado por BypassDetailScreen para rechazar
+  Future<bool> rejectBypass(String id, {String? reason, String? token, String? workspaceId, String? sessionId}) async {
+    return decideBypass(id, 'reject', reason: reason, token: token, workspaceId: workspaceId, sessionId: sessionId);
   }
 }

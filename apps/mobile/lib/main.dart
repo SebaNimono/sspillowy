@@ -6,8 +6,9 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'features/security_gate/presentation/screens/security_gate_bypasses_screen.dart';
 import 'services/api_client.dart';
-import 'features/scans/data/services/scan_service.dart';
 import 'features/scans/data/models/scan_model.dart';
+
+typedef StringMap = Map<String, String>;
 
 class AuthRepository {
   final ApiClient apiClient;
@@ -36,7 +37,6 @@ class AuthRepository {
       }
     } catch (_) {}
 
-    // Unicamente permite sesion si coincide con usuario guardado formalmente
     final savedEmail = prefs.getString('user_email');
     final savedToken = prefs.getString('jwt_token');
     if (savedEmail != null && savedEmail == email && savedToken != null && savedToken.isNotEmpty) {
@@ -44,7 +44,7 @@ class AuthRepository {
       return true;
     }
 
-    throw Exception('Ingresa tu correo y/o contraseña');
+    throw Exception('Usuario no registrado o contraseña incorrecta');
   }
 }
 
@@ -228,7 +228,7 @@ class _LoginScreenWithTermsState extends State<LoginScreenWithTerms> {
 
     if (email.isEmpty || password.isEmpty || !_isValidEmail(email)) {
       setState(() {
-        _inlineLoginError = 'Ingresa tu correo y/o contraseña';
+        _inlineLoginError = 'Usuario no registrado o contraseña incorrecta';
       });
       return;
     }
@@ -244,7 +244,7 @@ class _LoginScreenWithTermsState extends State<LoginScreenWithTerms> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _inlineLoginError = 'Ingresa tu correo y/o contraseña';
+          _inlineLoginError = 'Usuario no registrado o contraseña incorrecta';
         });
       }
     } finally {
@@ -347,6 +347,29 @@ class _LoginScreenWithTermsState extends State<LoginScreenWithTerms> {
                       ),
                     ),
                   ],
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text(
+                        '¿No tienes cuenta? ',
+                        style: TextStyle(color: Color(0xFF94A3B8)),
+                      ),
+                      InkWell(
+                        onTap: () => _openWebUrl('https://sspillowy.com/register'),
+                        child: const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 4.0, horizontal: 4.0),
+                          child: Text(
+                            'Regístrate',
+                            style: TextStyle(
+                              color: Color(0xFF38BDF8),
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 8),
                   Align(
                     alignment: Alignment.centerRight,
@@ -390,29 +413,6 @@ class _LoginScreenWithTermsState extends State<LoginScreenWithTerms> {
                             ),
                           ),
                   ),
-                  const SizedBox(height: 20),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Text(
-                        '¿No tienes cuenta? ',
-                        style: TextStyle(color: Color(0xFF94A3B8)),
-                      ),
-                      InkWell(
-                        onTap: () => _openWebUrl('https://sspillowy.com/register'),
-                        child: const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-                          child: Text(
-                            'Regístrate',
-                            style: TextStyle(
-                              color: Color(0xFF38BDF8),
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
                 ],
               ),
             ),
@@ -442,7 +442,7 @@ class MainNavigationWrapper extends StatefulWidget {
 class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
   int _currentIndex = 0;
   List<ScanModel> _currentActiveScans = [];
-  List<Map<String, String>> _globalAuditLogs = [];
+  List<StringMap> _globalAuditLogs = [];
 
   @override
   void initState() {
@@ -457,7 +457,7 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
       try {
         final List decoded = jsonDecode(savedLogsJson);
         setState(() {
-          _globalAuditLogs = decoded.map((e) => Map<String, String>.from(e)).toList();
+          _globalAuditLogs = decoded.map((e) => StringMap.from(e)).toList();
         });
       } catch (_) {}
     }
@@ -474,7 +474,7 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
     });
   }
 
-  void _addAuditLog(Map<String, String> log) {
+  void _addAuditLog(StringMap log) {
     setState(() {
       _globalAuditLogs.insert(0, log);
     });
@@ -560,7 +560,7 @@ class PillowChatScreen extends StatefulWidget {
 }
 
 class _PillowChatScreenState extends State<PillowChatScreen> {
-  final List<Map<String, String>> _messages = [
+  final _messages = [
     {
       'role': 'assistant',
       'text':
@@ -735,7 +735,7 @@ class ScanListScreen extends StatefulWidget {
   final VoidCallback onLogout;
   final bool isOnDuty;
   final ValueChanged<List<ScanModel>> onScansUpdated;
-  final ValueChanged<Map<String, String>> onAuditAdded;
+  final ValueChanged<StringMap> onAuditAdded;
 
   const ScanListScreen({
     super.key,
@@ -1329,7 +1329,7 @@ class _ScanListScreenState extends State<ScanListScreen> {
 }
 
 class AuditHistoryScreen extends StatefulWidget {
-  final List<Map<String, String>> auditLogs;
+  final List<StringMap> auditLogs;
 
   const AuditHistoryScreen({super.key, required this.auditLogs});
 
@@ -1338,7 +1338,7 @@ class AuditHistoryScreen extends StatefulWidget {
 }
 
 class _AuditHistoryScreenState extends State<AuditHistoryScreen> {
-  void _showLogDetail(BuildContext context, Map<String, String> log) {
+  void _showLogDetail(BuildContext context, StringMap log) {
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF161B22),

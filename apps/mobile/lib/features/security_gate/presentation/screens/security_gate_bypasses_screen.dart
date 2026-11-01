@@ -3,7 +3,7 @@ import 'package:dio/dio.dart';
 import '../../../../services/bypass_service.dart';
 
 class SecurityGateBypassesScreen extends StatefulWidget {
-  const SecurityGateBypassesScreen({Key? key}) : super(key: key);
+  const SecurityGateBypassesScreen({super.key});
 
   @override
   State<SecurityGateBypassesScreen> createState() => _SecurityGateBypassesScreenState();
