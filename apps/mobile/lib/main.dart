@@ -1,5 +1,6 @@
 ﻿import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -49,7 +50,7 @@ class AuthRepository {
 }
 
 void main() {
- WidgetsFlutterBinding.ensureInitialized();
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const SSPillowyApp());
 }
 
@@ -794,6 +795,13 @@ class _ScanListScreenState extends State<ScanListScreen> {
 
     try {
       final response = await _apiClient.get('/scans');
+      if (kDebugMode) {
+        debugPrint('--- RESPUESTA BACKEND /scans ---');
+        debugPrint('StatusCode: ${response.statusCode}');
+        debugPrint('Data: ${response.data}');
+        debugPrint('--------------------------------');
+      }
+
       if (response.statusCode == 200 && response.data != null) {
         List rawData = [];
 
@@ -836,7 +844,13 @@ class _ScanListScreenState extends State<ScanListScreen> {
           return;
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('--- ERROR AL CONSULTAR BACKEND /scans ---');
+        debugPrint(e.toString());
+        debugPrint('----------------------------------------');
+      }
+    }
 
     final prefs = await SharedPreferences.getInstance();
     final jsonStr = prefs.getString('persistent_scans_list_v4');
