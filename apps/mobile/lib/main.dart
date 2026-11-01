@@ -49,7 +49,7 @@ class AuthRepository {
 }
 
 void main() {
-  WidgetsFlutterBinding.ensureInitialized();
+ WidgetsFlutterBinding.ensureInitialized();
   runApp(const SSPillowyApp());
 }
 
@@ -228,7 +228,7 @@ class _LoginScreenWithTermsState extends State<LoginScreenWithTerms> {
 
     if (email.isEmpty || password.isEmpty || !_isValidEmail(email)) {
       setState(() {
-        _inlineLoginError = 'Usuario no registrado o contraseña incorrecta';
+        _inlineLoginError = 'Ingresa tu correo y/o contraseña';
       });
       return;
     }
@@ -347,21 +347,41 @@ class _LoginScreenWithTermsState extends State<LoginScreenWithTerms> {
                       ),
                     ),
                   ],
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        '¿No tienes cuenta? ',
-                        style: TextStyle(color: Color(0xFF94A3B8)),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text(
+                            '¿No tienes cuenta? ',
+                            style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+                          ),
+                          InkWell(
+                            onTap: () => _openWebUrl('https://sspillowy.com/register'),
+                            child: const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 4.0),
+                              child: Text(
+                                'Regístrate',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Color(0xFF38BDF8),
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       InkWell(
-                        onTap: () => _openWebUrl('https://sspillowy.com/register'),
+                        onTap: () => _openWebUrl('https://sspillowy.com/forgot-password'),
                         child: const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 4.0, horizontal: 4.0),
+                          padding: EdgeInsets.symmetric(vertical: 4.0),
                           child: Text(
-                            'Regístrate',
+                            '¿Olvidaste tu contraseña?',
                             style: TextStyle(
+                              fontSize: 13,
                               color: Color(0xFF38BDF8),
                               fontWeight: FontWeight.bold,
                             ),
@@ -369,20 +389,6 @@ class _LoginScreenWithTermsState extends State<LoginScreenWithTerms> {
                         ),
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 8),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: InkWell(
-                      onTap: () => _openWebUrl('https://sspillowy.com/forgot-password'),
-                      child: const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-                        child: Text(
-                          '¿Olvidaste tu contraseña?',
-                          style: TextStyle(fontSize: 12, color: Color(0xFF38BDF8), fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ),
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton(
@@ -752,10 +758,12 @@ class ScanListScreen extends StatefulWidget {
 class _ScanListScreenState extends State<ScanListScreen> {
   List<ScanModel> _localScans = [];
   bool _sortAscending = true;
+  bool _isLoading = false;
 
   String _selectedFilter = 'Todos';
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
+  final ApiClient _apiClient = ApiClient();
 
   @override
   void initState() {
@@ -782,6 +790,54 @@ class _ScanListScreenState extends State<ScanListScreen> {
   }
 
   Future<void> _initScans() async {
+    setState(() => _isLoading = true);
+
+    try {
+      final response = await _apiClient.get('/scans');
+      if (response.statusCode == 200 && response.data != null) {
+        List rawData = [];
+
+        if (response.data is List) {
+          rawData = response.data;
+        } else if (response.data is Map) {
+          rawData = response.data['scans'] ??
+                    response.data['repositories'] ??
+                    response.data['data'] ??
+                    response.data['repos'] ?? [];
+        }
+
+        if (rawData.isNotEmpty) {
+          _localScans = rawData.map((item) {
+            final repoTitle = item['title'] ??
+                              item['title_name'] ??
+                              item['repo_name'] ??
+                              item['repository'] ??
+                              item['name'] ??
+                              'vulnerable node';
+
+            final rawStatus = item['status'] ?? item['state'] ?? 'OPEN';
+            final summaryText = item['summary'] ??
+                                item['description'] ??
+                                'Análisis completado: ${item['open_findings'] ?? item['hallazgos_abiertos'] ?? '21'} hallazgos abiertos.';
+
+            return ScanModel(
+              id: (item['id'] ?? item['_id'] ?? DateTime.now().millisecondsSinceEpoch).toString(),
+              title: repoTitle.toString(),
+              status: rawStatus.toString().toUpperCase(),
+              summary: summaryText.toString(),
+              createdAt: DateTime.tryParse(item['createdAt'] ?? item['created_at'] ?? '') ?? DateTime.now(),
+            );
+          }).toList();
+
+          await _saveScansToPrefs();
+          _applySorting();
+          widget.onScansUpdated(_localScans);
+          if (mounted) setState(() => _isLoading = false);
+          return;
+        }
+      }
+    } catch (_) {}
+
     final prefs = await SharedPreferences.getInstance();
     final jsonStr = prefs.getString('persistent_scans_list_v4');
 
@@ -789,31 +845,22 @@ class _ScanListScreenState extends State<ScanListScreen> {
       try {
         final List decoded = jsonDecode(jsonStr);
         _localScans = decoded.map((item) => ScanModel(
-          id: item['id'] ?? '101',
-          title: item['title'] ?? 'SebaNimono/sspillowy',
+          id: item['id'] ?? '',
+          title: item['title'] ?? '',
           status: item['status'] ?? 'OPEN',
-          summary: item['summary'] ?? 'Análisis SAST completado.',
+          summary: item['summary'] ?? '',
           createdAt: DateTime.parse(item['createdAt']),
         )).toList();
-      } catch (_) {}
-    }
-
-    if (_localScans.isEmpty) {
-      _localScans = [
-        ScanModel(
-          id: '101',
-          title: 'SebaNimono/sspillowy',
-          status: 'OPEN',
-          summary: 'Análisis SAST completado en la rama "main". Se identificaron hallazgos de seguridad.',
-          createdAt: DateTime.now(),
-        )
-      ];
-      await _saveScansToPrefs();
+      } catch (_) {
+        _localScans = [];
+      }
+    } else {
+      _localScans = [];
     }
 
     _applySorting();
     widget.onScansUpdated(_localScans);
-    if (mounted) setState(() {});
+    if (mounted) setState(() => _isLoading = false);
   }
 
   void _applySorting() {
@@ -1246,81 +1293,83 @@ class _ScanListScreenState extends State<ScanListScreen> {
           ),
           const SizedBox(height: 8),
           Expanded(
-            child: scans.isEmpty
-                ? const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(24.0),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.inbox_outlined,
-                              size: 80, color: Colors.grey),
-                          SizedBox(height: 16),
-                          Text(
-                            'Sin hallazgos pendientes',
-                            style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white),
-                          ),
-                          SizedBox(height: 8),
-                          Text(
-                            'Tus repositorios vinculados se sincronizarán aquí automáticamente.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: Colors.grey, fontSize: 13),
-                          ),
-                        ],
-                      ),
-                    ),
-                  )
-                : ListView.builder(
-                    itemCount: scans.length,
-                    padding: const EdgeInsets.all(12),
-                    itemBuilder: (context, index) {
-                      final scan = scans[index];
-                      return Card(
-                        elevation: 2,
-                        color: const Color(0xFF161B22),
-                        margin: const EdgeInsets.only(bottom: 12),
-                        child: ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: scan.status == 'EXEMPTED'
-                                ? Colors.amber.shade800
-                                : scan.status == 'BLOCKED'
-                                    ? Colors.red.shade800
-                                    : Colors.green.shade700,
-                            child: Icon(
-                              scan.status == 'EXEMPTED'
-                                  ? Icons.shield_outlined
-                                  : scan.status == 'BLOCKED'
-                                      ? Icons.block
-                                      : Icons.security,
-                              color: Colors.white,
-                            ),
-                          ),
-                          title: Text(scan.title ?? 'Repositorio #${scan.id}',
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white)),
-                          subtitle: Text(
-                            'Estado: ${scan.status} - Fecha: ${_formatDate(scan.createdAt)}',
-                            style: const TextStyle(color: Colors.grey, fontSize: 12),
-                          ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator(color: Color(0xFF38BDF8)))
+                : scans.isEmpty
+                    ? const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(24.0),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              IconButton(
-                                icon: const Icon(Icons.delete_outline, color: Colors.grey, size: 20),
-                                onPressed: () => _deleteSingleScan(scan),
+                              Icon(Icons.inbox_outlined,
+                                  size: 80, color: Colors.grey),
+                              SizedBox(height: 16),
+                              Text(
+                                'Sin hallazgos pendientes',
+                                style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white),
                               ),
-                              const Icon(Icons.chevron_right, color: Colors.grey),
+                              SizedBox(height: 8),
+                              Text(
+                                'Tus repositorios vinculados se sincronizarán aquí automáticamente.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: Colors.grey, fontSize: 13),
+                              ),
                             ],
                           ),
-                          onTap: () => _showDetailModal(context, scan),
                         ),
-                      );
-                    },
-                  ),
+                      )
+                    : ListView.builder(
+                        itemCount: scans.length,
+                        padding: const EdgeInsets.all(12),
+                        itemBuilder: (context, index) {
+                          final scan = scans[index];
+                          return Card(
+                            elevation: 2,
+                            color: const Color(0xFF161B22),
+                            margin: const EdgeInsets.only(bottom: 12),
+                            child: ListTile(
+                              leading: CircleAvatar(
+                                backgroundColor: scan.status == 'EXEMPTED'
+                                    ? Colors.amber.shade800
+                                    : scan.status == 'BLOCKED'
+                                        ? Colors.red.shade800
+                                        : Colors.green.shade700,
+                                child: Icon(
+                                  scan.status == 'EXEMPTED'
+                                      ? Icons.shield_outlined
+                                      : scan.status == 'BLOCKED'
+                                          ? Icons.block
+                                          : Icons.security,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              title: Text(scan.title ?? 'Repositorio #${scan.id}',
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white)),
+                              subtitle: Text(
+                                'Estado: ${scan.status} - Fecha: ${_formatDate(scan.createdAt)}',
+                                style: const TextStyle(color: Colors.grey, fontSize: 12),
+                              ),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.delete_outline, color: Colors.grey, size: 20),
+                                    onPressed: () => _deleteSingleScan(scan),
+                                  ),
+                                  const Icon(Icons.chevron_right, color: Colors.grey),
+                                ],
+                              ),
+                              onTap: () => _showDetailModal(context, scan),
+                            ),
+                          );
+                        },
+                      ),
           ),
         ],
       ),
