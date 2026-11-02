@@ -19,24 +19,22 @@ class AuthRepository {
   Future<bool> login(String email, String password) async {
     final prefs = await SharedPreferences.getInstance();
 
-    try {
-      final response = await apiClient.post('/auth/login', data: {
-        'email': email,
-        'password': password,
-      });
+    final response = await apiClient.post('/auth/login', data: {
+      'email': email,
+      'password': password,
+    });
 
-      if (response.statusCode == 200 && response.data != null) {
-        final token = response.data['token'] ?? response.data['access_token'];
-        if (token != null && token.toString().isNotEmpty) {
-          await prefs.setString('jwt_token', token.toString());
-        } else {
-          await prefs.setString('jwt_token', 'token_$email');
-        }
-        await prefs.setString('user_email', email);
-        await prefs.setBool('is_logged_in', true);
-        return true;
+    if (response.statusCode == 200 && response.data != null) {
+      final token = response.data['token'] ?? response.data['access_token'];
+      if (token != null && token.toString().isNotEmpty) {
+        await prefs.setString('jwt_token', token.toString());
+      } else {
+        await prefs.setString('jwt_token', 'token_$email');
       }
-    } catch (_) {}
+      await prefs.setString('user_email', email);
+      await prefs.setBool('is_logged_in', true);
+      return true;
+    }
 
     final savedEmail = prefs.getString('user_email');
     final savedToken = prefs.getString('jwt_token');
