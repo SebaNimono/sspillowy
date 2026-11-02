@@ -348,39 +348,38 @@ class _LoginScreenWithTermsState extends State<LoginScreenWithTerms> {
                       ),
                     ),
                   ],
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: InkWell(
+                      onTap: () => _openWebUrl('https://sspillowy.com/forgot-password'),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 4.0),
+                        child: Text(
+                          '¿Olvidaste tu contraseña?',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Color(0xFF38BDF8),
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 8),
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text(
-                            '¿No tienes cuenta? ',
-                            style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
-                          ),
-                          InkWell(
-                            onTap: () => _openWebUrl('https://sspillowy.com/register'),
-                            child: const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 4.0),
-                              child: Text(
-                                'Regístrate',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: Color(0xFF38BDF8),
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
+                      const Text(
+                        '¿No tienes cuenta? ',
+                        style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
                       ),
                       InkWell(
-                        onTap: () => _openWebUrl('https://sspillowy.com/forgot-password'),
+                        onTap: () => _openWebUrl('https://sspillowy.com/register'),
                         child: const Padding(
                           padding: EdgeInsets.symmetric(vertical: 4.0),
                           child: Text(
-                            '¿Olvidaste tu contraseña?',
+                            'Regístrate',
                             style: TextStyle(
                               fontSize: 13,
                               color: Color(0xFF38BDF8),
