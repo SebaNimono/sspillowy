@@ -1,128 +1,65 @@
-﻿import 'package:flutter/material.dart';
-import 'package:dio/dio.dart';
-import '../../../../services/bypass_service.dart';
+import 'package:flutter/material.dart';
 
-class SecurityGateBypassesScreen extends StatefulWidget {
+class SecurityGateBypassesScreen extends StatelessWidget {
   const SecurityGateBypassesScreen({super.key});
-
-  @override
-  State<SecurityGateBypassesScreen> createState() => _SecurityGateBypassesScreenState();
-}
-
-class _SecurityGateBypassesScreenState extends State<SecurityGateBypassesScreen> {
-  late BypassService _bypassService;
-  List<dynamic> _bypasses = [];
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _bypassService = BypassService(Dio());
-    _loadBypasses();
-  }
-
-  Future<void> _loadBypasses() async {
-    setState(() => _isLoading = true);
-    final data = await _bypassService.getBypasses();
-    setState(() {
-      _bypasses = List.from(data);
-      _isLoading = false;
-    });
-  }
-
-  Future<void> _handleDecision(int index, String action) async {
-    final item = _bypasses[index];
-    final bypassId = (item['id'] ?? item['bypass_id'] ?? '').toString();
-
-    if (bypassId.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error: ID de excepción no encontrado')),
-      );
-      return;
-    }
-
-    // Llamada con parámetros posicionales
-    final success = await _bypassService.decideBypass(bypassId, action);
-
-    if (success || true) {
-      setState(() {
-        _bypasses.removeAt(index);
-      });
-
-      if (mounted) {
-        final label = action == 'approve' ? 'aprobada' : 'rechazada';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Solicitud $label con éxito'),
-            backgroundColor: action == 'approve' ? Colors.green[700] : Colors.red[700],
-          ),
-        );
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Excepciones Security Gate'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadBypasses,
-          ),
-        ],
+        title: const Text('Bypasses & Excepciones'),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _bypasses.isEmpty
-              ? const Center(
-                  child: Text(
-                    'No hay excepciones pendientes.',
-                    style: TextStyle(fontSize: 16, color: Colors.grey),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Gobernanza de Security Gates',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Aquí se resumen las excepciones autorizadas por el Tech Lead y los bloqueos permanentes de despliegue en el pipeline de CI/CD.',
+              style: TextStyle(color: Colors.grey, fontSize: 13),
+            ),
+            const SizedBox(height: 20),
+            Expanded(
+              child: ListView(
+                children: const [
+                  Card(
+                    color: Color(0xFF161B22),
+                    child: ListTile(
+                      leading: Icon(Icons.shield_outlined, color: Colors.amber),
+                      title: Text('Excepciones Temporizadas (HITL)',
+                          style: TextStyle(color: Colors.white)),
+                      subtitle: Text(
+                          'Permiten la continuidad de los pipelines durante 24h a 168h.',
+                          style: TextStyle(color: Colors.grey, fontSize: 12)),
+                    ),
                   ),
-                )
-              : ListView.builder(
-                  itemCount: _bypasses.length,
-                  padding: const EdgeInsets.all(16),
-                  itemBuilder: (context, index) {
-                    final item = _bypasses[index];
-                    return Card(
-                      elevation: 2,
-                      margin: const EdgeInsets.only(bottom: 12),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              item['reason'] ?? item['scope'] ?? 'Todo el espacio',
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                            ),
-                            const SizedBox(height: 8),
-                            Text('Usuario: ${item['user_email'] ?? item['created_by'] ?? 'N/A'}'),
-                            Text('Fecha: ${item['created_at'] ?? 'Reciente'}'),
-                            const SizedBox(height: 12),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.end,
-                              children: [
-                                OutlinedButton(
-                                  onPressed: () => _handleDecision(index, 'reject'),
-                                  child: const Text('Rechazar'),
-                                ),
-                                const SizedBox(width: 8),
-                                ElevatedButton(
-                                  onPressed: () => _handleDecision(index, 'approve'),
-                                  child: const Text('Aprobar'),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
+                  SizedBox(height: 8),
+                  Card(
+                    color: Color(0xFF161B22),
+                    child: ListTile(
+                      leading: Icon(Icons.block, color: Colors.redAccent),
+                      title: Text('Bloqueos de Despliegue',
+                          style: TextStyle(color: Colors.white)),
+                      subtitle: Text(
+                          'Detienen el pase a producción ante fallos o fugas críticas.',
+                          style: TextStyle(color: Colors.grey, fontSize: 12)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

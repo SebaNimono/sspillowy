@@ -38,7 +38,10 @@ class AuthRepository {
 
     final savedEmail = prefs.getString('user_email');
     final savedToken = prefs.getString('jwt_token');
-    if (savedEmail != null && savedEmail == email && savedToken != null && savedToken.isNotEmpty) {
+    if (savedEmail != null &&
+        savedEmail == email &&
+        savedToken != null &&
+        savedToken.isNotEmpty) {
       await prefs.setBool('is_logged_in', true);
       return true;
     }
@@ -103,6 +106,7 @@ class _SSPillowyAppState extends State<SSPillowyApp> {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('jwt_token');
+      await prefs.remove('user_email');
       await prefs.setBool('is_logged_in', false);
     } catch (_) {}
     if (!mounted) return;
@@ -254,10 +258,12 @@ class _LoginScreenWithTermsState extends State<LoginScreenWithTerms> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFF0D1117),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24.0),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 420),
               child: Column(
@@ -267,42 +273,53 @@ class _LoginScreenWithTermsState extends State<LoginScreenWithTerms> {
                   Center(
                     child: Image.asset(
                       'assets/logo/logo_2.png',
-                      height: 80,
+                      height: 100,
                       errorBuilder: (_, __, ___) => const Icon(
                         Icons.shield_outlined,
-                        size: 70,
+                        size: 80,
                         color: Color(0xFF38BDF8),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
                   const Text(
                     'SSPILLOWY',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      fontSize: 26,
+                      fontSize: 30,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
                       letterSpacing: 1.2,
                     ),
                   ),
+                  const SizedBox(height: 4),
                   const Text(
                     'Inicia sesión en tu cuenta',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: Color(0xFF94A3B8)),
+                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
                   ),
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 32),
                   TextField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: const InputDecoration(
+                    style: const TextStyle(color: Colors.white, fontSize: 15),
+                    decoration: InputDecoration(
                       labelText: 'Correo Electrónico',
-                      hintText: 'ej: usuario@correo.com',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.email, color: Color(0xFF30363D)),
+                      labelStyle:
+                          const TextStyle(color: Colors.white, fontSize: 14),
+                      prefixIcon:
+                          const Icon(Icons.email_outlined, color: Colors.grey),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 16),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(6),
+                        borderSide:
+                            const BorderSide(color: Colors.white, width: 1),
+                      ),
                       focusedBorder: OutlineInputBorder(
-                        borderSide: BorderSide(color: Color(0xFF30363D), width: 1.5),
+                        borderRadius: BorderRadius.circular(6),
+                        borderSide: const BorderSide(
+                            color: Color(0xFF38BDF8), width: 1.5),
                       ),
                     ),
                   ),
@@ -310,28 +327,39 @@ class _LoginScreenWithTermsState extends State<LoginScreenWithTerms> {
                   TextField(
                     controller: _passwordController,
                     obscureText: _obscurePassword,
-                    style: const TextStyle(color: Colors.white),
+                    style: const TextStyle(color: Colors.white, fontSize: 15),
                     decoration: InputDecoration(
                       labelText: 'Contraseña',
-                      border: const OutlineInputBorder(),
-                      focusedBorder: const OutlineInputBorder(
-                        borderSide: BorderSide(color: Color(0xFF30363D), width: 1.5),
-                      ),
-                      prefixIcon: const Icon(Icons.lock, color: Color(0xFF30363D)),
+                      labelStyle:
+                          const TextStyle(color: Colors.white, fontSize: 14),
+                      prefixIcon:
+                          const Icon(Icons.lock_outline, color: Colors.grey),
                       suffixIcon: IconButton(
                         icon: Icon(
                           _obscurePassword
-                              ? Icons.visibility_off
-                              : Icons.visibility,
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
                           color: Colors.grey,
                         ),
-                        onPressed: () =>
-                            setState(() => _obscurePassword = !_obscurePassword),
+                        onPressed: () => setState(
+                            () => _obscurePassword = !_obscurePassword),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 16),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(6),
+                        borderSide:
+                            const BorderSide(color: Colors.white, width: 1),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(6),
+                        borderSide: const BorderSide(
+                            color: Color(0xFF38BDF8), width: 1.5),
                       ),
                     ),
                   ),
                   if (_inlineLoginError != null) ...[
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 12),
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
@@ -341,60 +369,64 @@ class _LoginScreenWithTermsState extends State<LoginScreenWithTerms> {
                       ),
                       child: Text(
                         _inlineLoginError!,
-                        style: const TextStyle(color: Colors.redAccent, fontSize: 13),
+                        style: const TextStyle(
+                            color: Colors.redAccent, fontSize: 13),
                         textAlign: TextAlign.center,
                       ),
                     ),
                   ],
-                  const SizedBox(height: 12),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: InkWell(
-                      onTap: () => _openWebUrl('https://sspillowy.com/forgot-password'),
-                      child: const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 4.0),
-                        child: Text(
-                          '¿Olvidaste tu contraseña?',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Color(0xFF38BDF8),
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 16),
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        '¿No tienes cuenta? ',
-                        style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
-                      ),
                       InkWell(
-                        onTap: () => _openWebUrl('https://sspillowy.com/register'),
+                        onTap: () => _openWebUrl(
+                            'https://sspillowy.com/forgot-password'),
                         child: const Padding(
                           padding: EdgeInsets.symmetric(vertical: 4.0),
                           child: Text(
-                            'Regístrate',
+                            '¿Olvidaste tu contraseña?',
                             style: TextStyle(
-                              fontSize: 13,
+                              fontSize: 12,
                               color: Color(0xFF38BDF8),
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                         ),
                       ),
+                      Row(
+                        children: [
+                          const Text(
+                            '¿No tienes cuenta? ',
+                            style: TextStyle(
+                                fontSize: 12, color: Color(0xFF94A3B8)),
+                          ),
+                          InkWell(
+                            onTap: () =>
+                                _openWebUrl('https://sspillowy.com/register'),
+                            child: const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 4.0),
+                              child: Text(
+                                'Regístrate',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF38BDF8),
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 24),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF21262D),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(6),
                         side: const BorderSide(color: Color(0xFF30363D)),
                       ),
                     ),
@@ -469,7 +501,8 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
 
   Future<void> _savePersistentAuditLogs() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('persistent_audit_logs', jsonEncode(_globalAuditLogs));
+    await prefs.setString(
+        'persistent_audit_logs', jsonEncode(_globalAuditLogs));
   }
 
   void _updateActiveScans(List<ScanModel> scans) {
@@ -516,7 +549,10 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
           indicatorColor: const Color(0xFF0284C7).withValues(alpha: 0.3),
           labelTextStyle: WidgetStateProperty.resolveWith((states) {
             if (states.contains(WidgetState.selected)) {
-              return const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12);
+              return const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12);
             }
             return const TextStyle(color: Colors.grey, fontSize: 12);
           }),
@@ -533,12 +569,10 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
           onDestinationSelected: (index) =>
               setState(() => _currentIndex = index),
           destinations: const [
-            NavigationDestination(
-                icon: Icon(Icons.security), label: 'Bandeja'),
+            NavigationDestination(icon: Icon(Icons.security), label: 'Bandeja'),
             NavigationDestination(
                 icon: Icon(Icons.smart_toy_outlined), label: 'Pillow IA'),
-            NavigationDestination(
-                icon: Icon(Icons.gavel), label: 'Bypasses'),
+            NavigationDestination(icon: Icon(Icons.gavel), label: 'Bypasses'),
             NavigationDestination(
                 icon: Icon(Icons.history), label: 'Historial'),
             NavigationDestination(icon: Icon(Icons.person), label: 'Perfil'),
@@ -564,7 +598,8 @@ class PillowChatScreen extends StatefulWidget {
 }
 
 class _PillowChatScreenState extends State<PillowChatScreen> {
-  final _messages = [
+  // DECLARACIÓN CORREGIDA CON TIPO COMPLETO REASIGNABLE
+  List<StringMap> _messages = [
     {
       'role': 'assistant',
       'text':
@@ -577,10 +612,51 @@ class _PillowChatScreenState extends State<PillowChatScreen> {
   final ApiClient _apiClient = ApiClient();
 
   @override
+  void initState() {
+    super.initState();
+    _loadChatHistory();
+  }
+
+  @override
   void dispose() {
     _chatController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadChatHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedHistoryJson = prefs.getString('persistent_chat_history');
+    if (savedHistoryJson != null && savedHistoryJson.isNotEmpty) {
+      try {
+        final dynamic decoded = jsonDecode(savedHistoryJson);
+        if (decoded is List) {
+          setState(() {
+            _messages =
+                decoded.map((e) => Map<String, String>.from(e as Map)).toList();
+          });
+        }
+      } catch (_) {}
+    }
+  }
+
+  Future<void> _saveChatHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('persistent_chat_history', jsonEncode(_messages));
+  }
+
+  Future<void> _clearChatHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('persistent_chat_history');
+    setState(() {
+      _messages = [
+        {
+          'role': 'assistant',
+          'text':
+              '¡Hola! Soy tu asistente de seguridad Pillow IA. ¿En qué te puedo ayudar sobre los hallazgos actuales de tus repositorios?'
+        }
+      ];
+    });
   }
 
   void _scrollToBottom() {
@@ -595,33 +671,6 @@ class _PillowChatScreenState extends State<PillowChatScreen> {
     });
   }
 
-  String _generateDynamicAIResponse(String prompt) {
-    final lower = prompt.toLowerCase().trim();
-    final count = widget.currentScans.length;
-
-    if (lower == 'hola' || lower.contains('buenos dias') || lower.contains('buenas')) {
-      return '¡Hola! Estoy listo para asistirte con el análisis de tus vulnerabilidades. Actualmente tienes $count repositorio(s) vinculado(s). ¿Qué deseas revisar?';
-    }
-
-    if (lower.contains('ayuda') || lower.contains('puedes ayudar') || lower.contains('que haces')) {
-      return 'Te puedo ayudar a resumir los hallazgos SAST, evaluar bloqueos en pases a producción, explicar vulnerabilidades CWE o dar sugerencias sobre excepciones temporizadas.';
-    }
-
-    if (lower.contains('resumen') || lower.contains('hallazgos') || lower.contains('estado') || lower.contains('repo')) {
-      if (count == 0) {
-        return 'Tu bandeja está vacía. No hay hallazgos ni vulnerabilidades pendientes registradas en este momento.';
-      }
-      final names = widget.currentScans.map((s) => s.title ?? 'Repo').join(', ');
-      return 'Sincronización activa: $count repositorio(s) [$names]. Puedes seleccionar cualquiera en la pestaña de Bandeja para aplicar excepciones o bloqueos.';
-    }
-
-    if (lower.contains('bypass') || lower.contains('bloqueo') || lower.contains('excepcion')) {
-      return 'Las decisiones HITL tomadas desde la Bandeja se auditan inmediatamente en la pestaña de Historial con su respectiva vigencia.';
-    }
-
-    return 'Entendido. Estoy monitoreando tus $count repositorio(s) sincronizado(s). Si necesitas detalles sobre algún fallo específico o CWE, solo indícamelo.';
-  }
-
   Future<void> _sendMessageToAI(String prompt) async {
     final cleanPrompt = prompt.trim();
     if (cleanPrompt.isEmpty) return;
@@ -630,42 +679,101 @@ class _PillowChatScreenState extends State<PillowChatScreen> {
       _messages.add({'role': 'user', 'text': cleanPrompt});
       _isThinking = true;
     });
+    await _saveChatHistory();
     _chatController.clear();
     _scrollToBottom();
 
+    String? serverReply;
+
     try {
-      final response = await _apiClient.post('/ai/chat', data: {
-        'prompt': cleanPrompt,
-        'on_duty_status': widget.isOnDuty,
-        'scans_count': widget.currentScans.length,
-      });
+      final prefs = await SharedPreferences.getInstance();
+      final userEmail = prefs.getString('user_email') ?? '';
 
-      String aiResponse = "";
+      final response = await _apiClient.post(
+        '/pillow/chat',
+        data: {
+          'message': cleanPrompt,
+          'user_key': userEmail,
+        },
+      );
+
+      if (kDebugMode) {
+        debugPrint('--- PILLOW CHAT RESPUESTA BACKEND ---');
+        debugPrint('Status: ${response.statusCode}');
+        debugPrint('Data: ${response.data}');
+      }
+
       if (response.statusCode == 200 && response.data != null) {
-        aiResponse = (response.data['reply'] ?? response.data['message'] ?? "").toString();
+        if (response.data is Map) {
+          serverReply = (response.data['reply'] ??
+                  response.data['content'] ??
+                  response.data['message'] ??
+                  response.data['response'] ??
+                  response.data['answer'] ??
+                  response.data['result'])
+              ?.toString();
+        } else if (response.data is String) {
+          serverReply = response.data.toString();
+        }
       }
-
-      if (aiResponse.isEmpty) {
-        aiResponse = _generateDynamicAIResponse(cleanPrompt);
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('--- PILLOW CHAT ERROR API ---: $e');
       }
-
-      if (mounted) {
-        setState(() {
-          _messages.add({'role': 'assistant', 'text': aiResponse});
-        });
-        _scrollToBottom();
-      }
-    } catch (_) {
-      final fallbackMessage = _generateDynamicAIResponse(cleanPrompt);
-      if (mounted) {
-        setState(() {
-          _messages.add({'role': 'assistant', 'text': fallbackMessage});
-        });
-        _scrollToBottom();
-      }
-    } finally {
-      if (mounted) setState(() => _isThinking = false);
     }
+
+    if (serverReply == null || serverReply.trim().isEmpty) {
+      serverReply = _generateContextualAIResponse(cleanPrompt);
+    }
+
+    if (mounted) {
+      setState(() {
+        _messages.add({'role': 'assistant', 'text': serverReply!});
+      });
+      await _saveChatHistory();
+      _scrollToBottom();
+      setState(() => _isThinking = false);
+    }
+  }
+
+  String _generateContextualAIResponse(String prompt) {
+    final lower = prompt.toLowerCase();
+
+    if (lower.contains('sql') || lower.contains('inyec')) {
+      if (lower.contains('más') ||
+          lower.contains('mas') ||
+          lower.contains('detalle')) {
+        return '''Para profundizar en SQL Injection en Node.js:
+
+1. **Sanitización manual no recomendada**: No uses `replace()` ni expresiones regulares para limpiar entradas.
+2. **Parametrización con pg / mysql2**:
+   `db.query("SELECT * FROM users WHERE id = \$1", [userId])`
+3. **Uso de ORM**: Prisma o TypeORM escapan automáticamente los valores recibidos.
+4. **Principio de menor privilegio**: Asegúrate de que el usuario de la BD no tenga permisos de SUPERUSER o DROP TABLE.''';
+      }
+      return 'Para resolver una vulnerabilidad de inyección SQL en Node.js, utiliza consultas preparadas (parameterized queries) u ORMs como Prisma/Sequelize en lugar de concatenar cadenas directamente en las queries SQL.';
+    }
+
+    if (lower.contains('hallazgo') ||
+        lower.contains('repositorio') ||
+        lower.contains('cuanto') ||
+        lower.contains('bandeja')) {
+      return 'Actualmente dispones de ${widget.currentScans.length} hallazgo(s) registrado(s) en tu bandeja de monitoreo. Te sugiero triajar de inmediato los marcados con estado CRITICAL.';
+    }
+
+    if (lower.contains('guardia') ||
+        lower.contains('duty') ||
+        lower.contains('estado')) {
+      return 'Tu estado de guardia actual es: ${widget.isOnDuty ? "ACTIVO (On-Duty)" : "INACTIVO (Off-Duty)"}. ${widget.isOnDuty ? "Tienes permisos completos para aprobar excepciones y gestionar bloqueos." : "Estás en modo solo lectura."}';
+    }
+
+    if (lower.contains('hola') ||
+        lower.contains('buenas') ||
+        lower.contains('saludos')) {
+      return '¡Hola! Estoy supervisando la seguridad de tus proyectos. ¿En qué aspecto o vulnerabilidad específica deseas que profundicemos?';
+    }
+
+    return 'Entendido. He procesado tu consulta sobre "$prompt". Como asistente agéntico de Pillow, continúo monitoreando el pipeline de despliegue y las reglas de seguridad.';
   }
 
   @override
@@ -673,6 +781,40 @@ class _PillowChatScreenState extends State<PillowChatScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Asistente Pillow IA'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add_comment_outlined),
+            tooltip: 'Nuevo Chat / Limpiar Historial',
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  backgroundColor: const Color(0xFF161B22),
+                  title: const Text('Iniciar Nuevo Chat',
+                      style: TextStyle(color: Colors.white)),
+                  content: const Text(
+                      '¿Deseas reiniciar la conversación y limpiar el historial guardado?'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancelar'),
+                    ),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0284C7)),
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _clearChatHistory();
+                      },
+                      child: const Text('Limpiar Historial',
+                          style: TextStyle(color: Colors.white)),
+                    ),
+                  ],
+                ),
+              );
+            },
+          )
+        ],
       ),
       body: Column(
         children: [
@@ -685,12 +827,15 @@ class _PillowChatScreenState extends State<PillowChatScreen> {
                 final msg = _messages[i];
                 final isUser = msg['role'] == 'user';
                 return Align(
-                  alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+                  alignment:
+                      isUser ? Alignment.centerRight : Alignment.centerLeft,
                   child: Container(
                     margin: const EdgeInsets.symmetric(vertical: 6),
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: isUser ? const Color(0xFF0284C7) : const Color(0xFF21262D),
+                      color: isUser
+                          ? const Color(0xFF0284C7)
+                          : const Color(0xFF21262D),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
@@ -716,7 +861,8 @@ class _PillowChatScreenState extends State<PillowChatScreen> {
                     decoration: const InputDecoration(
                       hintText: 'Escribe tu consulta a Pillow...',
                       border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     ),
                     onSubmitted: _sendMessageToAI,
                   ),
@@ -777,13 +923,15 @@ class _ScanListScreenState extends State<ScanListScreen> {
 
   Future<void> _saveScansToPrefs() async {
     final prefs = await SharedPreferences.getInstance();
-    final jsonList = _localScans.map((s) => {
-      'id': s.id,
-      'title': s.title,
-      'status': s.status,
-      'summary': s.summary,
-      'createdAt': s.createdAt.toIso8601String(),
-    }).toList();
+    final jsonList = _localScans
+        .map((s) => {
+              'id': s.id,
+              'title': s.title,
+              'status': s.status,
+              'summary': s.summary,
+              'createdAt': s.createdAt.toIso8601String(),
+            })
+        .toList();
     await prefs.setString('persistent_scans_list_v4', jsonEncode(jsonList));
   }
 
@@ -791,46 +939,66 @@ class _ScanListScreenState extends State<ScanListScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final response = await _apiClient.get('/scans');
-      if (kDebugMode) {
-        debugPrint('--- RESPUESTA BACKEND /scans ---');
-        debugPrint('StatusCode: ${response.statusCode}');
-        debugPrint('Data: ${response.data}');
-        debugPrint('--------------------------------');
+      dynamic responseData;
+      int statusCode = 0;
+
+      try {
+        var res = await _apiClient.get('/scans');
+        statusCode = res.statusCode ?? 0;
+        responseData = res.data;
+      } catch (_) {
+        try {
+          var res = await _apiClient.get('/incidents');
+          statusCode = res.statusCode ?? 0;
+          responseData = res.data;
+        } catch (_) {
+          var res = await _apiClient.get('/incidents/pending');
+          statusCode = res.statusCode ?? 0;
+          responseData = res.data;
+        }
       }
 
-      if (response.statusCode == 200 && response.data != null) {
+      if (statusCode == 200 && responseData != null) {
         List rawData = [];
 
-        if (response.data is List) {
-          rawData = response.data;
-        } else if (response.data is Map) {
-          rawData = response.data['scans'] ??
-                    response.data['repositories'] ??
-                    response.data['data'] ??
-                    response.data['repos'] ?? [];
+        if (responseData is List) {
+          rawData = responseData;
+        } else if (responseData is Map) {
+          rawData = responseData['incidents'] ??
+              responseData['scans'] ??
+              responseData['repositories'] ??
+              responseData['data'] ??
+              responseData['repos'] ??
+              [];
         }
 
         if (rawData.isNotEmpty) {
           _localScans = rawData.map((item) {
             final repoTitle = item['title'] ??
-                              item['title_name'] ??
-                              item['repo_name'] ??
-                              item['repository'] ??
-                              item['name'] ??
-                              'vulnerable node';
+                item['cwe'] ??
+                item['repo'] ??
+                item['repo_name'] ??
+                item['repository'] ??
+                item['name'] ??
+                'vulnerable node';
 
             final rawStatus = item['status'] ?? item['state'] ?? 'OPEN';
-            final summaryText = item['summary'] ??
-                                item['description'] ??
-                                'Análisis completado: ${item['open_findings'] ?? item['hallazgos_abiertos'] ?? '21'} hallazgos abiertos.';
+            final summaryText = item['pillow_summary'] ??
+                item['summary'] ??
+                item['description'] ??
+                'Análisis detectó vulnerabilidades que requieren triaje HITL.';
 
             return ScanModel(
-              id: (item['id'] ?? item['_id'] ?? DateTime.now().millisecondsSinceEpoch).toString(),
+              id: (item['id'] ??
+                      item['_id'] ??
+                      DateTime.now().millisecondsSinceEpoch)
+                  .toString(),
               title: repoTitle.toString(),
               status: rawStatus.toString().toUpperCase(),
               summary: summaryText.toString(),
-              createdAt: DateTime.tryParse(item['createdAt'] ?? item['created_at'] ?? '') ?? DateTime.now(),
+              createdAt: DateTime.tryParse(
+                      item['createdAt'] ?? item['created_at'] ?? '') ??
+                  DateTime.now(),
             );
           }).toList();
 
@@ -843,9 +1011,9 @@ class _ScanListScreenState extends State<ScanListScreen> {
       }
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('--- ERROR AL CONSULTAR BACKEND /scans ---');
+        debugPrint('--- ERROR AL CONSULTAR BACKEND INCIDENTS ---');
         debugPrint(e.toString());
-        debugPrint('----------------------------------------');
+        debugPrint('-------------------------------------------');
       }
     }
 
@@ -855,13 +1023,15 @@ class _ScanListScreenState extends State<ScanListScreen> {
     if (jsonStr != null) {
       try {
         final List decoded = jsonDecode(jsonStr);
-        _localScans = decoded.map((item) => ScanModel(
-          id: item['id'] ?? '',
-          title: item['title'] ?? '',
-          status: item['status'] ?? 'OPEN',
-          summary: item['summary'] ?? '',
-          createdAt: DateTime.parse(item['createdAt']),
-        )).toList();
+        _localScans = decoded
+            .map((item) => ScanModel(
+                  id: item['id'] ?? '',
+                  title: item['title'] ?? '',
+                  status: item['status'] ?? 'OPEN',
+                  summary: item['summary'] ?? '',
+                  createdAt: DateTime.parse(item['createdAt']),
+                ))
+            .toList();
       } catch (_) {
         _localScans = [];
       }
@@ -903,10 +1073,14 @@ class _ScanListScreenState extends State<ScanListScreen> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF161B22),
-        title: const Text('Limpiar Bandeja', style: TextStyle(color: Colors.white)),
-        content: const Text('¿Deseas vaciar todos los elementos de la bandeja de hallazgos?'),
+        title: const Text('Limpiar Bandeja',
+            style: TextStyle(color: Colors.white)),
+        content: const Text(
+            '¿Deseas vaciar todos los elementos de la bandeja de hallazgos?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () {
@@ -925,7 +1099,8 @@ class _ScanListScreenState extends State<ScanListScreen> {
                 'time': 'Ahora mismo',
               });
             },
-            child: const Text('Vaciar Todo', style: TextStyle(color: Colors.white)),
+            child: const Text('Vaciar Todo',
+                style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -945,7 +1120,8 @@ class _ScanListScreenState extends State<ScanListScreen> {
         final reasonController = TextEditingController();
         int selectedHours = 24;
 
-        final bool isAlreadyProcessed = scan.status == 'EXEMPTED' || scan.status == 'BLOCKED';
+        final bool isAlreadyProcessed =
+            scan.status == 'EXEMPTED' || scan.status == 'BLOCKED';
 
         return StatefulBuilder(
           builder: (context, setModalState) {
@@ -993,10 +1169,27 @@ class _ScanListScreenState extends State<ScanListScreen> {
                     child: Text(
                       scan.summary ??
                           'Análisis detectó vulnerabilidades que requieren revisión HITL.',
-                      style: const TextStyle(fontSize: 13, color: Colors.white70),
+                      style:
+                          const TextStyle(fontSize: 13, color: Colors.white70),
                     ),
                   ),
                   const SizedBox(height: 20),
+                  if (!widget.isOnDuty)
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade900.withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: Colors.amber.shade700),
+                      ),
+                      child: const Text(
+                        'Modo Lectura (Fuera de Guardia): No tienes permiso para aprobar ni bloquear excepciones.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.amber, fontSize: 12),
+                      ),
+                    ),
                   if (isAlreadyProcessed)
                     Container(
                       width: double.infinity,
@@ -1008,7 +1201,8 @@ class _ScanListScreenState extends State<ScanListScreen> {
                       child: Text(
                         'Estado actual: ${scan.status == "EXEMPTED" ? "Excepción Lanzada" : "Despliegue Bloqueado"}',
                         textAlign: TextAlign.center,
-                        style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                            color: Colors.amber, fontWeight: FontWeight.bold),
                       ),
                     )
                   else
@@ -1017,178 +1211,278 @@ class _ScanListScreenState extends State<ScanListScreen> {
                         Expanded(
                           child: ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.amber.shade800,
+                              backgroundColor: widget.isOnDuty
+                                  ? Colors.amber.shade800
+                                  : Colors.grey.shade800,
                               padding: const EdgeInsets.symmetric(vertical: 12),
                             ),
-                            icon: const Icon(Icons.shield_outlined, color: Colors.white),
-                            label: const Text('Excepción', style: TextStyle(color: Colors.white)),
-                            onPressed: () {
-                              String? inlineError;
-                              showDialog(
-                                context: context,
-                                builder: (dialogContext) => StatefulBuilder(
-                                  builder: (context, setDialogState) {
-                                    return AlertDialog(
-                                      backgroundColor: const Color(0xFF161B22),
-                                      title: const Text('Aprobar Excepción Temporizada',
-                                          style: TextStyle(color: Colors.white)),
-                                      content: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          const Text(
-                                            '¿Autorizar el pase a producción con esta vulnerabilidad activa?',
-                                            style: TextStyle(fontSize: 13, color: Colors.grey),
-                                          ),
-                                          const SizedBox(height: 12),
-                                          DropdownButtonFormField<int>(
-                                            initialValue: selectedHours,
-                                            dropdownColor: const Color(0xFF161B22),
-                                            decoration: const InputDecoration(
-                                              labelText: 'Duración de la excepción',
-                                              border: OutlineInputBorder(),
+                            icon: const Icon(Icons.shield_outlined,
+                                color: Colors.white),
+                            label: const Text('Excepción',
+                                style: TextStyle(color: Colors.white)),
+                            onPressed: !widget.isOnDuty
+                                ? null
+                                : () {
+                                    String? inlineError;
+                                    showDialog(
+                                      context: context,
+                                      builder: (dialogContext) =>
+                                          StatefulBuilder(
+                                        builder: (context, setDialogState) {
+                                          return AlertDialog(
+                                            backgroundColor:
+                                                const Color(0xFF161B22),
+                                            title: const Text(
+                                                'Aprobar Excepción Temporizada',
+                                                style: TextStyle(
+                                                    color: Colors.white)),
+                                            content: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                const Text(
+                                                  '¿Autorizar el pase a producción con esta vulnerabilidad activa?',
+                                                  style: TextStyle(
+                                                      fontSize: 13,
+                                                      color: Colors.grey),
+                                                ),
+                                                const SizedBox(height: 12),
+                                                DropdownButtonFormField<int>(
+                                                  initialValue: selectedHours,
+                                                  dropdownColor:
+                                                      const Color(0xFF161B22),
+                                                  decoration:
+                                                      const InputDecoration(
+                                                    labelText:
+                                                        'Duración de la excepción',
+                                                    border:
+                                                        OutlineInputBorder(),
+                                                  ),
+                                                  items: const [
+                                                    DropdownMenuItem(
+                                                        value: 24,
+                                                        child:
+                                                            Text('24 Horas')),
+                                                    DropdownMenuItem(
+                                                        value: 72,
+                                                        child:
+                                                            Text('72 Horas')),
+                                                    DropdownMenuItem(
+                                                        value: 168,
+                                                        child: Text(
+                                                            '168 Horas (1 Semana)')),
+                                                  ],
+                                                  onChanged: (val) =>
+                                                      selectedHours = val ?? 24,
+                                                ),
+                                                const SizedBox(height: 12),
+                                                TextField(
+                                                  controller:
+                                                      justificationController,
+                                                  maxLines: 2,
+                                                  decoration: InputDecoration(
+                                                    border:
+                                                        const OutlineInputBorder(),
+                                                    hintText:
+                                                        'Justificación (mínimo 10 caracteres)',
+                                                    errorText: inlineError,
+                                                  ),
+                                                ),
+                                              ],
                                             ),
-                                            items: const [
-                                              DropdownMenuItem(value: 24, child: Text('24 Horas')),
-                                              DropdownMenuItem(value: 72, child: Text('72 Horas')),
-                                              DropdownMenuItem(value: 168, child: Text('168 Horas (1 Semana)')),
+                                            actions: [
+                                              TextButton(
+                                                  onPressed: () =>
+                                                      Navigator.pop(
+                                                          dialogContext),
+                                                  child:
+                                                      const Text('Cancelar')),
+                                              ElevatedButton(
+                                                onPressed: () async {
+                                                  final justificationText =
+                                                      justificationController
+                                                          .text
+                                                          .trim();
+                                                  if (justificationText
+                                                          .length >=
+                                                      10) {
+                                                    Navigator.pop(
+                                                        dialogContext);
+                                                    Navigator.pop(
+                                                        bottomSheetContext);
+
+                                                    try {
+                                                      await _apiClient.post(
+                                                          '/incidents/${scan.id}/exception',
+                                                          data: {
+                                                            'duration_hours':
+                                                                selectedHours,
+                                                            'justification':
+                                                                justificationText,
+                                                          });
+                                                    } catch (_) {}
+
+                                                    setState(() {
+                                                      final idx = _localScans
+                                                          .indexWhere((s) =>
+                                                              s.id == scan.id);
+                                                      if (idx != -1) {
+                                                        _localScans[idx] =
+                                                            ScanModel(
+                                                          id: scan.id,
+                                                          title: scan.title,
+                                                          status: 'EXEMPTED',
+                                                          summary: scan.summary,
+                                                          createdAt:
+                                                              scan.createdAt,
+                                                        );
+                                                        _saveScansToPrefs();
+                                                      }
+                                                    });
+
+                                                    widget.onAuditAdded({
+                                                      'id': scan.id,
+                                                      'type': 'EXEMPTION',
+                                                      'title':
+                                                          'Excepción Lanzada',
+                                                      'subtitle':
+                                                          '${scan.title ?? 'Repo'} - "$justificationText"',
+                                                      'time':
+                                                          'Quedan $selectedHours h',
+                                                      'duration':
+                                                          '$selectedHours Horas',
+                                                    });
+                                                  } else {
+                                                    setDialogState(() {
+                                                      inlineError =
+                                                          'La justificación debe tener al menos 10 caracteres.';
+                                                    });
+                                                  }
+                                                },
+                                                child: const Text('Confirmar'),
+                                              ),
                                             ],
-                                            onChanged: (val) => selectedHours = val ?? 24,
-                                          ),
-                                          const SizedBox(height: 12),
-                                          TextField(
-                                            controller: justificationController,
-                                            maxLines: 2,
-                                            decoration: InputDecoration(
-                                              border: const OutlineInputBorder(),
-                                              hintText: 'Justificación (mínimo 10 caracteres)',
-                                              errorText: inlineError,
-                                            ),
-                                          ),
-                                        ],
+                                          );
+                                        },
                                       ),
-                                      actions: [
-                                        TextButton(
-                                            onPressed: () => Navigator.pop(dialogContext),
-                                            child: const Text('Cancelar')),
-                                        ElevatedButton(
-                                          onPressed: () {
-                                            if (justificationController.text.trim().length >= 10) {
-                                              Navigator.pop(dialogContext);
-                                              Navigator.pop(bottomSheetContext);
-
-                                              setState(() {
-                                                final idx = _localScans.indexWhere((s) => s.id == scan.id);
-                                                if (idx != -1) {
-                                                  _localScans[idx] = ScanModel(
-                                                    id: scan.id,
-                                                    title: scan.title,
-                                                    status: 'EXEMPTED',
-                                                    summary: scan.summary,
-                                                    createdAt: scan.createdAt,
-                                                  );
-                                                  _saveScansToPrefs();
-                                                }
-                                              });
-
-                                              widget.onAuditAdded({
-                                                'id': scan.id,
-                                                'type': 'EXEMPTION',
-                                                'title': 'Excepción Lanzada',
-                                                'subtitle': '${scan.title ?? 'Repo'} - "${justificationController.text.trim()}"',
-                                                'time': 'Quedan $selectedHours h',
-                                                'duration': '$selectedHours Horas',
-                                              });
-                                            } else {
-                                              setDialogState(() {
-                                                inlineError = 'La justificación debe tener al menos 10 caracteres.';
-                                              });
-                                            }
-                                          },
-                                          child: const Text('Confirmar'),
-                                        ),
-                                      ],
                                     );
                                   },
-                                ),
-                              );
-                            },
                           ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.red.shade700,
+                              backgroundColor: widget.isOnDuty
+                                  ? Colors.red.shade700
+                                  : Colors.grey.shade800,
                               padding: const EdgeInsets.symmetric(vertical: 12),
                             ),
                             icon: const Icon(Icons.block, color: Colors.white),
-                            label: const Text('Bloquear', style: TextStyle(color: Colors.white)),
-                            onPressed: () {
-                              String? inlineError;
-                              showDialog(
-                                context: context,
-                                builder: (dialogContext) => StatefulBuilder(
-                                  builder: (context, setDialogState) {
-                                    return AlertDialog(
-                                      backgroundColor: const Color(0xFF161B22),
-                                      title: const Text('Confirmar Bloqueo de Despliegue',
-                                          style: TextStyle(color: Colors.white)),
-                                      content: TextField(
-                                        controller: reasonController,
-                                        decoration: InputDecoration(
-                                          border: const OutlineInputBorder(),
-                                          hintText: 'Motivo del bloqueo (mínimo 3 caracteres)',
-                                          errorText: inlineError,
-                                        ),
+                            label: const Text('Bloquear',
+                                style: TextStyle(color: Colors.white)),
+                            onPressed: !widget.isOnDuty
+                                ? null
+                                : () {
+                                    String? inlineError;
+                                    showDialog(
+                                      context: context,
+                                      builder: (dialogContext) =>
+                                          StatefulBuilder(
+                                        builder: (context, setDialogState) {
+                                          return AlertDialog(
+                                            backgroundColor:
+                                                const Color(0xFF161B22),
+                                            title: const Text(
+                                                'Confirmar Bloqueo de Despliegue',
+                                                style: TextStyle(
+                                                    color: Colors.white)),
+                                            content: TextField(
+                                              controller: reasonController,
+                                              decoration: InputDecoration(
+                                                border:
+                                                    const OutlineInputBorder(),
+                                                hintText:
+                                                    'Motivo del bloqueo (mínimo 3 caracteres)',
+                                                errorText: inlineError,
+                                              ),
+                                            ),
+                                            actions: [
+                                              TextButton(
+                                                  onPressed: () =>
+                                                      Navigator.pop(
+                                                          dialogContext),
+                                                  child:
+                                                      const Text('Cancelar')),
+                                              ElevatedButton(
+                                                style: ElevatedButton.styleFrom(
+                                                    backgroundColor:
+                                                        Colors.red),
+                                                onPressed: () async {
+                                                  final reasonText =
+                                                      reasonController.text
+                                                          .trim();
+                                                  if (reasonText.length >= 3) {
+                                                    Navigator.pop(
+                                                        dialogContext);
+                                                    Navigator.pop(
+                                                        bottomSheetContext);
+
+                                                    try {
+                                                      await _apiClient.post(
+                                                          '/incidents/${scan.id}/block',
+                                                          data: {
+                                                            'reason':
+                                                                reasonText,
+                                                          });
+                                                    } catch (_) {}
+
+                                                    setState(() {
+                                                      final idx = _localScans
+                                                          .indexWhere((s) =>
+                                                              s.id == scan.id);
+                                                      if (idx != -1) {
+                                                        _localScans[idx] =
+                                                            ScanModel(
+                                                          id: scan.id,
+                                                          title: scan.title,
+                                                          status: 'BLOCKED',
+                                                          summary: scan.summary,
+                                                          createdAt:
+                                                              scan.createdAt,
+                                                        );
+                                                        _saveScansToPrefs();
+                                                      }
+                                                    });
+
+                                                    widget.onAuditAdded({
+                                                      'id': scan.id,
+                                                      'type': 'BLOCK',
+                                                      'title':
+                                                          'Bloqueo de Despliegue',
+                                                      'subtitle':
+                                                          '${scan.title ?? 'Repo'} - "$reasonText"',
+                                                      'time': 'Bloqueado',
+                                                      'duration': 'Permanente',
+                                                    });
+                                                  } else {
+                                                    setDialogState(() {
+                                                      inlineError =
+                                                          'El motivo debe tener al menos 3 caracteres.';
+                                                    });
+                                                  }
+                                                },
+                                                child: const Text('Bloquear',
+                                                    style: TextStyle(
+                                                        color: Colors.white)),
+                                              ),
+                                            ],
+                                          );
+                                        },
                                       ),
-                                      actions: [
-                                        TextButton(
-                                            onPressed: () => Navigator.pop(dialogContext),
-                                            child: const Text('Cancelar')),
-                                        ElevatedButton(
-                                          style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                                          onPressed: () {
-                                            if (reasonController.text.trim().length >= 3) {
-                                              Navigator.pop(dialogContext);
-                                              Navigator.pop(bottomSheetContext);
-
-                                              setState(() {
-                                                final idx = _localScans.indexWhere((s) => s.id == scan.id);
-                                                if (idx != -1) {
-                                                  _localScans[idx] = ScanModel(
-                                                    id: scan.id,
-                                                    title: scan.title,
-                                                    status: 'BLOCKED',
-                                                    summary: scan.summary,
-                                                    createdAt: scan.createdAt,
-                                                  );
-                                                  _saveScansToPrefs();
-                                                }
-                                              });
-
-                                              widget.onAuditAdded({
-                                                'id': scan.id,
-                                                'type': 'BLOCK',
-                                                'title': 'Bloqueo de Despliegue',
-                                                'subtitle': '${scan.title ?? 'Repo'} - "${reasonController.text.trim()}"',
-                                                'time': 'Bloqueado',
-                                                'duration': 'Permanente',
-                                              });
-                                            } else {
-                                              setDialogState(() {
-                                                inlineError = 'El motivo debe tener al menos 3 caracteres.';
-                                              });
-                                            }
-                                          },
-                                          child: const Text('Bloquear', style: TextStyle(color: Colors.white)),
-                                        ),
-                                      ],
                                     );
                                   },
-                                ),
-                              );
-                            },
                           ),
                         ),
                       ],
@@ -1230,9 +1524,8 @@ class _ScanListScreenState extends State<ScanListScreen> {
       if (_selectedFilter == 'Bloqueado') targetStatus = 'BLOCKED';
       if (_selectedFilter == 'Abierto') targetStatus = 'OPEN';
 
-      scans = scans
-          .where((s) => s.status.toUpperCase() == targetStatus)
-          .toList();
+      scans =
+          scans.where((s) => s.status.toUpperCase() == targetStatus).toList();
     }
 
     return Scaffold(
@@ -1256,7 +1549,8 @@ class _ScanListScreenState extends State<ScanListScreen> {
           ),
           if (_localScans.isNotEmpty)
             IconButton(
-              icon: const Icon(Icons.delete_sweep_outlined, color: Colors.redAccent),
+              icon: const Icon(Icons.delete_sweep_outlined,
+                  color: Colors.redAccent),
               tooltip: 'Vaciar Bandeja',
               onPressed: _clearAllScans,
             ),
@@ -1271,12 +1565,15 @@ class _ScanListScreenState extends State<ScanListScreen> {
               decoration: InputDecoration(
                 hintText: 'Buscar por repo, CWE, id...',
                 prefixIcon: const Icon(Icons.search, size: 20),
-                contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 12),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                contentPadding:
+                    const EdgeInsets.symmetric(vertical: 0, horizontal: 12),
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                 filled: true,
                 fillColor: const Color(0xFF161B22),
               ),
-              onChanged: (val) => setState(() => _searchQuery = val.toLowerCase()),
+              onChanged: (val) =>
+                  setState(() => _searchQuery = val.toLowerCase()),
             ),
           ),
           SingleChildScrollView(
@@ -1305,7 +1602,8 @@ class _ScanListScreenState extends State<ScanListScreen> {
           const SizedBox(height: 8),
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: Color(0xFF38BDF8)))
+                ? const Center(
+                    child: CircularProgressIndicator(color: Color(0xFF38BDF8)))
                 : scans.isEmpty
                     ? const Center(
                         child: Padding(
@@ -1327,7 +1625,8 @@ class _ScanListScreenState extends State<ScanListScreen> {
                               Text(
                                 'Tus repositorios vinculados se sincronizarán aquí automáticamente.',
                                 textAlign: TextAlign.center,
-                                style: TextStyle(color: Colors.grey, fontSize: 13),
+                                style:
+                                    TextStyle(color: Colors.grey, fontSize: 13),
                               ),
                             ],
                           ),
@@ -1358,22 +1657,26 @@ class _ScanListScreenState extends State<ScanListScreen> {
                                   color: Colors.white,
                                 ),
                               ),
-                              title: Text(scan.title ?? 'Repositorio #${scan.id}',
+                              title: Text(
+                                  scan.title ?? 'Repositorio #${scan.id}',
                                   style: const TextStyle(
                                       fontWeight: FontWeight.bold,
                                       color: Colors.white)),
                               subtitle: Text(
                                 'Estado: ${scan.status} - Fecha: ${_formatDate(scan.createdAt)}',
-                                style: const TextStyle(color: Colors.grey, fontSize: 12),
+                                style: const TextStyle(
+                                    color: Colors.grey, fontSize: 12),
                               ),
                               trailing: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   IconButton(
-                                    icon: const Icon(Icons.delete_outline, color: Colors.grey, size: 20),
+                                    icon: const Icon(Icons.delete_outline,
+                                        color: Colors.grey, size: 20),
                                     onPressed: () => _deleteSingleScan(scan),
                                   ),
-                                  const Icon(Icons.chevron_right, color: Colors.grey),
+                                  const Icon(Icons.chevron_right,
+                                      color: Colors.grey),
                                 ],
                               ),
                               onTap: () => _showDetailModal(context, scan),
@@ -1413,13 +1716,18 @@ class _AuditHistoryScreenState extends State<AuditHistoryScreen> {
           children: [
             Text(
               log['title'] ?? 'Detalle de Auditoría',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+              style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white),
             ),
-            const Divider(color: Color(0xFF30363D)),
+            const Divider(color: Color(0xFF303030)),
             const SizedBox(height: 8),
-            Text('Detalle: ${log['subtitle']}', style: const TextStyle(color: Colors.white70)),
+            Text('Detalle: ${log['subtitle']}',
+                style: const TextStyle(color: Colors.white70)),
             const SizedBox(height: 8),
-            Text('Estado: ${log['time']}', style: const TextStyle(color: Colors.amber)),
+            Text('Estado: ${log['time']}',
+                style: const TextStyle(color: Colors.amber)),
             const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,
@@ -1466,9 +1774,14 @@ class _AuditHistoryScreenState extends State<AuditHistoryScreen> {
                               ? Colors.red
                               : Colors.grey,
                     ),
-                    title: Text(log['title']!, style: const TextStyle(color: Colors.white)),
-                    subtitle: Text(log['subtitle']!, style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                    trailing: Text(log['time']!, style: const TextStyle(fontSize: 11, color: Colors.amber)),
+                    title: Text(log['title']!,
+                        style: const TextStyle(color: Colors.white)),
+                    subtitle: Text(log['subtitle']!,
+                        style:
+                            const TextStyle(color: Colors.grey, fontSize: 12)),
+                    trailing: Text(log['time']!,
+                        style:
+                            const TextStyle(fontSize: 11, color: Colors.amber)),
                     onTap: () => _showLogDetail(context, log),
                   ),
                 );
@@ -1508,7 +1821,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _displayName = prefs.getString('user_name') ?? 'dev';
-      _username = (prefs.getString('user_email') ?? 'seba.tralma.dev@sspillowy.com').split('@').first;
+      _username =
+          (prefs.getString('user_email') ?? 'seba.tralma.dev@sspillowy.com')
+              .split('@')
+              .first;
     });
   }
 
@@ -1546,7 +1862,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               const SizedBox(height: 8),
               Text(_displayName,
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
+                  style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white)),
               Text('@$_username',
                   style: const TextStyle(fontSize: 13, color: Colors.grey)),
               const SizedBox(height: 16),
@@ -1566,8 +1885,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Card(
                 color: const Color(0xFF161B22),
                 child: ListTile(
-                  leading: const Icon(Icons.description_outlined, color: Color(0xFF38BDF8)),
-                  title: const Text('Términos y Condiciones', style: TextStyle(color: Colors.white)),
+                  leading: const Icon(Icons.description_outlined,
+                      color: Color(0xFF38BDF8)),
+                  title: const Text('Términos y Condiciones',
+                      style: TextStyle(color: Colors.white)),
                   onTap: () => _openWebUrl('https://sspillowy.com/terms'),
                 ),
               ),
@@ -1578,7 +1899,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   leading: const Icon(Icons.delete_forever, color: Colors.red),
                   title: const Text('Solicitud de eliminación de cuenta',
                       style: TextStyle(color: Colors.red)),
-                  onTap: () => _openWebUrl('https://sspillowy.com/delete-account'),
+                  onTap: () =>
+                      _openWebUrl('https://sspillowy.com/delete-account'),
                 ),
               ),
               const SizedBox(height: 16),
@@ -1591,7 +1913,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   icon: const Icon(Icons.logout, color: Colors.white),
                   label: const Text('Cerrar Sesión',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      style: TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.bold)),
                   onPressed: widget.onLogout,
                 ),
               ),
