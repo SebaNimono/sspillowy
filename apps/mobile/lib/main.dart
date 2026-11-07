@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'features/security_gate/presentation/screens/security_gate_bypasses_screen.dart';
 import 'services/api_client.dart';
+import 'services/auth_headers.dart';
 import 'features/scans/data/models/scan_model.dart';
 
 typedef StringMap = Map<String, String>;
@@ -25,12 +26,8 @@ class AuthRepository {
     });
 
     if (response.statusCode == 200 && response.data != null) {
-      final token = response.data['token'] ?? response.data['access_token'];
-      if (token != null && token.toString().isNotEmpty) {
-        await prefs.setString('jwt_token', token.toString());
-      } else {
-        await prefs.setString('jwt_token', 'token_$email');
-      }
+      final token = readSessionToken(response.data) ?? 'token_$email';
+      await apiClient.persistAuthToken(token);
       await prefs.setString('user_email', email);
       await prefs.setBool('is_logged_in', true);
       return true;
@@ -43,6 +40,7 @@ class AuthRepository {
         savedToken != null &&
         savedToken.isNotEmpty) {
       await prefs.setBool('is_logged_in', true);
+      apiClient.setAuthToken(savedToken);
       return true;
     }
 
@@ -76,7 +74,7 @@ class _SSPillowyAppState extends State<SSPillowyApp> {
   Future<void> _checkLoginStatus() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('jwt_token');
+      final token = prefs.getString('jwt_token') ?? prefs.getString('session_id');
       final isLoggedInPref = prefs.getBool('is_logged_in') ?? false;
 
       if (!mounted) return;
@@ -106,6 +104,7 @@ class _SSPillowyAppState extends State<SSPillowyApp> {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('jwt_token');
+      await prefs.remove('session_id');
       await prefs.remove('user_email');
       await prefs.setBool('is_logged_in', false);
     } catch (_) {}
@@ -598,7 +597,6 @@ class PillowChatScreen extends StatefulWidget {
 }
 
 class _PillowChatScreenState extends State<PillowChatScreen> {
-  // DECLARACIÓN CORREGIDA CON TIPO COMPLETO REASIGNABLE
   List<StringMap> _messages = [
     {
       'role': 'assistant',
@@ -688,6 +686,11 @@ class _PillowChatScreenState extends State<PillowChatScreen> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final userEmail = prefs.getString('user_email') ?? '';
+      final token = prefs.getString('jwt_token');
+
+      if (token != null && token.isNotEmpty) {
+        _apiClient.setAuthToken(token);
+      }
 
       final response = await _apiClient.post(
         '/pillow/chat',
@@ -939,23 +942,27 @@ class _ScanListScreenState extends State<ScanListScreen> {
     setState(() => _isLoading = true);
 
     try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('jwt_token');
+
+      if (token != null && token.isNotEmpty) {
+        _apiClient.setAuthToken(token);
+      }
+
       dynamic responseData;
       int statusCode = 0;
 
+      // Se consulta directamente a /findings (Endpoint de Producción)
       try {
-        var res = await _apiClient.get('/scans');
+        var res = await _apiClient.get('/findings');
         statusCode = res.statusCode ?? 0;
         responseData = res.data;
       } catch (_) {
         try {
-          var res = await _apiClient.get('/incidents');
+          var res = await _apiClient.get('/scans');
           statusCode = res.statusCode ?? 0;
           responseData = res.data;
-        } catch (_) {
-          var res = await _apiClient.get('/incidents/pending');
-          statusCode = res.statusCode ?? 0;
-          responseData = res.data;
-        }
+        } catch (_) {}
       }
 
       if (statusCode == 200 && responseData != null) {
@@ -964,7 +971,8 @@ class _ScanListScreenState extends State<ScanListScreen> {
         if (responseData is List) {
           rawData = responseData;
         } else if (responseData is Map) {
-          rawData = responseData['incidents'] ??
+          rawData = responseData['findings'] ??
+              responseData['incidents'] ??
               responseData['scans'] ??
               responseData['repositories'] ??
               responseData['data'] ??
@@ -1011,7 +1019,7 @@ class _ScanListScreenState extends State<ScanListScreen> {
       }
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('--- ERROR AL CONSULTAR BACKEND INCIDENTS ---');
+        debugPrint('--- ERROR AL CONSULTAR BACKEND FINDINGS ---');
         debugPrint(e.toString());
         debugPrint('-------------------------------------------');
       }
@@ -1313,9 +1321,24 @@ class _ScanListScreenState extends State<ScanListScreen> {
                                                         bottomSheetContext);
 
                                                     try {
+                                                      final prefs =
+                                                          await SharedPreferences
+                                                              .getInstance();
+                                                      final token =
+                                                          prefs.getString(
+                                                              'jwt_token');
+
+                                                      if (token != null &&
+                                                          token.isNotEmpty) {
+                                                        _apiClient.setAuthToken(
+                                                            token);
+                                                      }
+
                                                       await _apiClient.post(
-                                                          '/incidents/${scan.id}/exception',
+                                                          '/findings/${scan.id}',
                                                           data: {
+                                                            'status':
+                                                                'EXEMPTED',
                                                             'duration_hours':
                                                                 selectedHours,
                                                             'justification':
@@ -1430,9 +1453,23 @@ class _ScanListScreenState extends State<ScanListScreen> {
                                                         bottomSheetContext);
 
                                                     try {
+                                                      final prefs =
+                                                          await SharedPreferences
+                                                              .getInstance();
+                                                      final token =
+                                                          prefs.getString(
+                                                              'jwt_token');
+
+                                                      if (token != null &&
+                                                          token.isNotEmpty) {
+                                                        _apiClient.setAuthToken(
+                                                            token);
+                                                      }
+
                                                       await _apiClient.post(
-                                                          '/incidents/${scan.id}/block',
+                                                          '/findings/${scan.id}',
                                                           data: {
+                                                            'status': 'BLOCKED',
                                                             'reason':
                                                                 reasonText,
                                                           });
