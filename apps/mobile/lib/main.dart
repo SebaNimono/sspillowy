@@ -8,9 +8,93 @@ import 'package:url_launcher/url_launcher.dart';
 import 'features/security_gate/presentation/screens/security_gate_bypasses_screen.dart';
 import 'services/api_client.dart';
 import 'services/auth_headers.dart';
-import 'features/scans/data/models/scan_model.dart';
 
 typedef StringMap = Map<String, String>;
+
+class ScanModel {
+  final String id;
+  final String? title;
+  final String status;
+  final String? severity;
+  final String? summary;
+  final String? repo;
+  final String? type;
+  final DateTime createdAt;
+
+  ScanModel({
+    required this.id,
+    this.title,
+    required this.status,
+    this.severity,
+    this.summary,
+    this.repo,
+    this.type,
+    required this.createdAt,
+  });
+
+  factory ScanModel.fromJson(Map<String, dynamic> json) {
+    DateTime parsedDate = DateTime.now();
+    final rawDate = json['createdAt'] ??
+        json['created_at'] ??
+        json['date'] ??
+        json['timestamp'];
+
+    if (rawDate != null) {
+      if (rawDate is num) {
+        final int timestamp = rawDate.toInt();
+        parsedDate = timestamp > 100000000000
+            ? DateTime.fromMillisecondsSinceEpoch(timestamp)
+            : DateTime.fromMillisecondsSinceEpoch(timestamp * 1000);
+      } else {
+        parsedDate = DateTime.tryParse(rawDate.toString()) ?? DateTime.now();
+      }
+    }
+
+    return ScanModel(
+      id: (json['id'] ?? json['_id'] ?? json['cwe_id'] ?? '').toString(),
+      title: json['title']?.toString() ??
+          json['cwe']?.toString() ??
+          json['rule_id']?.toString() ??
+          json['repo']?.toString() ??
+          json['repository_name']?.toString() ??
+          json['name']?.toString() ??
+          'Repositorio / CWE sin título',
+      status:
+          (json['status'] ?? json['state'] ?? 'OPEN').toString().toUpperCase(),
+      summary: json['pillow_summary']?.toString() ??
+          json['summary']?.toString() ??
+          json['description']?.toString() ??
+          json['message']?.toString() ??
+          'Sin resumen de triage disponible.',
+      severity:
+          (json['severity'] ?? json['level'] ?? json['risk_level'] ?? 'HIGH')
+              .toString()
+              .toUpperCase(),
+      repo: (json['repo'] ??
+              json['repository'] ??
+              json['repo_name'] ??
+              json['repository_name'])
+          ?.toString(),
+      type: (json['type'] ?? json['scan_type'] ?? json['engine'] ?? 'SAST')
+          .toString()
+          .toUpperCase(),
+      createdAt: parsedDate,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'status': status,
+      'summary': summary,
+      'severity': severity,
+      'repo': repo,
+      'type': type,
+      'created_at': createdAt.toIso8601String(),
+    };
+  }
+}
 
 class AuthRepository {
   final ApiClient apiClient;
@@ -74,7 +158,8 @@ class _SSPillowyAppState extends State<SSPillowyApp> {
   Future<void> _checkLoginStatus() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('jwt_token') ?? prefs.getString('session_id');
+      final token =
+          prefs.getString('jwt_token') ?? prefs.getString('session_id');
       final isLoggedInPref = prefs.getBool('is_logged_in') ?? false;
 
       if (!mounted) return;
@@ -926,15 +1011,7 @@ class _ScanListScreenState extends State<ScanListScreen> {
 
   Future<void> _saveScansToPrefs() async {
     final prefs = await SharedPreferences.getInstance();
-    final jsonList = _localScans
-        .map((s) => {
-              'id': s.id,
-              'title': s.title,
-              'status': s.status,
-              'summary': s.summary,
-              'createdAt': s.createdAt.toIso8601String(),
-            })
-        .toList();
+    final jsonList = _localScans.map((s) => s.toJson()).toList();
     await prefs.setString('persistent_scans_list_v4', jsonEncode(jsonList));
   }
 
@@ -952,7 +1029,6 @@ class _ScanListScreenState extends State<ScanListScreen> {
       dynamic responseData;
       int statusCode = 0;
 
-      // Se consulta directamente a /findings (Endpoint de Producción)
       try {
         var res = await _apiClient.get('/findings');
         statusCode = res.statusCode ?? 0;
@@ -981,34 +1057,10 @@ class _ScanListScreenState extends State<ScanListScreen> {
         }
 
         if (rawData.isNotEmpty) {
-          _localScans = rawData.map((item) {
-            final repoTitle = item['title'] ??
-                item['cwe'] ??
-                item['repo'] ??
-                item['repo_name'] ??
-                item['repository'] ??
-                item['name'] ??
-                'vulnerable node';
-
-            final rawStatus = item['status'] ?? item['state'] ?? 'OPEN';
-            final summaryText = item['pillow_summary'] ??
-                item['summary'] ??
-                item['description'] ??
-                'Análisis detectó vulnerabilidades que requieren triaje HITL.';
-
-            return ScanModel(
-              id: (item['id'] ??
-                      item['_id'] ??
-                      DateTime.now().millisecondsSinceEpoch)
-                  .toString(),
-              title: repoTitle.toString(),
-              status: rawStatus.toString().toUpperCase(),
-              summary: summaryText.toString(),
-              createdAt: DateTime.tryParse(
-                      item['createdAt'] ?? item['created_at'] ?? '') ??
-                  DateTime.now(),
-            );
-          }).toList();
+          _localScans = rawData
+              .map(
+                  (item) => ScanModel.fromJson(Map<String, dynamic>.from(item)))
+              .toList();
 
           await _saveScansToPrefs();
           _applySorting();
@@ -1032,13 +1084,7 @@ class _ScanListScreenState extends State<ScanListScreen> {
       try {
         final List decoded = jsonDecode(jsonStr);
         _localScans = decoded
-            .map((item) => ScanModel(
-                  id: item['id'] ?? '',
-                  title: item['title'] ?? '',
-                  status: item['status'] ?? 'OPEN',
-                  summary: item['summary'] ?? '',
-                  createdAt: DateTime.parse(item['createdAt']),
-                ))
+            .map((item) => ScanModel.fromJson(Map<String, dynamic>.from(item)))
             .toList();
       } catch (_) {
         _localScans = [];
@@ -1356,6 +1402,8 @@ class _ScanListScreenState extends State<ScanListScreen> {
                                                           id: scan.id,
                                                           title: scan.title,
                                                           status: 'EXEMPTED',
+                                                          severity:
+                                                              scan.severity,
                                                           summary: scan.summary,
                                                           createdAt:
                                                               scan.createdAt,
@@ -1485,6 +1533,8 @@ class _ScanListScreenState extends State<ScanListScreen> {
                                                           id: scan.id,
                                                           title: scan.title,
                                                           status: 'BLOCKED',
+                                                          severity:
+                                                              scan.severity,
                                                           summary: scan.summary,
                                                           createdAt:
                                                               scan.createdAt,
@@ -1555,14 +1605,25 @@ class _ScanListScreenState extends State<ScanListScreen> {
     }
 
     if (_selectedFilter != 'Todos') {
-      String targetStatus = 'OPEN';
-      if (_selectedFilter == 'Crítico') targetStatus = 'CRITICAL';
-      if (_selectedFilter == 'Alto') targetStatus = 'HIGH';
-      if (_selectedFilter == 'Bloqueado') targetStatus = 'BLOCKED';
-      if (_selectedFilter == 'Abierto') targetStatus = 'OPEN';
+      scans = scans.where((s) {
+        final status = s.status.toUpperCase();
+        final severity = (s.severity ?? '').toUpperCase();
 
-      scans =
-          scans.where((s) => s.status.toUpperCase() == targetStatus).toList();
+        if (_selectedFilter == 'Crítico') {
+          return severity == 'CRITICAL';
+        }
+        if (_selectedFilter == 'Alto') {
+          return severity == 'HIGH';
+        }
+        if (_selectedFilter == 'Bloqueado') {
+          return status == 'BLOCKED' || status == 'BLOQUEADO';
+        }
+        if (_selectedFilter == 'Abierto') {
+          return status == 'OPEN' || status == 'ABIERTO';
+        }
+
+        return true;
+      }).toList();
     }
 
     return Scaffold(
@@ -1845,24 +1906,138 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  String _displayName = 'dev';
-  String _username = 'seba.tralma.dev';
+  final ApiClient _apiClient = ApiClient();
+  bool _isLoadingProfiles = true;
+  String _activeUserEmail = '';
+  String _activeUserName = '';
+  List _availableProfiles = [];
 
   @override
   void initState() {
     super.initState();
-    _loadProfileData();
+    _fetchUsersAndProfiles();
   }
 
-  Future<void> _loadProfileData() async {
+  Future<void> _fetchUsersAndProfiles() async {
     final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('jwt_token');
+    final savedEmail = prefs.getString('user_email') ?? '';
+    final savedName = prefs.getString('user_name') ??
+        (savedEmail.isNotEmpty ? savedEmail.split('@').first : 'Usuario');
+
+    if (token != null && token.isNotEmpty) {
+      _apiClient.setAuthToken(token);
+    }
+
+    List fetchedList = [];
+
+    // 1. Agregar siempre la cuenta principal activa del usuario
+    if (savedEmail.isNotEmpty) {
+      fetchedList.add({
+        'name': savedName,
+        'email': savedEmail,
+        'role': 'Cuenta Principal',
+      });
+    }
+
+    try {
+      dynamic resData;
+      // Endpoints donde el backend pueda alojar los perfiles web
+      final endpoints = [
+        '/profiles',
+        '/auth/profiles',
+        '/organization/profiles',
+        '/user/profiles',
+        '/users',
+        '/auth/me',
+        '/organization/users',
+      ];
+
+      for (String ep in endpoints) {
+        try {
+          var res = await _apiClient.get(ep);
+          if (res.statusCode == 200 && res.data != null) {
+            resData = res.data;
+            break;
+          }
+        } catch (_) {}
+      }
+
+      if (resData != null) {
+        List items = [];
+        if (resData is List) {
+          items = resData;
+        } else if (resData is Map) {
+          items = resData['profiles'] ??
+              resData['accounts'] ??
+              resData['users'] ??
+              resData['members'] ??
+              resData['data'] ??
+              resData['organizations'] ??
+              [];
+          if (items.isEmpty && resData['email'] != null) {
+            items = [resData];
+          }
+        }
+
+        for (var item in items) {
+          if (item is Map) {
+            final email = (item['email'] ?? item['username'] ?? '').toString();
+            final name = (item['name'] ??
+                    item['display_name'] ??
+                    item['title'] ??
+                    (email.isNotEmpty ? email.split('@').first : 'Perfil'))
+                .toString();
+            final role = (item['role'] ??
+                    item['type'] ??
+                    item['position'] ??
+                    'Perfil Vinculado')
+                .toString();
+
+            if (email.isNotEmpty && email != savedEmail) {
+              bool alreadyAdded = fetchedList.any((p) => p['email'] == email);
+              if (!alreadyAdded) {
+                fetchedList.add({
+                  'name': name,
+                  'email': email,
+                  'role': role,
+                });
+              }
+            }
+          }
+        }
+      }
+    } catch (_) {}
+
+    if (mounted) {
+      setState(() {
+        _availableProfiles = fetchedList;
+        _activeUserEmail = savedEmail;
+        _activeUserName = savedName;
+        _isLoadingProfiles = false;
+      });
+    }
+  }
+
+  Future<void> _switchProfile(Map<String, String> profile) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('user_email', profile['email']!);
+    await prefs.setString('user_name', profile['name']!);
+
     setState(() {
-      _displayName = prefs.getString('user_name') ?? 'dev';
-      _username =
-          (prefs.getString('user_email') ?? 'seba.tralma.dev@sspillowy.com')
-              .split('@')
-              .first;
+      _activeUserEmail = profile['email']!;
+      _activeUserName = profile['name']!;
     });
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Perfil cambiado a: ${profile['name']} (${profile['role']})'),
+          backgroundColor: const Color(0xFF0284C7),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   Future<void> _openWebUrl(String url) async {
@@ -1885,27 +2060,122 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Perfil & Configuración')),
+      appBar: AppBar(
+        title: const Text('Perfil & Configuración'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Sincronizar perfiles del Hub',
+            onPressed: () {
+              setState(() => _isLoadingProfiles = true);
+              _fetchUsersAndProfiles();
+            },
+          ),
+        ],
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           physics: const ClampingScrollPhysics(),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const CircleAvatar(
-                radius: 36,
-                backgroundColor: Color(0xFF0284C7),
-                child: Icon(Icons.person, size: 40, color: Colors.white),
+              Center(
+                child: Column(
+                  children: [
+                    const CircleAvatar(
+                      radius: 36,
+                      backgroundColor: Color(0xFF0284C7),
+                      child: Icon(Icons.person, size: 40, color: Colors.white),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _activeUserName.isNotEmpty ? _activeUserName : 'Cargando...',
+                      style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white),
+                    ),
+                    Text(
+                      _activeUserEmail,
+                      style: const TextStyle(fontSize: 13, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              const Text(
+                'Perfiles / Cuentas Vinculadas Hub',
+                style: TextStyle(
+                  color: Color(0xFF38BDF8),
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 8),
-              Text(_displayName,
-                  style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white)),
-              Text('@$_username',
-                  style: const TextStyle(fontSize: 13, color: Colors.grey)),
+              _isLoadingProfiles
+                  ? const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(16.0),
+                        child: CircularProgressIndicator(color: Color(0xFF38BDF8)),
+                      ),
+                    )
+                  : Card(
+                      color: const Color(0xFF161B22),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4.0),
+                        child: Column(
+                          children: _availableProfiles.map((profile) {
+                            final isCurrent = profile['email'] == _activeUserEmail;
+                            return ListTile(
+                              leading: CircleAvatar(
+                                radius: 16,
+                                backgroundColor: isCurrent
+                                    ? const Color(0xFF0284C7)
+                                    : const Color(0xFF21262D),
+                                child: Icon(
+                                  isCurrent ? Icons.check : Icons.person_outline,
+                                  size: 16,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              title: Text(
+                                profile['name']!,
+                                style: TextStyle(
+                                  color: isCurrent ? Colors.white : Colors.grey.shade300,
+                                  fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                                ),
+                              ),
+                              subtitle: Text(
+                                '${profile['email']} • ${profile['role']}',
+                                style: const TextStyle(fontSize: 11, color: Colors.grey),
+                              ),
+                              trailing: isCurrent
+                                  ? const Chip(
+                                      label: Text('Activo',
+                                          style: TextStyle(fontSize: 10, color: Colors.white)),
+                                      backgroundColor: Color(0xFF0284C7),
+                                      padding: EdgeInsets.zero,
+                                    )
+                                  : OutlinedButton(
+                                      style: OutlinedButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                                        side: const BorderSide(color: Color(0xFF38BDF8)),
+                                      ),
+                                      onPressed: () => _switchProfile(profile),
+                                      child: const Text(
+                                        'Cambiar',
+                                        style: TextStyle(fontSize: 11, color: Color(0xFF38BDF8)),
+                                      ),
+                                    ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ),
               const SizedBox(height: 16),
+
               Card(
                 color: const Color(0xFF161B22),
                 child: SwitchListTile(
@@ -1926,7 +2196,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       color: Color(0xFF38BDF8)),
                   title: const Text('Términos y Condiciones',
                       style: TextStyle(color: Colors.white)),
-                  onTap: () => _openWebUrl('https://sspillowy.com/terms'),
+                  onTap: () => _openWebUrl('https://sspillowy.com/terminos'),
                 ),
               ),
               const SizedBox(height: 8),
