@@ -20,6 +20,12 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _as_utc(dt: datetime | None) -> datetime | None:
+    if dt is None:
+        return None
+    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
+
+
 class BypassCreate(BaseModel):
     reason: str = Field(min_length=8, max_length=2000)
     repository_id: Optional[str] = None
@@ -54,9 +60,9 @@ def _out(row: GateBypassRequest, repo_name: str | None = None) -> BypassResponse
         requested_by=row.requested_by,
         decided_by=row.decided_by,
         decision_note=row.decision_note,
-        expires_at=row.expires_at,
-        created_at=row.created_at,
-        decided_at=row.decided_at,
+        expires_at=_as_utc(row.expires_at),
+        created_at=_as_utc(row.created_at) or _now(),
+        decided_at=_as_utc(row.decided_at),
     )
 
 
@@ -83,26 +89,39 @@ def expire_stale_bypasses(db) -> int:
     rows = (
         db.query(GateBypassRequest)
         .filter(GateBypassRequest.status == "APPROVED", GateBypassRequest.expires_at.isnot(None))
-        .filter(GateBypassRequest.expires_at < now)
         .all()
     )
+    expired_count = 0
     for r in rows:
-        r.status = "EXPIRED"
-    return len(rows)
+        exp = _as_utc(r.expires_at)
+        if exp is not None and exp < now:
+            r.status = "EXPIRED"
+            expired_count += 1
+    return expired_count
+
+
+def list_active_bypasses(db, workspace_id: str | None = None) -> list[GateBypassRequest]:
+    """Todos los bypasses APPROVED vigentes del espacio."""
+    expire_stale_bypasses(db)
+    now = _now()
+    rows = (
+        db.query(GateBypassRequest)
+        .filter(GateBypassRequest.status == "APPROVED")
+        .filter(GateBypassRequest.workspace_id == (workspace_id or "__none__"))
+        .order_by(GateBypassRequest.created_at.desc())
+        .all()
+    )
+    active: list[GateBypassRequest] = []
+    for r in rows:
+        exp = _as_utc(r.expires_at)
+        if exp is None or exp >= now:
+            active.append(r)
+    return active
 
 
 def find_active_bypass(db, repository_id: str | None, workspace_id: str | None = None) -> GateBypassRequest | None:
     """Bypass APPROVED vigente del espacio: del repo o para todo el espacio (repository_id NULL)."""
-    expire_stale_bypasses(db)
-    now = _now()
-    q = (
-        db.query(GateBypassRequest)
-        .filter(GateBypassRequest.status == "APPROVED")
-        .filter((GateBypassRequest.expires_at.is_(None)) | (GateBypassRequest.expires_at >= now))
-        .filter(GateBypassRequest.workspace_id == (workspace_id or "__none__"))
-        .order_by(GateBypassRequest.created_at.desc())
-    )
-    rows = q.all()
+    rows = list_active_bypasses(db, workspace_id)
     for r in rows:
         if repository_id and r.repository_id == repository_id:
             return r
@@ -147,9 +166,10 @@ def create_bypass(body: BypassCreate, ws: WorkspaceCtx = Depends(require_ws_writ
     db = ws.session()
     try:
         repo_name = None
-        if body.repository_id:
-            ws.require_repo(body.repository_id)
-            repo = db.get(Repository, body.repository_id)
+        repo_id = (body.repository_id or "").strip() or None
+        if repo_id:
+            ws.require_repo(repo_id)
+            repo = db.get(Repository, repo_id)
             if not repo:
                 raise HTTPException(status_code=404, detail="Repositorio no encontrado")
             repo_name = repo.name
@@ -157,16 +177,18 @@ def create_bypass(body: BypassCreate, ws: WorkspaceCtx = Depends(require_ws_writ
         from gate_eval import gate_for
 
         auto = not gate_for(db, ws.id).require_ciso_approval_for_bypass
+        now = _now()
         row = GateBypassRequest(
             id=str(uuid.uuid4()),
-            repository_id=body.repository_id,
+            workspace_id=ws.id,
+            repository_id=repo_id,
             reason=body.reason.strip(),
             status="APPROVED" if auto else "PENDING",
             requested_by=email,
             decided_by=email if auto else None,
-            decided_at=_now() if auto else None,
-            expires_at=_now() + timedelta(hours=body.expires_hours),
-            created_at=_now(),
+            decided_at=now if auto else None,
+            expires_at=now + timedelta(hours=body.expires_hours),
+            created_at=now,
         )
         db.add(row)
         target = repo_name or "organización"
@@ -198,20 +220,30 @@ def approve_bypass(bypass_id: str, body: BypassDecision | None = None, ws: Works
             raise HTTPException(status_code=404, detail="Solicitud no encontrada")
         if row.status != "PENDING":
             raise HTTPException(status_code=409, detail=f"Estado actual: {row.status}")
+        now = _now()
+        created = _as_utc(row.created_at)
+        exp = _as_utc(row.expires_at)
+        if created and exp and exp > created:
+            duration = exp - created
+            new_exp = now + duration
+        elif not exp or exp < now:
+            new_exp = now + timedelta(hours=24)
+        else:
+            new_exp = exp
         row.status = "APPROVED"
         row.decided_by = email
-        row.decided_at = _now()
-        row.decision_note = (body.note if body else None) or None
-        if not row.expires_at or row.expires_at < _now():
-            row.expires_at = _now() + timedelta(hours=24)
+        row.decided_at = now
+        row.decision_note = ((body.note if body else None) or "").strip() or None
+        row.expires_at = new_exp
         repo = db.get(Repository, row.repository_id) if row.repository_id else None
         target = repo.name if repo else "organización"
+        note_suffix = f" · Nota: {row.decision_note}" if row.decision_note else ""
         _append_audit(
             db,
             email,
             "GATE_BYPASS_APPROVED",
             target,
-            f"Bypass {row.id[:8]}… hasta {row.expires_at.isoformat() if row.expires_at else 'sin fecha'}",
+            f"Bypass {row.id[:8]}… hasta {new_exp.isoformat()}{note_suffix}",
         )
         db.commit()
         db.refresh(row)
@@ -236,10 +268,54 @@ def reject_bypass(bypass_id: str, body: BypassDecision | None = None, ws: Worksp
         row.status = "REJECTED"
         row.decided_by = email
         row.decided_at = _now()
-        row.decision_note = (body.note if body else None) or None
+        row.decision_note = ((body.note if body else None) or "").strip() or None
         repo = db.get(Repository, row.repository_id) if row.repository_id else None
         target = repo.name if repo else "organización"
-        _append_audit(db, email, "GATE_BYPASS_REJECTED", target, f"Bypass {row.id[:8]}… rechazado")
+        note_suffix = f" · Nota: {row.decision_note}" if row.decision_note else ""
+        _append_audit(db, email, "GATE_BYPASS_REJECTED", target, f"Bypass {row.id[:8]}… rechazado{note_suffix}")
+        db.commit()
+        db.refresh(row)
+        return _out(row, repo.name if repo else None)
+    finally:
+        db.close()
+
+
+@router.post("/{bypass_id}/revoke", response_model=BypassResponse)
+def revoke_bypass(bypass_id: str, body: BypassDecision | None = None, ws: WorkspaceCtx = Depends(require_ws)):
+    """Revoca una excepción activa o cancela una solicitud pendiente."""
+    _require_db()
+    email = ws.email
+    db = ws.session()
+    try:
+        row = db.get(GateBypassRequest, bypass_id)
+        if not row or row.workspace_id != ws.id:
+            raise HTTPException(status_code=404, detail="Solicitud no encontrada")
+        is_requester_pending = row.status == "PENDING" and (row.requested_by or "").lower() == email.lower()
+        if not ws.can_manage and not is_requester_pending:
+            raise HTTPException(
+                status_code=403,
+                detail="Solo el propietario o un administrador del espacio puede revocar excepciones.",
+            )
+        if row.status not in ("APPROVED", "PENDING"):
+            raise HTTPException(status_code=409, detail=f"Estado actual: {row.status}")
+        now = _now()
+        was_pending = row.status == "PENDING"
+        row.status = "EXPIRED"
+        row.decided_by = email
+        row.decided_at = now
+        row.expires_at = now
+        if body and body.note and body.note.strip():
+            row.decision_note = body.note.strip()
+        repo = db.get(Repository, row.repository_id) if row.repository_id else None
+        target = repo.name if repo else "organización"
+        action_label = "cancelada antes de aprobar" if was_pending else "revocada manualmente"
+        _append_audit(
+            db,
+            email,
+            "GATE_BYPASS_REVOKED",
+            target,
+            f"Bypass {row.id[:8]}… ({action_label})",
+        )
         db.commit()
         db.refresh(row)
         return _out(row, repo.name if repo else None)

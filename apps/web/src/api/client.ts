@@ -537,6 +537,14 @@ export async function rejectGateBypass(id: string, note?: string): Promise<GateB
   });
 }
 
+export async function revokeGateBypass(id: string, note?: string): Promise<GateBypassRequest> {
+  return request(`/security-gates/bypasses/${id}/revoke`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ note: note || null }),
+  });
+}
+
 export type SecretStep = 'rotated' | 'revoked' | 'history_cleaned' | 'verified';
 export type SecretStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'FALSE_POSITIVE';
 

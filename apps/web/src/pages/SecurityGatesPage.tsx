@@ -12,9 +12,10 @@ import {
   evaluateSecurityGate,
   fetchSecurityGateOverview,
   rejectGateBypass,
+  revokeGateBypass,
   updateSecurityGate,
 } from '../api/client';
-import { ArrowRight, Ban, CircleCheck, PauseCircle, RefreshCw, ShieldAlert, Timer } from 'lucide-react';
+import { ArrowRight, Ban, CircleCheck, Clock, PauseCircle, RefreshCw, ShieldAlert, Timer, XCircle } from 'lucide-react';
 import { useI18n } from '../i18n/I18nProvider';
 import PageSkeleton from '../components/PageSkeleton';
 import '../styles/gates.css';
@@ -63,9 +64,9 @@ const BYPASS_STATUS: Record<string, string> = {
 
 const DURATIONS = [
   { hours: 4, label: '4 horas' },
-  { hours: 24, label: '1 día' },
-  { hours: 72, label: '3 días' },
-  { hours: 168, label: '7 días' },
+  { hours: 24, label: '1 día (24 h)' },
+  { hours: 72, label: '3 días (72 h)' },
+  { hours: 168, label: '7 días (168 h)' },
 ];
 
 const asDecision = (d: string): Decision => (d in DECISION ? (d as Decision) : 'PASSED');
@@ -76,6 +77,38 @@ const samePolicy = (a: SecurityGatePolicy, b: SecurityGatePolicy) =>
   a.max_high_allowed === b.max_high_allowed &&
   a.block_on_secrets === b.block_on_secrets &&
   a.require_ciso_approval_for_bypass === b.require_ciso_approval_for_bypass;
+
+function isBypassActive(b: GateBypassRequest): boolean {
+  if (b.status !== 'APPROVED') return false;
+  if (!b.expires_at) return true;
+  return new Date(b.expires_at).getTime() > Date.now();
+}
+
+function formatRemainingTime(expiresAt?: string | null): string {
+  if (!expiresAt) return 'Sin vencimiento';
+  const diffMs = new Date(expiresAt).getTime() - Date.now();
+  if (diffMs <= 0) return 'Vencida';
+  const totalMinutes = Math.ceil(diffMs / 60000);
+  if (totalMinutes < 60) return `Quedan ${totalMinutes} min`;
+  const hours = Math.floor(totalMinutes / 60);
+  const mins = totalMinutes % 60;
+  if (hours < 48) {
+    return mins > 0 ? `Quedan ${hours} h ${mins} min` : `Quedan ${hours} h`;
+  }
+  const days = Math.floor(hours / 24);
+  const remHours = hours % 24;
+  return remHours > 0 ? `Quedan ${days} d ${remHours} h` : `Quedan ${days} días`;
+}
+
+function formatRequestedDuration(b: GateBypassRequest): string | null {
+  if (!b.created_at || !b.expires_at) return null;
+  const hours = Math.round((new Date(b.expires_at).getTime() - new Date(b.created_at).getTime()) / 3600000);
+  if (hours <= 0) return null;
+  if (hours === 24) return '24 h (1 día)';
+  if (hours === 72) return '72 h (3 días)';
+  if (hours === 168) return '168 h (7 días)';
+  return `${hours} h`;
+}
 
 let cached: SecurityGateOverview | null = null;
 
@@ -88,6 +121,9 @@ export const SecurityGatesPage: React.FC<PageProps> = ({ onNavigate, ...headerPr
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [busyBypassId, setBusyBypassId] = useState<string | null>(null);
+  const [busyAction, setBusyAction] = useState<'approve' | 'reject' | 'revoke' | null>(null);
+  const [decisionNotes, setDecisionNotes] = useState<Record<string, string>>({});
   const [showRequest, setShowRequest] = useState(false);
   const [reason, setReason] = useState('');
   const [scope, setScope] = useState('');
@@ -173,18 +209,57 @@ export const SecurityGatesPage: React.FC<PageProps> = ({ onNavigate, ...headerPr
 
   const decide = async (b: GateBypassRequest, approve: boolean) => {
     setBusy(true);
+    setBusyBypassId(b.id);
+    setBusyAction(approve ? 'approve' : 'reject');
     try {
-      await (approve ? approveGateBypass(b.id) : rejectGateBypass(b.id));
+      const note = (decisionNotes[b.id] || '').trim() || undefined;
+      await (approve ? approveGateBypass(b.id, note) : rejectGateBypass(b.id, note));
+      setDecisionNotes((prev) => {
+        const next = { ...prev };
+        delete next[b.id];
+        return next;
+      });
       await load();
-      notify(approve ? 'success' : 'info', approve ? 'Excepción aprobada' : 'Excepción rechazada', b.repository_name || 'Todo el espacio');
+      notify(
+        approve ? 'success' : 'info',
+        approve ? 'Excepción aprobada' : 'Excepción rechazada',
+        b.repository_name || 'Todo el espacio',
+      );
     } catch (err) {
       notify('error', 'No se pudo completar', errorText(err));
     } finally {
       setBusy(false);
+      setBusyBypassId(null);
+      setBusyAction(null);
     }
   };
 
-  const openRequest = () => {
+  const handleRevoke = async (b: GateBypassRequest) => {
+    setBusy(true);
+    setBusyBypassId(b.id);
+    setBusyAction('revoke');
+    try {
+      const wasPending = b.status === 'PENDING';
+      await revokeGateBypass(b.id, wasPending ? 'Cancelada por el solicitante' : 'Revocada manualmente desde Security Gates');
+      await load();
+      notify(
+        'info',
+        wasPending ? 'Solicitud cancelada' : 'Excepción revocada',
+        wasPending
+          ? 'La solicitud de excepción fue retirada.'
+          : `El gate volvió a aplicarse sobre ${b.repository_name || 'todo el espacio'}.`,
+      );
+    } catch (err) {
+      notify('error', 'No se pudo revocar', errorText(err));
+    } finally {
+      setBusy(false);
+      setBusyBypassId(null);
+      setBusyAction(null);
+    }
+  };
+
+  const openRequest = (repoId = '') => {
+    setScope(repoId);
     setShowRequest(true);
     window.setTimeout(() => requestRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
   };
@@ -192,11 +267,14 @@ export const SecurityGatesPage: React.FC<PageProps> = ({ onNavigate, ...headerPr
   const check = data?.check;
   const decision = asDecision(check?.decision || 'PASSED');
   const info = DECISION[decision];
-  const pending = data?.bypasses.filter((b) => b.status === 'PENDING') ?? [];
-  const history = data?.bypasses.filter((b) => b.status !== 'PENDING').slice(0, 8) ?? [];
+  const allBypasses = data?.bypasses ?? [];
+  const activeBypasses = allBypasses.filter(isBypassActive);
+  const pending = allBypasses.filter((b) => b.status === 'PENDING');
+  const history = allBypasses.filter((b) => b.status !== 'PENDING' && !isBypassActive(b)).slice(0, 10);
   const readOnly = !data?.can_manage;
   const dirty = Boolean(data && draft && !samePolicy(data.policy, draft));
   const blockingReasons = check?.reasons.filter((r) => !r.startsWith('Para continuar')) ?? [];
+  const currentUserEmail = (headerProps.user?.email || '').toLowerCase();
 
   return (
     <div className="gt-page">
@@ -227,7 +305,7 @@ export const SecurityGatesPage: React.FC<PageProps> = ({ onNavigate, ...headerPr
               </div>
               <div className="gt-status-actions">
                 {decision === 'BLOCKED' && data.can_write && (
-                  <button type="button" className="btn btn-secondary" onClick={openRequest}>
+                  <button type="button" className="btn btn-secondary" onClick={() => openRequest('')}>
                     Pedir excepción
                   </button>
                 )}
@@ -281,20 +359,39 @@ export const SecurityGatesPage: React.FC<PageProps> = ({ onNavigate, ...headerPr
                     <th>Altas</th>
                     <th>Secretos</th>
                     <th>Estado</th>
+                    {data.can_write && <th className="gt-col-action">Acción</th>}
                   </tr>
                 </thead>
                 <tbody>
-                  {data.repos.map((r) => (
-                    <tr key={r.id}>
-                      <td className="gt-strong">{r.name}</td>
-                      <td className={r.open_critical > check.max_critical_allowed ? 'gt-over' : undefined}>{r.open_critical}</td>
-                      <td className={r.open_high > check.max_high_allowed ? 'gt-over' : undefined}>{r.open_high}</td>
-                      <td className={check.block_on_secrets && r.open_secrets > 0 ? 'gt-over' : undefined}>{r.open_secrets}</td>
-                      <td>
-                        <span className={`gt-pill is-${r.decision.toLowerCase()}`}>{DECISION[asDecision(r.decision)].label}</span>
-                      </td>
-                    </tr>
-                  ))}
+                  {data.repos.map((r) => {
+                    const repoDecision = asDecision(r.decision);
+                    return (
+                      <tr key={r.id}>
+                        <td className="gt-strong">{r.name}</td>
+                        <td className={r.open_critical > check.max_critical_allowed ? 'gt-over' : undefined}>{r.open_critical}</td>
+                        <td className={r.open_high > check.max_high_allowed ? 'gt-over' : undefined}>{r.open_high}</td>
+                        <td className={check.block_on_secrets && r.open_secrets > 0 ? 'gt-over' : undefined}>{r.open_secrets}</td>
+                        <td>
+                          <span className={`gt-pill is-${repoDecision.toLowerCase()}`}>{DECISION[repoDecision].label}</span>
+                        </td>
+                        {data.can_write && (
+                          <td className="gt-col-action">
+                            {repoDecision === 'BLOCKED' ? (
+                              <button
+                                type="button"
+                                className="gt-link"
+                                onClick={() => openRequest(r.id)}
+                              >
+                                Pedir excepción
+                              </button>
+                            ) : (
+                              <span className="gt-muted">—</span>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             )}
@@ -401,7 +498,7 @@ export const SecurityGatesPage: React.FC<PageProps> = ({ onNavigate, ...headerPr
               {showRequest && (
                 <form className="gt-request" onSubmit={requestBypass}>
                   <label>
-                    <span>Motivo</span>
+                    <span>Motivo (mínimo 8 caracteres)</span>
                     <textarea
                       value={reason}
                       rows={3}
@@ -412,7 +509,7 @@ export const SecurityGatesPage: React.FC<PageProps> = ({ onNavigate, ...headerPr
                   </label>
                   <div className="gt-request-row">
                     <label>
-                      <span>Para</span>
+                      <span>Alcance</span>
                       <select value={scope} onChange={(e) => setScope(e.target.value)}>
                         <option value="">Todo el espacio</option>
                         {data.repos.map((r) => (
@@ -423,7 +520,7 @@ export const SecurityGatesPage: React.FC<PageProps> = ({ onNavigate, ...headerPr
                       </select>
                     </label>
                     <label>
-                      <span>Durante</span>
+                      <span>Duración</span>
                       <select value={hours} onChange={(e) => setHours(parseInt(e.target.value, 10))}>
                         {DURATIONS.map((d) => (
                           <option key={d.hours} value={d.hours}>
@@ -438,63 +535,167 @@ export const SecurityGatesPage: React.FC<PageProps> = ({ onNavigate, ...headerPr
                       Cancelar
                     </button>
                     <button type="submit" className="btn btn-primary" disabled={busy}>
-                      {data.policy.require_ciso_approval_for_bypass ? 'Enviar solicitud' : 'Activar excepción'}
+                      {busy
+                        ? 'Enviando…'
+                        : data.policy.require_ciso_approval_for_bypass
+                          ? 'Enviar solicitud'
+                          : 'Activar excepción'}
                     </button>
                   </div>
                 </form>
               )}
 
-              {pending.length > 0 && (
-                <>
-                  <h4 className="gt-subhead">Esperando aprobación</h4>
+              {activeBypasses.length > 0 && (
+                <div className="gt-section-block">
+                  <h4 className="gt-subhead">Excepciones activas ({activeBypasses.length})</h4>
                   <ul className="gt-list">
-                    {pending.map((b) => (
-                      <li key={b.id}>
-                        <div>
-                          <strong>{b.repository_name || 'Todo el espacio'}</strong>
-                          <p>{b.reason}</p>
-                          <small>
-                            {b.requested_by} · {new Date(b.created_at).toLocaleString()}
-                          </small>
-                        </div>
-                        {data.can_manage && (
-                          <div className="gt-list-actions">
-                            <button type="button" className="btn btn-primary" disabled={busy} onClick={() => decide(b, true)}>
-                              Aprobar
-                            </button>
-                            <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => decide(b, false)}>
-                              Rechazar
-                            </button>
+                    {activeBypasses.map((b) => {
+                      const isThisBusy = busyBypassId === b.id;
+                      return (
+                        <li key={b.id} className="gt-bypass-active-item">
+                          <div className="gt-bypass-body">
+                            <div className="gt-bypass-top">
+                              <strong>{b.repository_name || 'Todo el espacio'}</strong>
+                              <span className="gt-pill is-bypassed">
+                                <Clock size={11} style={{ marginRight: 4, verticalAlign: 'text-bottom' }} />
+                                {formatRemainingTime(b.expires_at)}
+                              </span>
+                            </div>
+                            <p>{b.reason}</p>
+                            {b.decision_note && (
+                              <small className="gt-decision-note">Nota: &ldquo;{b.decision_note}&rdquo;</small>
+                            )}
+                            <small>
+                              Solicitada por {b.requested_by}
+                              {b.decided_by ? ` · Aprobada por ${b.decided_by}` : ''}
+                              {b.expires_at ? ` · Vence ${new Date(b.expires_at).toLocaleString()}` : ''}
+                            </small>
                           </div>
-                        )}
-                      </li>
-                    ))}
+                          {data.can_manage && (
+                            <div className="gt-list-actions">
+                              <button
+                                type="button"
+                                className="btn btn-secondary"
+                                disabled={busy}
+                                onClick={() => handleRevoke(b)}
+                                title="Terminar esta excepción inmediatamente"
+                              >
+                                <XCircle size={13} />
+                                {isThisBusy && busyAction === 'revoke' ? 'Revocando…' : 'Revocar'}
+                              </button>
+                            </div>
+                          )}
+                        </li>
+                      );
+                    })}
                   </ul>
-                </>
+                </div>
+              )}
+
+              {pending.length > 0 && (
+                <div className="gt-section-block">
+                  <h4 className="gt-subhead">Esperando aprobación ({pending.length})</h4>
+                  <ul className="gt-list">
+                    {pending.map((b) => {
+                      const durationLabel = formatRequestedDuration(b);
+                      const isThisBusy = busyBypassId === b.id;
+                      const canCancelOwn = !data.can_manage && currentUserEmail && b.requested_by.toLowerCase() === currentUserEmail;
+                      return (
+                        <li key={b.id} className="gt-bypass-pending-item">
+                          <div className="gt-bypass-body">
+                            <div className="gt-bypass-top">
+                              <strong>{b.repository_name || 'Todo el espacio'}</strong>
+                              {durationLabel && <span className="gt-pill">Plazo: {durationLabel}</span>}
+                            </div>
+                            <p>{b.reason}</p>
+                            <small>
+                              {b.requested_by} · {new Date(b.created_at).toLocaleString()}
+                            </small>
+                            {data.can_manage && (
+                              <div className="gt-decision-box">
+                                <input
+                                  type="text"
+                                  className="gt-note-input"
+                                  placeholder="Nota opcional al aprobar o rechazar…"
+                                  value={decisionNotes[b.id] || ''}
+                                  disabled={busy}
+                                  onChange={(e) =>
+                                    setDecisionNotes((prev) => ({
+                                      ...prev,
+                                      [b.id]: e.target.value,
+                                    }))
+                                  }
+                                />
+                                <div className="gt-list-actions">
+                                  <button
+                                    type="button"
+                                    className="btn btn-primary"
+                                    disabled={busy}
+                                    onClick={() => decide(b, true)}
+                                  >
+                                    {isThisBusy && busyAction === 'approve' ? 'Aprobando…' : 'Aprobar'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    disabled={busy}
+                                    onClick={() => decide(b, false)}
+                                  >
+                                    {isThisBusy && busyAction === 'reject' ? 'Rechazando…' : 'Rechazar'}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                          {canCancelOwn && (
+                            <div className="gt-list-actions">
+                              <button
+                                type="button"
+                                className="btn btn-secondary"
+                                disabled={busy}
+                                onClick={() => handleRevoke(b)}
+                              >
+                                {isThisBusy && busyAction === 'revoke' ? 'Cancelando…' : 'Cancelar'}
+                              </button>
+                            </div>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
               )}
 
               {history.length > 0 && (
-                <>
+                <div className="gt-section-block">
                   <h4 className="gt-subhead">Historial</h4>
                   <ul className="gt-list is-compact">
                     {history.map((b) => (
                       <li key={b.id}>
-                        <div>
+                        <div className="gt-bypass-body">
                           <strong>{b.repository_name || 'Todo el espacio'}</strong>
                           <p>{b.reason}</p>
+                          {b.decision_note && (
+                            <small className="gt-decision-note">Nota: &ldquo;{b.decision_note}&rdquo;</small>
+                          )}
                           <small>
-                            {b.requested_by}
-                            {b.expires_at && b.status === 'APPROVED' ? ` · vence ${new Date(b.expires_at).toLocaleString()}` : ''}
+                            Solicitada por {b.requested_by}
+                            {b.decided_by ? ` · Decidida por ${b.decided_by}` : ''}
+                            {b.decided_at
+                              ? ` · ${new Date(b.decided_at).toLocaleString()}`
+                              : b.expires_at
+                                ? ` · Venció ${new Date(b.expires_at).toLocaleString()}`
+                                : ''}
                           </small>
                         </div>
                         <span className={`gt-pill is-${b.status.toLowerCase()}`}>{BYPASS_STATUS[b.status] || b.status}</span>
                       </li>
                     ))}
                   </ul>
-                </>
+                </div>
               )}
 
-              {!showRequest && pending.length === 0 && history.length === 0 && (
+              {!showRequest && activeBypasses.length === 0 && pending.length === 0 && history.length === 0 && (
                 <div className="gt-empty">No hay excepciones.</div>
               )}
             </section>

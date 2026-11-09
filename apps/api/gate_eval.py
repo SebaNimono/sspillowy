@@ -157,10 +157,27 @@ def evaluate_gate(
 
     if reasons:
         # ¿Hay bypass CISO aprobado y vigente?
+        ws_key = workspace_id or gate.id
+        active = None
         try:
-            from gate_bypass import find_active_bypass
+            from gate_bypass import find_active_bypass, list_active_bypasses
 
-            active = find_active_bypass(db, repository_id, workspace_id or gate.id)
+            active = find_active_bypass(db, repository_id, ws_key)
+            if active is None and repository_id is None and repo_ids:
+                active_list = list_active_bypasses(db, ws_key)
+                bypassed_rids = {b.repository_id for b in active_list if b.repository_id}
+                if bypassed_rids:
+                    remaining_rids = [rid for rid in repo_ids if rid not in bypassed_rids]
+                    rem_crit = _count_open(db, severity="CRITICAL", repo_ids=remaining_rids)
+                    rem_high = _count_open(db, severity="HIGH", repo_ids=remaining_rids)
+                    rem_sec = _count_open(db, engine="gitleaks", repo_ids=remaining_rids)
+                    still_blocked = (
+                        rem_crit > max_c
+                        or rem_high > max_h
+                        or (block_secrets and rem_sec > 0)
+                    )
+                    if not still_blocked:
+                        active = active_list[0]
         except Exception:
             active = None
 

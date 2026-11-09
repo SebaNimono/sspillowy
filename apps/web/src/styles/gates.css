@@ -468,3 +468,71 @@
     flex-direction: column;
   }
 }
+
+
+.gt-section-block {
+  margin-top: 0.5rem;
+}
+
+.gt-section-block + .gt-section-block {
+  margin-top: 0.9rem;
+}
+
+.gt-bypass-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.gt-bypass-top {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.gt-bypass-active-item {
+  padding: 0.75rem 0.85rem !important;
+  margin-bottom: 0.5rem;
+  border: 1px solid #c297ff !important;
+  background: rgba(130, 80, 223, 0.05);
+  border-radius: 6px;
+}
+
+.gt-decision-note {
+  display: block;
+  font-style: italic;
+  color: var(--fg-default) !important;
+}
+
+.gt-decision-box {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.45rem;
+}
+
+.gt-note-input {
+  flex: 1 1 200px;
+  min-width: 160px;
+  padding: 0.34rem 0.55rem;
+  border: 1px solid var(--border-default);
+  background: var(--bg-input, #fff);
+  font-size: 0.78rem;
+  color: var(--fg-default);
+  font-family: inherit;
+}
+
+.gt-list-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.gt-col-action {
+  text-align: right !important;
+  white-space: nowrap;
+}
