@@ -26,7 +26,8 @@ from sqlalchemy.orm import Session
 
 from auth_deps import resolve_session
 from database import SessionLocal
-from models import AuditEvent, Repository, Workspace, WorkspaceMember
+import secrets
+from models import AuditEvent, Repository, Workspace, WorkspaceMember, WorkspaceInvitation
 
 ROLES = ("owner", "admin", "member", "viewer")
 ROLE_LABEL = {"owner": "Propietario", "admin": "Administrador", "member": "Miembro", "viewer": "Solo lectura"}
@@ -411,6 +412,12 @@ def _overview(db: Session, ctx: WorkspaceCtx) -> dict:
         .order_by(WorkspaceMember.created_at.asc())
         .all()
     )
+    pending_invs = (
+        db.query(WorkspaceInvitation)
+        .filter(WorkspaceInvitation.workspace_id == ctx.id, WorkspaceInvitation.status == "pending")
+        .order_by(WorkspaceInvitation.created_at.desc())
+        .all()
+    )
     from models import User
 
     emails = [m.email for m in members]
@@ -453,6 +460,19 @@ def _overview(db: Session, ctx: WorkspaceCtx) -> dict:
             }
             for m in members
         ],
+        "invitations": [
+            {
+                "id": inv.id,
+                "email": inv.email,
+                "role": inv.role,
+                "role_label": ROLE_LABEL.get(inv.role, inv.role),
+                "invited_by": inv.invited_by,
+                "status": inv.status,
+                "created_at": _iso(inv.created_at),
+                "expires_at": _iso(inv.expires_at),
+            }
+            for inv in pending_invs
+        ],
         "roles": [{"id": r, "label": ROLE_LABEL[r]} for r in ROLES if r != "owner"],
     }
 
@@ -494,47 +514,233 @@ class InviteBody(BaseModel):
     role: Literal["admin", "member", "viewer"] = "member"
 
 
-def _send_invite(to: str, ctx: WorkspaceCtx) -> None:
+def _send_invitation_email_bg(to: str, ctx: WorkspaceCtx, role: str, invite_url: str) -> None:
     try:
-        from email_service import mailer_configured, send_email_sync
+        from email_service import send_workspace_invitation_sync
 
-        if not mailer_configured():
-            return
-        hub = os.getenv("FRONTEND_URL", "https://sspillowy.com").rstrip("/")
-        who = html.escape(ctx.user_name or ctx.email)
-        ws = html.escape(ctx.name)
-        text_body = (
-            f"Hola,\n\n{ctx.user_name or ctx.email} te invitó al espacio \"{ctx.name}\" en SSPILLOWY.\n\n"
-            f"Entra con este correo ({to}) en {hub} y lo verás en el selector de espacios.\n"
+        send_workspace_invitation_sync(
+            to=to,
+            inviter_name=ctx.user_name or ctx.email,
+            workspace_name=ctx.name,
+            role_label=ROLE_LABEL.get(role, role),
+            invite_url=invite_url,
         )
-        html_body = (
-            f"<p>Hola,</p><p><strong>{who}</strong> te invitó al espacio <strong>{ws}</strong> en SSPILLOWY.</p>"
-            f"<p>Entra con este correo (<strong>{html.escape(to)}</strong>) en "
-            f"<a href=\"{hub}\">{html.escape(hub)}</a> y lo verás en el selector de espacios.</p>"
-        )
-        send_email_sync(to=to, subject=f"Te invitaron a {ctx.name} — SSPILLOWY", text=text_body, html_body=html_body)
     except Exception as exc:
         print(f"[sspillowy] invitación no enviada a {to}: {exc}", flush=True)
 
 
 @router.post("/current/members", status_code=201)
+@router.post("/current/invitations", status_code=201)
 def invite_member(body: InviteBody, ctx: WorkspaceCtx = Depends(require_ws_admin)):
     email = body.email.strip().lower()
     if not _EMAIL_RE.match(email):
         raise HTTPException(status_code=422, detail="Escribe un correo válido.")
     db = SessionLocal()
     try:
-        exists = db.query(WorkspaceMember).filter(
+        exists_member = db.query(WorkspaceMember).filter(
             WorkspaceMember.workspace_id == ctx.id, WorkspaceMember.email == email
         ).first()
-        if exists:
-            raise HTTPException(status_code=409, detail="Esa persona ya tiene acceso a este espacio.")
-        db.add(WorkspaceMember(id=str(uuid.uuid4()), workspace_id=ctx.id, email=email, role=body.role,
-                               invited_by=ctx.email, created_at=_now()))
-        _audit(db, ctx, "WORKSPACE_MEMBER_INVITED", email, f"Rol: {ROLE_LABEL[body.role]}")
+        if exists_member:
+            raise HTTPException(status_code=409, detail="Esa persona ya tiene acceso activo a este espacio.")
+
+        hub = os.getenv("FRONTEND_URL", "https://sspillowy.com").rstrip("/")
+        now = _now()
+        expires = now + timedelta(days=7)
+
+        inv = db.query(WorkspaceInvitation).filter(
+            WorkspaceInvitation.workspace_id == ctx.id,
+            WorkspaceInvitation.email == email,
+            WorkspaceInvitation.status == "pending"
+        ).first()
+
+        if inv:
+            token = secrets.token_urlsafe(32)
+            inv.token = token
+            inv.role = body.role
+            inv.invited_by = ctx.email
+            inv.expires_at = expires
+            inv.created_at = now
+        else:
+            token = secrets.token_urlsafe(32)
+            inv = WorkspaceInvitation(
+                id=str(uuid.uuid4()),
+                workspace_id=ctx.id,
+                email=email,
+                role=body.role,
+                invited_by=ctx.email,
+                token=token,
+                status="pending",
+                created_at=now,
+                expires_at=expires,
+            )
+            db.add(inv)
+
+        _audit(db, ctx, "WORKSPACE_MEMBER_INVITED", email, f"Invitación pendiente · Rol: {ROLE_LABEL[body.role]}")
+        db.commit()
+
+        invite_url = f"{hub}/invitacion?token={token}"
+        threading.Thread(target=_send_invitation_email_bg, args=(email, ctx, body.role, invite_url), daemon=True).start()
+        return _overview(db, ctx)
+    finally:
+        db.close()
+
+
+@router.get("/invitations/{token}")
+def get_invitation_details(token: str):
+    """Consulta pública de una invitación por token para renderizar la pantalla de aceptación."""
+    db = SessionLocal()
+    try:
+        inv = db.query(WorkspaceInvitation).filter(WorkspaceInvitation.token == token).first()
+        if not inv:
+            raise HTTPException(status_code=404, detail="Invitación no encontrada o enlace inválido.")
+        if inv.status == "accepted":
+            raise HTTPException(status_code=400, detail="Esta invitación ya fue aceptada.")
+        if inv.status == "cancelled":
+            raise HTTPException(status_code=400, detail="Esta invitación ha sido revocada por el administrador.")
+        exp = inv.expires_at
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        if exp < _now():
+            raise HTTPException(status_code=400, detail="Esta invitación ha caducado. Solicita una nueva al administrador.")
+
+        ws = db.get(Workspace, inv.workspace_id)
+        return {
+            "token": inv.token,
+            "workspace_id": inv.workspace_id,
+            "workspace_name": ws.name if ws else "Espacio de trabajo",
+            "email": inv.email,
+            "role": inv.role,
+            "role_label": ROLE_LABEL.get(inv.role, inv.role),
+            "invited_by": inv.invited_by,
+            "expires_at": _iso(inv.expires_at),
+        }
+    finally:
+        db.close()
+
+
+@router.post("/invitations/{token}/accept")
+def accept_invitation(
+    token: str,
+    x_session_id: Annotated[Optional[str], Header(alias="X-Session-Id")] = None,
+    authorization: Annotated[Optional[str], Header()] = None,
+):
+    """Acepta la invitación y une al usuario autenticado como miembro formal del espacio."""
+    try:
+        session = resolve_session(x_session_id, authorization)
+    except Exception:
+        raise HTTPException(status_code=401, detail="Debes iniciar sesión para aceptar esta invitación.")
+
+    user_email = (session.get("email") or "").strip().lower()
+    if not user_email:
+        raise HTTPException(status_code=401, detail="Sesión no válida. Vuelve a iniciar sesión.")
+
+    db = SessionLocal()
+    try:
+        inv = db.query(WorkspaceInvitation).filter(WorkspaceInvitation.token == token).first()
+        if not inv:
+            raise HTTPException(status_code=404, detail="Invitación no encontrada o enlace inválido.")
+        if inv.status != "pending":
+            raise HTTPException(status_code=400, detail="Esta invitación ya no está pendiente.")
+        exp = inv.expires_at
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        if exp < _now():
+            raise HTTPException(status_code=400, detail="Esta invitación ha caducado.")
+
+        if user_email != inv.email.lower():
+            raise HTTPException(
+                status_code=403,
+                detail=f"Has iniciado sesión como {user_email}, pero esta invitación fue enviada a {inv.email}. Inicia sesión con la cuenta correcta.",
+            )
+
+        ws = db.get(Workspace, inv.workspace_id)
+        if not ws:
+            raise HTTPException(status_code=404, detail="El espacio de trabajo ya no existe.")
+
+        existing_member = db.query(WorkspaceMember).filter(
+            WorkspaceMember.workspace_id == inv.workspace_id,
+            WorkspaceMember.email == inv.email.lower()
+        ).first()
+
+        now = _now()
+        if not existing_member:
+            member = WorkspaceMember(
+                id=str(uuid.uuid4()),
+                workspace_id=inv.workspace_id,
+                email=inv.email.lower(),
+                role=inv.role,
+                invited_by=inv.invited_by,
+                created_at=now,
+                last_used_at=now,
+            )
+            db.add(member)
+
+        inv.status = "accepted"
+        inv.accepted_at = now
+
+        db.add(
+            AuditEvent(
+                id=str(uuid.uuid4()),
+                workspace_id=inv.workspace_id,
+                action="WORKSPACE_INVITATION_ACCEPTED",
+                target=inv.email,
+                detail=f"Rol asignado: {ROLE_LABEL.get(inv.role, inv.role)}",
+                actor_email=inv.email,
+                created_at=now,
+            )
+        )
         db.commit()
         invalidate_workspace_cache()
-        threading.Thread(target=_send_invite, args=(email, ctx), daemon=True).start()
+
+        return {
+            "ok": True,
+            "workspace_id": inv.workspace_id,
+            "workspace_name": ws.name,
+            "role": inv.role,
+            "role_label": ROLE_LABEL.get(inv.role, inv.role),
+        }
+    finally:
+        db.close()
+
+
+@router.delete("/current/invitations/{invitation_id}")
+def cancel_invitation(invitation_id: str, ctx: WorkspaceCtx = Depends(require_ws_admin)):
+    """Revoca o cancela una invitación pendiente."""
+    db = SessionLocal()
+    try:
+        inv = db.get(WorkspaceInvitation, invitation_id)
+        if not inv or inv.workspace_id != ctx.id:
+            raise HTTPException(status_code=404, detail="Invitación no encontrada.")
+
+        email = inv.email
+        inv.status = "cancelled"
+        _audit(db, ctx, "WORKSPACE_INVITATION_CANCELLED", email, f"Invitación revocada por {ctx.email}")
+        db.commit()
+        return _overview(db, ctx)
+    finally:
+        db.close()
+
+
+@router.post("/current/invitations/{invitation_id}/resend")
+def resend_invitation(invitation_id: str, ctx: WorkspaceCtx = Depends(require_ws_admin)):
+    """Reenvía el correo de invitación pendiente y renueva la fecha de expiración."""
+    db = SessionLocal()
+    try:
+        inv = db.get(WorkspaceInvitation, invitation_id)
+        if not inv or inv.workspace_id != ctx.id:
+            raise HTTPException(status_code=404, detail="Invitación no encontrada.")
+        if inv.status != "pending":
+            raise HTTPException(status_code=400, detail="Solo se pueden reenviar invitaciones pendientes.")
+
+        now = _now()
+        inv.token = secrets.token_urlsafe(32)
+        inv.expires_at = now + timedelta(days=7)
+        db.commit()
+
+        hub = os.getenv("FRONTEND_URL", "https://sspillowy.com").rstrip("/")
+        invite_url = f"{hub}/invitacion?token={inv.token}"
+        threading.Thread(target=_send_invitation_email_bg, args=(inv.email, ctx, inv.role, invite_url), daemon=True).start()
+
         return _overview(db, ctx)
     finally:
         db.close()

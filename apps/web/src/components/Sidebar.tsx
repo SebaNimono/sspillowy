@@ -19,6 +19,7 @@ import {
   Sliders,
   Sparkles,
   Target,
+  Users,
   Workflow,
   X,
 } from 'lucide-react';
@@ -79,7 +80,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       id: 'governance',
       label: t('nav.groupGovernance'),
-      items: [navItem('reports', ClipboardCheck), navItem('traceability', History), navItem('notifications', Bell)],
+      items: [navItem('users', Users), navItem('reports', ClipboardCheck), navItem('traceability', History), navItem('notifications', Bell)],
     },
     {
       id: 'resources',

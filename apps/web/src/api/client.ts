@@ -1439,6 +1439,28 @@ export interface WorkspaceMember {
   is_me: boolean;
 }
 
+export interface WorkspaceInvitation {
+  id: string;
+  email: string;
+  role: WorkspaceRole;
+  role_label: string;
+  invited_by: string | null;
+  status: 'pending' | 'accepted' | 'cancelled';
+  created_at: string;
+  expires_at: string;
+}
+
+export interface InvitationDetails {
+  token: string;
+  workspace_id: string;
+  workspace_name: string;
+  email: string;
+  role: WorkspaceRole;
+  role_label: string;
+  invited_by: string | null;
+  expires_at: string;
+}
+
 export interface WorkspaceOverview {
   current: {
     id: string;
@@ -1451,6 +1473,7 @@ export interface WorkspaceOverview {
   };
   workspaces: WorkspaceSummary[];
   members: WorkspaceMember[];
+  invitations: WorkspaceInvitation[];
   roles: { id: Exclude<WorkspaceRole, 'owner'>; label: string }[];
 }
 
@@ -1487,6 +1510,28 @@ export async function changeWorkspaceMemberRole(
 
 export async function removeWorkspaceMember(memberId: string): Promise<WorkspaceOverview | { ok: true; left: true }> {
   return request(`/workspaces/current/members/${memberId}`, { method: 'DELETE' });
+}
+
+export async function cancelWorkspaceInvitation(invitationId: string): Promise<WorkspaceOverview> {
+  return request(`/workspaces/current/invitations/${invitationId}`, { method: 'DELETE' });
+}
+
+export async function resendWorkspaceInvitation(invitationId: string): Promise<WorkspaceOverview> {
+  return request(`/workspaces/current/invitations/${invitationId}/resend`, { method: 'POST' });
+}
+
+export async function getInvitationDetails(token: string): Promise<InvitationDetails> {
+  return request(`/workspaces/invitations/${token}`);
+}
+
+export async function acceptWorkspaceInvitation(token: string): Promise<{
+  ok: boolean;
+  workspace_id: string;
+  workspace_name: string;
+  role: WorkspaceRole;
+  role_label: string;
+}> {
+  return request(`/workspaces/invitations/${token}/accept`, { method: 'POST' });
 }
 
 export async function logoutSession(): Promise<void> {

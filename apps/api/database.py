@@ -118,6 +118,27 @@ def init_db() -> bool:
             conn.execute(
                 text(
                     """
+                    CREATE TABLE IF NOT EXISTS workspace_invitations (
+                      id TEXT PRIMARY KEY,
+                      workspace_id TEXT NOT NULL REFERENCES workspaces (id) ON DELETE CASCADE,
+                      email TEXT NOT NULL,
+                      role TEXT NOT NULL DEFAULT 'member',
+                      invited_by TEXT,
+                      token TEXT NOT NULL UNIQUE,
+                      status TEXT NOT NULL DEFAULT 'pending',
+                      created_at TIMESTAMPTZ DEFAULT NOW(),
+                      expires_at TIMESTAMPTZ NOT NULL,
+                      accepted_at TIMESTAMPTZ
+                    )
+                    """
+                )
+            )
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_ws_inv_ws ON workspace_invitations (workspace_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_ws_inv_token ON workspace_invitations (token)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_ws_inv_email ON workspace_invitations (email)"))
+            conn.execute(
+                text(
+                    """
                     CREATE TABLE IF NOT EXISTS gate_bypass_requests (
                       id TEXT PRIMARY KEY,
                       repository_id TEXT REFERENCES repositories (id) ON DELETE SET NULL,

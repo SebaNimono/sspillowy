@@ -33,6 +33,23 @@ class WorkspaceMember(Base):
     last_used_at = Column(DateTime, nullable=True)
 
 
+class WorkspaceInvitation(Base):
+    """Invitación pendiente para unirse a un espacio. Al ser aceptada se convierte en WorkspaceMember."""
+
+    __tablename__ = "workspace_invitations"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    workspace_id = Column(String, ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, index=True)
+    email = Column(String, nullable=False, index=True)
+    role = Column(String, nullable=False, default="member")
+    invited_by = Column(String, nullable=True)
+    token = Column(String, nullable=False, unique=True, index=True)
+    status = Column(String, nullable=False, default="pending")  # pending | accepted | cancelled
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    expires_at = Column(DateTime, nullable=False)
+    accepted_at = Column(DateTime, nullable=True)
+
+
 class User(Base):
     """Usuario SSO (Google/…) o registro manual (email + contraseña)."""
 

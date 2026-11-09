@@ -1,12 +1,16 @@
 import React from 'react';
 
-interface ConfirmModalProps {
-  open: boolean;
+export interface ConfirmModalProps {
+  open?: boolean;
+  isOpen?: boolean;
   title: string;
   message: string;
   confirmLabel?: string;
+  confirmText?: string;
   cancelLabel?: string;
+  cancelText?: string;
   danger?: boolean;
+  isDanger?: boolean;
   busy?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
@@ -15,20 +19,29 @@ interface ConfirmModalProps {
 /** Modal de confirmación con estilo del hub (reemplaza window.confirm). */
 export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   open,
+  isOpen,
   title,
   message,
-  confirmLabel = 'Confirmar',
-  cancelLabel = 'Cancelar',
-  danger = false,
+  confirmLabel,
+  confirmText,
+  cancelLabel,
+  cancelText,
+  danger,
+  isDanger,
   busy = false,
   onConfirm,
   onCancel,
 }) => {
-  if (!open) return null;
+  const visible = open ?? isOpen ?? false;
+  if (!visible) return null;
+
+  const btnConfirm = confirmLabel || confirmText || 'Confirmar';
+  const btnCancel = cancelLabel || cancelText || 'Cancelar';
+  const isDestructive = danger || isDanger || false;
 
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title">
-      <div className="modal-content" style={{ maxWidth: '420px' }}>
+      <div className="modal-content" style={{ maxWidth: '440px' }}>
         <h2 id="confirm-modal-title" style={{ fontSize: '1.15rem', marginBottom: '0.5rem', color: '#1f2328', fontWeight: 700 }}>
           {title}
         </h2>
@@ -37,7 +50,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
         </p>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.65rem' }}>
           <button type="button" className="btn btn-secondary" disabled={busy} onClick={onCancel}>
-            {cancelLabel}
+            {btnCancel}
           </button>
           <button
             type="button"
@@ -45,12 +58,12 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
             disabled={busy}
             onClick={onConfirm}
             style={
-              danger
+              isDestructive
                 ? { background: '#cf222e', borderColor: '#cf222e' }
                 : undefined
             }
           >
-            {busy ? 'Procesando…' : confirmLabel}
+            {busy ? 'Procesando…' : btnConfirm}
           </button>
         </div>
       </div>

@@ -4,6 +4,8 @@ import { LoginPage } from './pages/LoginPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { LandingPage } from './pages/LandingPage';
 import { LegalPage, LegalDoc } from './pages/LegalPage';
+import { UsersPage } from './pages/UsersPage';
+import { AcceptInvitePage } from './pages/AcceptInvitePage';
 import { DashboardPage } from './pages/DashboardPage';
 import { RepositoriesPage } from './pages/RepositoriesPage';
 import { FindingsPage } from './pages/FindingsPage';
@@ -40,8 +42,16 @@ import { CookieBanner } from './components/CookieBanner';
 import { AppToaster } from './components/Toast';
 import './styles/flat.css';
 
-type AppView = 'site' | 'login' | 'console' | LegalDoc | 'reset-password';
+type AppView = 'site' | 'login' | 'console' | LegalDoc | 'reset-password' | 'accept-invite';
 export type LoginMode = 'login' | 'register' | 'forgot';
+
+const INVITATION_PATHS = new Set([
+  '/invitacion',
+  '/invitation',
+  '/accept-invite',
+  '/join',
+]);
+
 
 const RESET_PASSWORD_PATH = '/restablecer-contrasena';
 
@@ -100,6 +110,7 @@ const VALID_TABS = new Set([
   'gates',
   'notifications',
   'reports',
+  'users',
   'observability',
   'traceability',
   'docs',
@@ -123,6 +134,7 @@ interface RouteInfo {
   resetToken?: string | null;
   loginMode?: LoginMode;
   consoleTab?: string;
+  inviteToken?: string | null;
 }
 
 function parseCurrentRoute(): RouteInfo {
@@ -142,6 +154,12 @@ function parseCurrentRoute(): RouteInfo {
   if (RESET_PASSWORD_PATHS.has(pathname)) {
     const token = new URLSearchParams(search).get('token');
     return { view: 'reset-password', resetToken: token };
+  }
+
+  // 2.1 Workspace Invitation
+  if (INVITATION_PATHS.has(pathname)) {
+    const token = new URLSearchParams(search).get('token');
+    return { view: 'accept-invite', inviteToken: token };
   }
 
   // 3. Auth routes (/login, /register, /forgot-password, etc.)
@@ -175,10 +193,12 @@ function parseCurrentRoute(): RouteInfo {
 function pathForView(
   view: AppView,
   mode: LoginMode = 'login',
-  consoleTab = 'dashboard'
+  consoleTab = 'dashboard',
+  inviteToken?: string | null
 ): string {
   if (view === 'privacidad' || view === 'terminos' || view === 'cookies') return `/${view}`;
   if (view === 'reset-password') return RESET_PASSWORD_PATH;
+  if (view === 'accept-invite') return inviteToken ? `/invitacion?token=${encodeURIComponent(inviteToken)}` : '/invitacion';
   if (view === 'login') {
     if (mode === 'register') return '/register';
     if (mode === 'forgot') return '/forgot-password';
@@ -200,6 +220,7 @@ export const App: React.FC = () => (
 const AppShell: React.FC = () => {
   const [view, setView] = useState<AppView>(() => parseCurrentRoute().view);
   const [resetToken, setResetToken] = useState<string | null>(() => parseCurrentRoute().resetToken ?? null);
+  const [inviteToken, setInviteToken] = useState<string | null>(() => parseCurrentRoute().inviteToken ?? null);
   const [loginMode, setLoginMode] = useState<LoginMode>(() => parseCurrentRoute().loginMode ?? 'login');
   const [activeTab, setActiveTabState] = useState<string>(() => parseCurrentRoute().consoleTab ?? initialConsoleTab());
   const [unreadCount, setUnreadCount] = useState(0);
@@ -249,6 +270,14 @@ const AppShell: React.FC = () => {
     setSessionExpiresAt(expiresAt ?? null);
     setOauthError(null);
     setOauthDetail(null);
+    const returnTo = new URLSearchParams(window.location.search).get('return_to');
+    if (returnTo && returnTo.startsWith('/')) {
+      window.history.replaceState({}, '', returnTo);
+      const nextRoute = parseCurrentRoute();
+      setView(nextRoute.view);
+      if (nextRoute.inviteToken) setInviteToken(nextRoute.inviteToken);
+      return;
+    }
     setView('console');
     window.history.replaceState({}, '', activeTab === 'dashboard' ? '/console' : `/console/${activeTab}`);
   };
@@ -310,16 +339,23 @@ const AppShell: React.FC = () => {
       setView(route.view);
       if (route.legalDoc) {
         setResetToken(null);
+        setInviteToken(null);
       } else if (route.view === 'reset-password') {
         setResetToken(route.resetToken ?? null);
+        setInviteToken(null);
+      } else if (route.view === 'accept-invite') {
+        setInviteToken(route.inviteToken ?? null);
+        setResetToken(null);
       } else if (route.view === 'login') {
         setResetToken(null);
         if (route.loginMode) setLoginMode(route.loginMode);
       } else if (route.view === 'console') {
         setResetToken(null);
+        setInviteToken(null);
         if (route.consoleTab) setActiveTabState(route.consoleTab);
       } else if (route.view === 'site') {
         setResetToken(null);
+        setInviteToken(null);
       }
     };
     window.addEventListener('popstate', onPop);
@@ -359,6 +395,13 @@ const AppShell: React.FC = () => {
     if (currentRoute.view === 'reset-password' && currentRoute.resetToken) {
       setResetToken(currentRoute.resetToken);
       setView('reset-password');
+      setBootstrapping(false);
+      return () => window.removeEventListener('popstate', onPop);
+    }
+
+    if (currentRoute.view === 'accept-invite') {
+      setInviteToken(currentRoute.inviteToken ?? null);
+      setView('accept-invite');
       setBootstrapping(false);
       return () => window.removeEventListener('popstate', onPop);
     }
@@ -483,6 +526,36 @@ const AppShell: React.FC = () => {
     );
   }
 
+  if (view === 'accept-invite') {
+    return (
+      <>
+        <AcceptInvitePage
+          token={inviteToken || new URLSearchParams(window.location.search).get('token') || ''}
+          currentUser={user}
+          onGoHome={goHome}
+          onGoLogin={(returnTo) => {
+            const url = returnTo ? `/login?return_to=${encodeURIComponent(returnTo)}` : '/login';
+            window.history.pushState({}, '', url);
+            setLoginMode('login');
+            setView('login');
+          }}
+          onGoRegister={(returnTo) => {
+            const url = returnTo ? `/register?return_to=${encodeURIComponent(returnTo)}` : '/register';
+            window.history.pushState({}, '', url);
+            setLoginMode('register');
+            setView('login');
+          }}
+          onAcceptSuccess={() => {
+            window.history.pushState({}, '', '/console');
+            setView('console');
+            setActiveTab('dashboard');
+          }}
+        />
+        <CookieBanner />
+      </>
+    );
+  }
+
   if (view === 'site') {
     return (
       <>
@@ -549,6 +622,8 @@ const AppShell: React.FC = () => {
         return <NotificationsPage {...pageProps} onNotificationsChange={refreshUnread} />;
       case 'reports':
         return <ReportsPage {...pageProps} />;
+      case 'users':
+        return <UsersPage user={user} />;
       case 'docs':
         return <DocsPage {...pageProps} />;
       case 'secrets':

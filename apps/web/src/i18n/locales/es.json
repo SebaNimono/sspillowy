@@ -34,7 +34,8 @@
     "groupRisk": "Inteligencia de riesgo",
     "groupOrchestration": "Orquestación",
     "groupObservability": "Observabilidad",
-    "soon": "Pronto"
+    "soon": "Pronto",
+    "users": "Usuarios y Accesos"
   },
   "workspace": {
     "yourSpaces": "Tus espacios",

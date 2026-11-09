@@ -306,3 +306,83 @@ async def send_password_reset_email(*, to: str, name: str, reset_url: str) -> bo
     if not ok and not mailer_configured():
         print(f"[sspillowy] Email no configurado. Enlace de reset para {to}: {reset_url}")
     return ok
+
+
+def _workspace_invitation_html(to_email: str, inviter_name: str, workspace_name: str, role_label: str, invite_url: str) -> str:
+    safe_inviter = html.escape(inviter_name)
+    safe_ws = html.escape(workspace_name)
+    safe_role = html.escape(role_label)
+    return f"""<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f6f8fa;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f6f8fa;padding:32px 16px;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:520px;background:#ffffff;border:1px solid #d0d7de;border-radius:10px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.05);">
+        <tr>
+          <td style="padding:20px 24px;border-bottom:1px solid #d0d7de;background:#0d1117;">
+            <span style="font-size:11px;font-weight:700;letter-spacing:0.06em;color:#7d8590;text-transform:uppercase;">Plataforma DevSecOps</span><br>
+            <span style="font-size:20px;font-weight:700;color:#ffffff;letter-spacing:-0.02em;">SSPILLOWY</span>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:24px;">
+            <p style="margin:0 0 12px;font-size:16px;font-weight:600;color:#1f2328;">¡Has sido invitado a unirte a un espacio!</p>
+            <p style="margin:0 0 16px;font-size:14px;line-height:1.55;color:#424a53;">
+              <strong>{safe_inviter}</strong> te ha invitado a formar parte del espacio de trabajo <strong>"{safe_ws}"</strong> con el rol de <strong>{safe_role}</strong>.
+            </p>
+            <p style="margin:0 0 20px;font-size:13px;line-height:1.5;color:#656d76;">
+              Al aceptar esta invitación, tendrás acceso a los repositorios, escaneos de seguridad y tableros vinculados a este espacio de trabajo.
+            </p>
+            <table role="presentation" cellspacing="0" cellpadding="0">
+              <tr>
+                <td style="border-radius:6px;background:#1a7f37;">
+                  <a href="{invite_url}" style="display:inline-block;padding:12px 24px;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px;">
+                    Aceptar Invitación y Unirme
+                  </a>
+                </td>
+              </tr>
+            </table>
+            <p style="margin:24px 0 0;font-size:12px;line-height:1.5;color:#8c959f;">
+              Si no esperabas esta invitación o consideras que se trata de un error, puedes simplemente ignorar este mensaje o rechazarla. El enlace es de uso único y caduca en 7 días.
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:14px 24px;border-top:1px solid #d0d7de;background:#f6f8fa;">
+            <p style="margin:0;font-size:11px;color:#8c959f;">
+              SSPILLOWY · Plataforma Integral de Gobernanza DevSecOps<br>
+              <a href="https://sspillowy.com" style="color:#0969da;text-decoration:none;">sspillowy.com</a>
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+
+
+def _workspace_invitation_text(inviter_name: str, workspace_name: str, role_label: str, invite_url: str) -> str:
+    return f"""Hola,
+
+{inviter_name} te ha invitado a unirte al espacio de trabajo "{workspace_name}" en SSPILLOWY con el rol de {role_label}.
+
+Para aceptar la invitación y unirte al espacio, ingresa en el siguiente enlace:
+{invite_url}
+
+Este enlace es válido por 7 días. Si no esperabas esta invitación, puedes ignorar este correo.
+
+— Equipo SSPILLOWY
+https://sspillowy.com
+"""
+
+
+def send_workspace_invitation_sync(*, to: str, inviter_name: str, workspace_name: str, role_label: str, invite_url: str) -> bool:
+    subject = f"Invitación para unirte a {workspace_name} — SSPILLOWY"
+    html_body = _workspace_invitation_html(to, inviter_name, workspace_name, role_label, invite_url)
+    text = _workspace_invitation_text(inviter_name, workspace_name, role_label, invite_url)
+    ok = send_email_sync(to=to, subject=subject, text=text, html_body=html_body)
+    if not ok and not mailer_configured():
+        print(f"[sspillowy] Email no configurado. Enlace de invitación para {to}: {invite_url}")
+    return ok
