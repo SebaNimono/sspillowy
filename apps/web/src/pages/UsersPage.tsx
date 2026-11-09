@@ -25,6 +25,8 @@ import {
   resendWorkspaceInvitation,
 } from '../api/client';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { Header } from '../components/Header';
+import { SidebarState } from '../components/Sidebar';
 
 type AssignableRole = Exclude<WorkspaceRole, 'owner'>;
 
@@ -52,10 +54,24 @@ const ROLE_INFO: Record<WorkspaceRole, { label: string; desc: string; badgeColor
 };
 
 interface UsersPageProps {
-  user?: { email: string; name?: string } | null;
+  sidebarState?: SidebarState;
+  setSidebarState?: (state: SidebarState) => void;
+  user?: { email: string; name: string } | null;
+  onLogout?: () => void;
+  onNavigate?: (tab: string) => void;
+  unreadCount?: number;
+  onGoToSite?: () => void;
 }
 
-export const UsersPage: React.FC<UsersPageProps> = () => {
+export const UsersPage: React.FC<UsersPageProps> = ({
+  sidebarState = 'expanded',
+  setSidebarState = () => {},
+  user,
+  onLogout,
+  onNavigate,
+  unreadCount,
+  onGoToSite,
+}) => {
   const [data, setData] = useState<WorkspaceOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -202,19 +218,11 @@ export const UsersPage: React.FC<UsersPageProps> = () => {
     }
   };
 
-  if (loading) {
-    return (
-      <div style={{ padding: '2.5rem', textAlign: 'center', color: '#64748b' }}>
-        <RefreshCw size={24} className="spin" style={{ animation: 'spin 1s linear infinite' }} />
-        <p style={{ marginTop: '0.75rem', fontSize: '0.9rem' }}>Cargando usuarios y roles...</p>
-      </div>
-    );
-  }
-
-  if (!data) return null;
-
-  const { current, members, invitations = [], roles } = data;
-  const canManage = current.can_manage;
+  const current = data?.current;
+  const members = data?.members || [];
+  const invitations = data?.invitations || [];
+  const roles = data?.roles || [];
+  const canManage = !!current?.can_manage;
 
   const filteredMembers = members.filter((m) => {
     const q = searchTerm.toLowerCase();
@@ -226,54 +234,74 @@ export const UsersPage: React.FC<UsersPageProps> = () => {
   );
 
   return (
-    <div style={{ maxWidth: '1120px', margin: '0 auto', padding: '1.5rem 1.25rem' }}>
-      {/* Encabezado */}
-      <header style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
-            <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>
-              Usuarios y Accesos
-            </h1>
-            <span
-              style={{
-                fontSize: '0.75rem',
-                fontWeight: 600,
-                padding: '0.2rem 0.55rem',
-                borderRadius: '9999px',
-                background: '#e0f2fe',
-                color: '#0369a1',
-              }}
-            >
-              Espacio: {current.name}
-            </span>
-          </div>
-          <p style={{ margin: 0, fontSize: '0.875rem', color: '#64748b' }}>
-            Gestiona los miembros, asigna roles de seguridad e invita colaboradores mediante verificación segura por correo.
-          </p>
-        </div>
+    <div>
+      <Header
+        title="Usuarios y Accesos"
+        subtitle="Gestiona los miembros, asigna roles de seguridad e invita colaboradores mediante verificación segura por correo."
+        sidebarState={sidebarState}
+        setSidebarState={setSidebarState}
+        user={user}
+        onLogout={onLogout}
+        onNavigate={onNavigate}
+        unreadCount={unreadCount}
+        onGoToSite={onGoToSite}
+      />
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <button
-            type="button"
-            onClick={loadData}
+      {loading ? (
+        <div style={{ padding: '3.5rem 1rem', textAlign: 'center', color: '#64748b' }}>
+          <RefreshCw size={24} className="spin" style={{ animation: 'spin 1s linear infinite' }} />
+          <p style={{ marginTop: '0.75rem', fontSize: '0.9rem' }}>Cargando usuarios y roles...</p>
+        </div>
+      ) : !data || !current ? null : (
+        <div style={{ maxWidth: '1120px', margin: '0 auto', padding: '1.5rem 1.25rem' }}>
+          {/* Subcabecera con badge del espacio activo y refresco */}
+          <div
             style={{
-              display: 'inline-flex',
+              marginBottom: '1.5rem',
+              display: 'flex',
+              justifyContent: 'space-between',
               alignItems: 'center',
-              gap: '0.35rem',
-              padding: '0.45rem 0.85rem',
-              fontSize: '0.8rem',
-              fontWeight: 500,
-              background: '#ffffff',
-              border: '1px solid #cbd5e1',
-              borderRadius: '6px',
-              color: '#475569',
-              cursor: 'pointer',
+              flexWrap: 'wrap',
+              gap: '0.75rem',
             }}
           >
-            <RefreshCw size={14} /> Actualizar
-          </button>
-        </div>
-      </header>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span
+                style={{
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  padding: '0.25rem 0.65rem',
+                  borderRadius: '9999px',
+                  background: '#e0f2fe',
+                  color: '#0369a1',
+                }}
+              >
+                Espacio activo: {current.name}
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <button
+                type="button"
+                onClick={loadData}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  padding: '0.45rem 0.85rem',
+                  fontSize: '0.8rem',
+                  fontWeight: 500,
+                  background: '#ffffff',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '6px',
+                  color: '#475569',
+                  cursor: 'pointer',
+                }}
+              >
+                <RefreshCw size={14} /> Actualizar
+              </button>
+            </div>
+          </div>
 
       {/* Alertas de Feedback */}
       {feedback && (
@@ -763,6 +791,8 @@ export const UsersPage: React.FC<UsersPageProps> = () => {
         }}
         onCancel={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
       />
+        </div>
+      )}
     </div>
   );
 };

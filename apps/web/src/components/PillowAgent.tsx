@@ -265,6 +265,9 @@ export const PillowAgent: React.FC<PillowAgentProps> = ({ userEmail, page }) => 
 
   return (
     <>
+      {/* Efecto bordeado fluido en todo el sistema cuando Pillow está analizando */}
+      {sending && <div className="system-analyzing-border" aria-hidden="true" />}
+
       <button type="button" className="pillow-fab" onClick={() => setOpen(true)} title="Abrir Pillow">
         <Sparkles size={18} />
         <span>Pillow</span>
@@ -356,21 +359,15 @@ export const PillowAgent: React.FC<PillowAgentProps> = ({ userEmail, page }) => 
                     </div>
                   ))}
 
-                  {/* Efecto fluido cuadrado como analizando eso */}
+                  {/* Indicador de respuesta en chat */}
                   {sending && (
-                    <div className="pillow-analyzing-card" aria-live="polite">
-                      <div className="pillow-scanning-box">
-                        <div className="pillow-scan-corner c-tl" />
-                        <div className="pillow-scan-corner c-tr" />
-                        <div className="pillow-scan-corner c-bl" />
-                        <div className="pillow-scan-corner c-br" />
-                        <div className="pillow-scan-grid" />
-                        <div className="pillow-scan-laser" />
-                      </div>
-                      <div className="pillow-analyzing-text">
-                        <strong className="pillow-analyzing-status">Pillow está analizando…</strong>
-                        <span className="pillow-analyzing-sub">Examinando pantalla, hallazgos y contexto de seguridad</span>
-                      </div>
+                    <div className="pillow-chat-line pillow-chat-line--pillow pillow-chat-line--typing">
+                      <span className="pillow-typing-label">Pillow está analizando…</span>
+                      <span className="pillow-typing-dots">
+                        <span />
+                        <span />
+                        <span />
+                      </span>
                     </div>
                   )}
                   <div ref={chatEndRef} />

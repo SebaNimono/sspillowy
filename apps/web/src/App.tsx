@@ -623,7 +623,7 @@ const AppShell: React.FC = () => {
       case 'reports':
         return <ReportsPage {...pageProps} />;
       case 'users':
-        return <UsersPage user={user} />;
+        return <UsersPage {...pageProps} />;
       case 'docs':
         return <DocsPage {...pageProps} />;
       case 'secrets':
