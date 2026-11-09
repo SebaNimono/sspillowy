@@ -130,6 +130,13 @@ class AuthRepository {
 
     throw Exception('Usuario no registrado o contraseña incorrecta');
   }
+
+  Future<bool> requestPasswordReset(String email) async {
+    final response = await apiClient.post('/auth/forgot-password', data: {
+      'email': email,
+    });
+    return response.statusCode == 200 || response.statusCode == 201;
+  }
 }
 
 void main() {
@@ -464,8 +471,14 @@ class _LoginScreenWithTermsState extends State<LoginScreenWithTerms> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       InkWell(
-                        onTap: () => _openWebUrl(
-                            'https://sspillowy.com/forgot-password'),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const ForgotPasswordScreen(),
+                            ),
+                          );
+                        },
                         child: const Padding(
                           padding: EdgeInsets.symmetric(vertical: 4.0),
                           child: Text(
@@ -532,6 +545,227 @@ class _LoginScreenWithTermsState extends State<LoginScreenWithTerms> {
                               fontWeight: FontWeight.bold,
                             ),
                           ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class ForgotPasswordScreen extends StatefulWidget {
+  const ForgotPasswordScreen({super.key});
+
+  @override
+  State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
+}
+
+class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
+  final TextEditingController _emailController = TextEditingController();
+  bool _isLoading = false;
+  String? _message;
+  bool _isSuccess = false;
+  late final AuthRepository _authRepository;
+
+  @override
+  void initState() {
+    super.initState();
+    _authRepository = AuthRepository(ApiClient());
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleSendResetLink() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty ||
+        !RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email)) {
+      setState(() {
+        _message = 'Ingresa un correo electrónico válido';
+        _isSuccess = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _message = null;
+    });
+
+    try {
+      final success = await _authRepository.requestPasswordReset(email);
+      if (mounted) {
+        setState(() {
+          _isSuccess = success;
+          _message = success
+              ? 'Te hemos enviado un enlace para definir tu contraseña nueva.'
+              : 'No se pudo procesar la solicitud.';
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _isSuccess = false;
+          _message =
+              'Ocurrió un problema al enviar el enlace. Inténtalo nuevamente.';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0D1117),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Image.asset(
+                      'assets/logo/logo_2.png',
+                      height: 80,
+                      errorBuilder: (_, __, ___) => const Icon(
+                        Icons.shield_outlined,
+                        size: 70,
+                        color: Color(0xFF38BDF8),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Recuperar contraseña',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Te enviaremos un enlace para definir una contraseña nueva.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+                  ),
+                  const SizedBox(height: 28),
+                  TextField(
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    style: const TextStyle(color: Colors.white, fontSize: 15),
+                    decoration: InputDecoration(
+                      labelText: 'Correo electrónico',
+                      labelStyle:
+                          const TextStyle(color: Colors.white, fontSize: 14),
+                      prefixIcon:
+                          const Icon(Icons.email_outlined, color: Colors.grey),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 16),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(6),
+                        borderSide:
+                            const BorderSide(color: Colors.white, width: 1),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(6),
+                        borderSide: const BorderSide(
+                            color: Color(0xFF38BDF8), width: 1.5),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Si entraste solo con Google o GitHub, usa «Crear cuenta» con el mismo correo para definir una contraseña.',
+                    style: TextStyle(color: Color(0xFF64748B), fontSize: 11.5),
+                  ),
+                  if (_message != null) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: _isSuccess
+                            ? Colors.green.shade900.withValues(alpha: 0.4)
+                            : Colors.red.shade900.withValues(alpha: 0.4),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: _isSuccess
+                              ? Colors.green.shade700
+                              : Colors.red.shade700,
+                        ),
+                      ),
+                      child: Text(
+                        _message!,
+                        style: TextStyle(
+                          color: _isSuccess
+                              ? Colors.greenAccent
+                              : Colors.redAccent,
+                          fontSize: 13,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF16A34A),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    ),
+                    onPressed: _isLoading ? null : _handleSendResetLink,
+                    child: _isLoading
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                'Enviar enlace de recuperación',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              SizedBox(width: 8),
+                              Icon(Icons.arrow_forward,
+                                  size: 18, color: Colors.white),
+                            ],
+                          ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text(
+                      'Volver al inicio de sesión',
+                      style: TextStyle(
+                        color: Color(0xFF38BDF8),
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -2032,7 +2266,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Perfil cambiado a: ${profile['name']} (${profile['role']})'),
+          content: Text(
+              'Perfil cambiado a: ${profile['name']} (${profile['role']})'),
           backgroundColor: const Color(0xFF0284C7),
           duration: const Duration(seconds: 2),
         ),
@@ -2090,7 +2325,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      _activeUserName.isNotEmpty ? _activeUserName : 'Cargando...',
+                      _activeUserName.isNotEmpty
+                          ? _activeUserName
+                          : 'Cargando...',
                       style: const TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
@@ -2104,7 +2341,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
               const SizedBox(height: 20),
-
               const Text(
                 'Perfiles / Cuentas Vinculadas Hub',
                 style: TextStyle(
@@ -2118,7 +2354,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ? const Center(
                       child: Padding(
                         padding: EdgeInsets.all(16.0),
-                        child: CircularProgressIndicator(color: Color(0xFF38BDF8)),
+                        child:
+                            CircularProgressIndicator(color: Color(0xFF38BDF8)),
                       ),
                     )
                   : Card(
@@ -2127,7 +2364,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         padding: const EdgeInsets.symmetric(vertical: 4.0),
                         child: Column(
                           children: _availableProfiles.map((profile) {
-                            final isCurrent = profile['email'] == _activeUserEmail;
+                            final isCurrent =
+                                profile['email'] == _activeUserEmail;
                             return ListTile(
                               leading: CircleAvatar(
                                 radius: 16,
@@ -2135,7 +2373,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     ? const Color(0xFF0284C7)
                                     : const Color(0xFF21262D),
                                 child: Icon(
-                                  isCurrent ? Icons.check : Icons.person_outline,
+                                  isCurrent
+                                      ? Icons.check
+                                      : Icons.person_outline,
                                   size: 16,
                                   color: Colors.white,
                                 ),
@@ -2143,30 +2383,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               title: Text(
                                 profile['name']!,
                                 style: TextStyle(
-                                  color: isCurrent ? Colors.white : Colors.grey.shade300,
-                                  fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                                  color: isCurrent
+                                      ? Colors.white
+                                      : Colors.grey.shade300,
+                                  fontWeight: isCurrent
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
                                 ),
                               ),
                               subtitle: Text(
                                 '${profile['email']} • ${profile['role']}',
-                                style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                style: const TextStyle(
+                                    fontSize: 11, color: Colors.grey),
                               ),
                               trailing: isCurrent
                                   ? const Chip(
                                       label: Text('Activo',
-                                          style: TextStyle(fontSize: 10, color: Colors.white)),
+                                          style: TextStyle(
+                                              fontSize: 10,
+                                              color: Colors.white)),
                                       backgroundColor: Color(0xFF0284C7),
                                       padding: EdgeInsets.zero,
                                     )
                                   : OutlinedButton(
                                       style: OutlinedButton.styleFrom(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                                        side: const BorderSide(color: Color(0xFF38BDF8)),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 8),
+                                        side: const BorderSide(
+                                            color: Color(0xFF38BDF8)),
                                       ),
                                       onPressed: () => _switchProfile(profile),
                                       child: const Text(
                                         'Cambiar',
-                                        style: TextStyle(fontSize: 11, color: Color(0xFF38BDF8)),
+                                        style: TextStyle(
+                                            fontSize: 11,
+                                            color: Color(0xFF38BDF8)),
                                       ),
                                     ),
                             );
@@ -2175,7 +2426,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
               const SizedBox(height: 16),
-
               Card(
                 color: const Color(0xFF161B22),
                 child: SwitchListTile(
