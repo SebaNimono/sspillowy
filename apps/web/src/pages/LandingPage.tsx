@@ -382,8 +382,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ user, onCuenta, onOpen
         <div className="site-shell site-footer-grid">
           <div>
             <strong>SSPILLOWY</strong>
-            <p>Software Security Platform for Intelligent, Low-latency Oversight &amp; Warning Yield.</p>
-          </div>
+                      </div>
           <div>
             <span>Plataforma</span>
             <a href="#plataforma">Flujo HITL</a>

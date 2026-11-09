@@ -127,8 +127,7 @@ export const LegalPage: React.FC<LegalPageProps> = ({ doc, onHome, onNavigate })
         <div className="site-shell site-footer-grid">
           <div>
             <strong>SSPILLOWY</strong>
-            <p>Software Security Platform for Intelligent, Low-latency Oversight &amp; Warning Yield.</p>
-          </div>
+                      </div>
           <div>
             <span>Legal</span>
             <a href="/privacidad">Privacidad</a>

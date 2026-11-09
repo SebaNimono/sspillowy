@@ -96,21 +96,7 @@ export const WorkspaceSwitcher: React.FC<{ collapsed: boolean }> = ({ collapsed 
               {w.id === current.id && <Check size={15} />}
             </button>
           ))}
-          <div className="ws-menu-sep" />
-          <button
-            type="button"
-            role="menuitem"
-            className="ws-menu-item"
-            onClick={() => {
-              setOpen(false);
-              setManaging(true);
-            }}
-          >
-            <Users size={15} />
-            <span className="ws-menu-text">
-              <span>{current.can_manage ? t('workspace.peopleAccess') : t('workspace.viewAccess')}</span>
-            </span>
-          </button>
+
         </div>
       )}
 

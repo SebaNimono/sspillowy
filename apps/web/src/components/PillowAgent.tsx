@@ -1,5 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUp, Sparkles, X, LayoutGrid, MessageSquare, RotateCcw } from 'lucide-react';
+import {
+  ArrowUp,
+  Camera,
+  FileText,
+  LayoutGrid,
+  MessageSquare,
+  Paperclip,
+  RotateCcw,
+  Sparkles,
+  X,
+} from 'lucide-react';
 import {
   fetchPillowAdminStatus,
   fetchPillowQuota,
@@ -30,8 +40,16 @@ interface PillowAgentProps {
 
 type Tab = 'ask' | 'widgets';
 
-const GREETING =
-  'Hola, soy Pillow. Te acompaño en todas las secciones: pregúntame qué significa lo que ves, qué atender primero o cómo corregirlo.';
+interface AttachedItem {
+  name: string;
+  size: number;
+  type: string;
+  isImage: boolean;
+  dataUrl?: string;
+  textSnippet?: string;
+}
+
+const GREETING = '¡Hola! ¿En qué deseas que te ayude hoy?';
 
 export const PillowAgent: React.FC<PillowAgentProps> = ({ userEmail, page }) => {
   const userKey = userEmail?.trim().toLowerCase() || '';
@@ -42,7 +60,11 @@ export const PillowAgent: React.FC<PillowAgentProps> = ({ userEmail, page }) => 
   const [isAdmin, setIsAdmin] = useState(false);
   const [quota, setQuota] = useState<PillowQuota | null>(null);
   const [chat, setChat] = useState<PillowChatLine[]>(() => loadPillowChat(userKey));
+  const [attachment, setAttachment] = useState<AttachedItem | null>(null);
+  const [captureNotice, setCaptureNotice] = useState<string | null>(null);
+
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isDashboard = page === 'dashboard';
   const pageLabel = PILLOW_PAGE_LABEL[page] ?? 'SSPILLOWY';
@@ -79,25 +101,140 @@ export const PillowAgent: React.FC<PillowAgentProps> = ({ userEmail, page }) => 
 
   const grouped = useMemo(() => groupCatalogByCategory(), []);
 
+  // Manejo de archivo subido (máximo 1 archivo)
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const isImg = file.type.startsWith('image/');
+    const reader = new FileReader();
+
+    if (isImg) {
+      reader.onload = () => {
+        setAttachment({
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          isImage: true,
+          dataUrl: reader.result as string,
+        });
+      };
+      reader.readAsDataURL(file);
+    } else {
+      reader.onload = () => {
+        const full = reader.result as string;
+        setAttachment({
+          name: file.name,
+          size: file.size,
+          type: file.type || 'text/plain',
+          isImage: false,
+          textSnippet: full.slice(0, 4000),
+        });
+      };
+      reader.readAsText(file);
+    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  // Captura de pantalla de la consola ("le permite capturar")
+  const handleCaptureConsole = async () => {
+    try {
+      setCaptureNotice('Selecciona la ventana o pestaña para capturar...');
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { displaySurface: 'browser' },
+        preferCurrentTab: true,
+      } as any);
+
+      const track = stream.getVideoTracks()[0];
+      const video = document.createElement('video');
+      video.srcObject = stream;
+      await video.play();
+
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth || 1280;
+      canvas.height = video.videoHeight || 720;
+      const ctx = canvas.getContext('2d');
+      ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      track.stop();
+      stream.getTracks().forEach((t) => t.stop());
+
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+      setAttachment({
+        name: `captura_consola_${page}.jpg`,
+        size: Math.round(dataUrl.length * 0.75),
+        type: 'image/jpeg',
+        isImage: true,
+        dataUrl,
+      });
+
+      setCaptureNotice('Captura realizada y adjunta. Puedes preguntar sobre ella.');
+      setTimeout(() => setCaptureNotice(null), 4000);
+    } catch (err) {
+      setCaptureNotice(null);
+      console.warn('Captura cancelada o permiso denegado:', err);
+    }
+  };
+
   const handleSend = async () => {
     const text = input.trim();
-    if (!text || sending) return;
+    if ((!text && !attachment) || sending) return;
     if (!userKey) {
       setChat((prev) => [...prev, { role: 'pillow', text: 'Inicia sesión para usar Pillow y contar tus créditos diarios.' }]);
       return;
     }
 
+    const currentAttached = attachment;
     const history = chat.slice(-8).map(({ role, text: t }) => ({ role, text: t }));
     setSending(true);
     setInput('');
-    setChat((prev) => [...prev, { role: 'user', text, page }]);
+    setAttachment(null);
+
+    // Texto visual del mensaje del usuario
+    let userDisplayText = text;
+    if (!userDisplayText && currentAttached) {
+      userDisplayText = `[Adjunto: ${currentAttached.name}] Analiza este archivo/captura en relación a la pantalla actual.`;
+    }
+
+    setChat((prev) => [
+      ...prev,
+      {
+        role: 'user',
+        text: userDisplayText,
+        page,
+        attachmentInfo: currentAttached
+          ? {
+              name: currentAttached.name,
+              isImage: currentAttached.isImage,
+              dataUrl: currentAttached.dataUrl,
+            }
+          : undefined,
+      } as any,
+    ]);
+
+    // Contexto extendido con el adjunto
+    const baseContext = getPillowPageContext(page) || {};
+    const pageContextWithAttachment = {
+      ...baseContext,
+      ...(currentAttached
+        ? {
+            attached_file: {
+              name: currentAttached.name,
+              type: currentAttached.type,
+              size_bytes: currentAttached.size,
+              text_preview: currentAttached.textSnippet,
+              has_image: currentAttached.isImage,
+            },
+          }
+        : {}),
+    };
 
     try {
       const res = await sendPillowMessage({
-        message: text,
+        message: userDisplayText,
         user_key: userKey,
         page,
-        page_context: getPillowPageContext(page),
+        page_context: pageContextWithAttachment,
         history,
       });
       setChat((prev) => [...prev, { role: 'pillow', text: res.reply, page, suggestions: res.suggested_widgets }]);
@@ -185,15 +322,31 @@ export const PillowAgent: React.FC<PillowAgentProps> = ({ userEmail, page }) => 
             {tab === 'ask' ? (
               <div className="pillow-ask">
                 <div className="pillow-chat">
-                  {[{ role: 'pillow', text: GREETING } as PillowChatLine, ...chat].map((line, i) => (
+                  {[{ role: 'pillow', text: GREETING } as PillowChatLine, ...chat].map((line: any, i) => (
                     <div key={i} className={`pillow-chat-line pillow-chat-line--${line.role}`}>
-                      {line.role === 'user' && line.page && line.page !== page && (
-                        <span className="pillow-chat-origin">desde {PILLOW_PAGE_LABEL[line.page] ?? line.page}</span>
-                      )}
                       <p>{line.text}</p>
+
+                      {/* Vista previa de archivo adjunto enviado */}
+                      {line.attachmentInfo && (
+                        <div className="pillow-chat-attachment-bubble">
+                          {line.attachmentInfo.isImage && line.attachmentInfo.dataUrl ? (
+                            <img
+                              src={line.attachmentInfo.dataUrl}
+                              alt={line.attachmentInfo.name}
+                              className="pillow-chat-thumb"
+                            />
+                          ) : (
+                            <div className="pillow-chat-doc-icon">
+                              <FileText size={16} />
+                            </div>
+                          )}
+                          <span>{line.attachmentInfo.name}</span>
+                        </div>
+                      )}
+
                       {isDashboard && line.suggestions?.length ? (
                         <div className="pillow-suggestions">
-                          {line.suggestions.map((s) => (
+                          {line.suggestions.map((s: any) => (
                             <button key={`${s.type}-${s.title}`} type="button" onClick={() => addSuggestion(s)}>
                               + {s.title}
                             </button>
@@ -202,18 +355,33 @@ export const PillowAgent: React.FC<PillowAgentProps> = ({ userEmail, page }) => 
                       ) : null}
                     </div>
                   ))}
+
+                  {/* Efecto fluido cuadrado como analizando eso */}
                   {sending && (
-                    <div className="pillow-chat-line pillow-chat-line--pillow pillow-chat-line--typing" aria-live="polite">
-                      <span className="pillow-typing-dots">
-                        <span />
-                        <span />
-                        <span />
-                      </span>
-                      <span className="pillow-typing-label">Pillow está pensando…</span>
+                    <div className="pillow-analyzing-card" aria-live="polite">
+                      <div className="pillow-scanning-box">
+                        <div className="pillow-scan-corner c-tl" />
+                        <div className="pillow-scan-corner c-tr" />
+                        <div className="pillow-scan-corner c-bl" />
+                        <div className="pillow-scan-corner c-br" />
+                        <div className="pillow-scan-grid" />
+                        <div className="pillow-scan-laser" />
+                      </div>
+                      <div className="pillow-analyzing-text">
+                        <strong className="pillow-analyzing-status">Pillow está analizando…</strong>
+                        <span className="pillow-analyzing-sub">Examinando pantalla, hallazgos y contexto de seguridad</span>
+                      </div>
                     </div>
                   )}
                   <div ref={chatEndRef} />
                 </div>
+
+                {captureNotice && (
+                  <div className="pillow-capture-toast">
+                    <Sparkles size={13} />
+                    <span>{captureNotice}</span>
+                  </div>
+                )}
 
                 <div className="pillow-suggestion-chips">
                   {suggestionsFor(page).map((s) => (
@@ -223,10 +391,32 @@ export const PillowAgent: React.FC<PillowAgentProps> = ({ userEmail, page }) => 
                   ))}
                 </div>
 
-                <div className="pillow-input-row">
+                {/* Banner de archivo adjunto preparado para enviar (máximo 1) */}
+                {attachment && (
+                  <div className="pillow-attachment-chip">
+                    {attachment.isImage && attachment.dataUrl ? (
+                      <img src={attachment.dataUrl} alt="Vista previa" className="pillow-chip-thumb" />
+                    ) : (
+                      <FileText size={16} color="#0284c7" />
+                    )}
+                    <span className="pillow-chip-name" title={attachment.name}>
+                      {attachment.name} ({Math.round(attachment.size / 1024)} KB)
+                    </span>
+                    <button
+                      type="button"
+                      className="pillow-chip-remove"
+                      onClick={() => setAttachment(null)}
+                      title="Quitar archivo"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                )}
+
+                <div className="pillow-input-wrapper">
                   <textarea
-                    rows={3}
-                    placeholder={`Pregunta sobre ${pageLabel}…`}
+                    rows={2}
+                    placeholder={`Pregunta a Pillow sobre ${pageLabel}…`}
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => {
@@ -236,15 +426,47 @@ export const PillowAgent: React.FC<PillowAgentProps> = ({ userEmail, page }) => 
                       }
                     }}
                   />
-                  <button
-                    type="button"
-                    className="pillow-send"
-                    disabled={sending || !input.trim()}
-                    onClick={() => void handleSend()}
-                    aria-label="Enviar"
-                  >
-                    <ArrowUp size={18} />
-                  </button>
+
+                  <div className="pillow-input-footer">
+                    <div className="pillow-attachment-tools">
+                      {/* Subir 1 archivo (máximo 1) */}
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        style={{ display: 'none' }}
+                        onChange={handleFileSelect}
+                        accept="image/*,.txt,.json,.log,.py,.ts,.tsx,.dart,.md,.yml,.yaml,.csv"
+                      />
+                      <button
+                        type="button"
+                        className="pillow-tool-btn"
+                        onClick={() => fileInputRef.current?.click()}
+                        title="Subir archivo o imagen (máximo 1)"
+                      >
+                        <Paperclip size={16} />
+                      </button>
+
+                      {/* Captura de pantalla de la consola ("le permite capturar") */}
+                      <button
+                        type="button"
+                        className="pillow-tool-btn"
+                        onClick={handleCaptureConsole}
+                        title="Capturar pantalla de la consola (le permite capturar la vista actual para consultar sobre ella)"
+                      >
+                        <Camera size={16} />
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="pillow-send"
+                      disabled={sending || (!input.trim() && !attachment)}
+                      onClick={() => void handleSend()}
+                      aria-label="Enviar"
+                    >
+                      <ArrowUp size={18} />
+                    </button>
+                  </div>
                 </div>
               </div>
             ) : (

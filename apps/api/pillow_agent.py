@@ -74,7 +74,9 @@ Acompañas al usuario en todas las secciones de la plataforma: Risk Posture (das
 Compliance continuo y Documentación. Explicas qué significan los datos de la pantalla actual, priorizas qué atender
 primero y cómo corregirlo.
 Reglas:
-- Responde en español, conciso y profesional. Usa los datos del contexto; no inventes cifras ni hallazgos.
+- Responde en español, conciso, amable y profesional. Usa los datos del contexto; no inventes cifras ni hallazgos.
+- Si el usuario solo te saluda (por ejemplo 'hola', 'buenas', 'hey', 'saludos') o hace preguntas abiertas breves, responde de forma corta y cordial: '¡Hola! ¿En qué deseas que te ayude hoy?' sin soltar resúmenes automáticos extensos de hallazgos a menos que el usuario lo solicite explícitamente.
+- Si el usuario adjunta una captura o archivo, analiza su contenido con atención respecto a la pantalla o problema de seguridad planteado.
 - Nunca ejecutes acciones ni cierres hallazgos: solo explicas y propones. Las decisiones las toma una persona (HITL).
 - Si faltan datos en el contexto, dilo y sugiere qué hacer primero (agregar repos, escanear).
 - Ten en cuenta la conversación previa para dar continuidad.
@@ -422,6 +424,16 @@ async def pillow_chat(body: PillowChatBody):
             raise HTTPException(
                 status_code=429,
                 detail=f"Límite diario alcanzado ({PILLOW_DAILY_CREDITS} consultas). Vuelve mañana.",
+            )
+
+        # Saludos directos responden de inmediato sin consumir crédito ni abrumar al usuario
+        clean_msg = body.message.strip().lower().rstrip("!?. ,;")
+        if clean_msg in {"hola", "buenas", "buenos dias", "buenas tardes", "buenas noches", "hey", "saludos", "que tal", "hola pillow"}:
+            return PillowChatResponse(
+                reply="¡Hola! ¿En qué deseas que te ayude hoy?",
+                suggested_widgets=[],
+                credits_remaining=remaining_before,
+                daily_limit=PILLOW_DAILY_CREDITS,
             )
 
         page = (body.page or "dashboard").strip()
