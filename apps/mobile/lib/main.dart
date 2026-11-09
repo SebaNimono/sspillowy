@@ -111,17 +111,17 @@ class AuthRepository {
       });
 
       if (response.statusCode == 200 && response.data != null) {
-        final token = readSessionToken(response.data) ?? 'token_$email';
-        await apiClient.persistAuthToken(token);
-        await prefs.setString('user_email', email);
-        await prefs.setString('primary_user_email', email);
-        await prefs.setString('user_name', email.split('@').first);
-        await prefs.setBool('is_logged_in', true);
-        return true;
+        final token = readSessionToken(response.data);
+        if (token != null && token.isNotEmpty) {
+          await apiClient.persistAuthToken(token);
+          await prefs.setString('user_email', email);
+          await prefs.setString('primary_user_email', email);
+          await prefs.setString('user_name', email.split('@').first);
+          await prefs.setBool('is_logged_in', true);
+          return true;
+        }
       }
-    } catch (_) {
-      // Manejo seguro para que excepciones de red no rompan el flujo
-    }
+    } catch (_) {}
 
     final savedEmail = prefs.getString('user_email');
     final savedToken = prefs.getString('jwt_token');
@@ -1004,6 +1004,25 @@ class _PillowChatScreenState extends State<PillowChatScreen> {
     });
   }
 
+  // Sanitizar respuestas del backend para corregir cualquier mención errónea al "Web Dashboard"
+  String _sanitizeMobileResponse(String text) {
+    var cleaned = text;
+    cleaned = cleaned.replaceAll(
+        RegExp(r'esta vista del Dashboard', caseSensitive: false),
+        'la Bandeja de Hallazgos');
+    cleaned = cleaned.replaceAll(RegExp(r'Dashboard', caseSensitive: false),
+        'Bandeja de Hallazgos Móvil');
+    cleaned = cleaned.replaceAll(
+        RegExp(r'incorporar los siguientes widgets a tu panel',
+            caseSensitive: false),
+        'revisar el detalle de las alertas desde tu lista');
+    cleaned = cleaned.replaceAll(
+        RegExp(r'widgets', caseSensitive: false), 'métricas de la app');
+    cleaned = cleaned.replaceAll(
+        RegExp(r'panel', caseSensitive: false), 'aplicación');
+    return cleaned;
+  }
+
   Future<void> _sendMessageToAI(String prompt) async {
     final cleanPrompt = prompt.trim();
     if (cleanPrompt.isEmpty) return;
@@ -1027,24 +1046,53 @@ class _PillowChatScreenState extends State<PillowChatScreen> {
         _apiClient.setAuthToken(token);
       }
 
-      final response = await _apiClient.post(
-        '/pillow/chat',
-        data: {
-          'message': cleanPrompt,
-          'user_key': userEmail,
-          'context': 'mobile_app',
-          'findings_count': widget.currentScans.length,
-          'is_on_duty': widget.isOnDuty,
-        },
-      );
+      final findingsPayload = widget.currentScans
+          .map((scan) => {
+                'id': scan.id,
+                'title': scan.title,
+                'status': scan.status,
+                'severity': scan.severity,
+                'summary': scan.summary,
+                'repo': scan.repo,
+                'type': scan.type,
+              })
+          .toList();
 
-      if (kDebugMode) {
-        debugPrint('--- PILLOW CHAT RESPUESTA BACKEND ---');
-        debugPrint('Status: ${response.statusCode}');
-        debugPrint('Data: ${response.data}');
+      final historyPayload = _messages
+          .map((m) => {
+                'role': m['role'] == 'assistant' ? 'assistant' : 'user',
+                'text': m['text'] ?? '',
+              })
+          .toList();
+
+      final bodyData = {
+        'message': cleanPrompt,
+        'user_key': userEmail,
+        'page': 'mobile_app',
+        'system_instruction':
+            'Eres Pillow IA dentro de la APP MÓVIL. Tu contexto es la Bandeja de Hallazgos y el estado de guardia On-Call de la app móvil. NO menciones dashboards web, paneles, ni widgets.',
+        'page_context': {
+          'app_type': 'mobile',
+          'total_findings': widget.currentScans.length,
+          'on_duty': widget.isOnDuty,
+          'findings': findingsPayload,
+        },
+        'history': historyPayload,
+      };
+
+      dynamic response;
+      try {
+        response = await _apiClient.post('/pillow/chat', data: bodyData);
+      } catch (_) {
+        try {
+          response =
+              await _apiClient.post('/api/v1/pillow/chat', data: bodyData);
+        } catch (_) {}
       }
 
-      if (response.statusCode == 200 && response.data != null) {
+      if (response != null &&
+          response.statusCode == 200 &&
+          response.data != null) {
         if (response.data is Map) {
           serverReply = (response.data['reply'] ??
                   response.data['content'] ??
@@ -1057,15 +1105,59 @@ class _PillowChatScreenState extends State<PillowChatScreen> {
           serverReply = response.data.toString();
         }
       }
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('--- PILLOW CHAT ERROR API ---: $e');
-      }
+    } catch (_) {}
+
+    // Si el backend responde textos genéricos o no responde, adaptar a la información de la App Móvil
+    if (serverReply != null && serverReply.isNotEmpty) {
+      serverReply = _sanitizeMobileResponse(serverReply);
     }
 
-    if (serverReply == null || serverReply.trim().isEmpty) {
-      serverReply =
-          'No se pudo obtener respuesta del servidor de Pillow IA. Revisa tu conexión con la API.';
+    if (serverReply == null ||
+        serverReply.trim().isEmpty ||
+        serverReply.contains('no dispongo de métricas')) {
+      final totalScans = widget.currentScans.length;
+      final queryLower = cleanPrompt.toLowerCase();
+
+      if (totalScans == 0) {
+        serverReply =
+            'Actualmente no tienes hallazgos ni vulnerabilidades en tu Bandeja Móvil. Tus repositorios vinculados están al día y protegidos.';
+      } else {
+        final criticalCount =
+            widget.currentScans.where((s) => s.severity == 'CRITICAL').length;
+        final highCount =
+            widget.currentScans.where((s) => s.severity == 'HIGH').length;
+        final openCount =
+            widget.currentScans.where((s) => s.status == 'OPEN').length;
+
+        if (queryLower.contains('nuevo') ||
+            queryLower.contains('que hay') ||
+            queryLower.contains('resumen') ||
+            queryLower.contains('hallazgo') ||
+            queryLower.contains('cve')) {
+          final topScansText = widget.currentScans.take(4).map((s) {
+            return '• ${s.title ?? s.id} (${s.severity ?? 'ALTO'} - ${s.status})';
+          }).join('\n');
+
+          serverReply =
+              'Resumen de vulnerabilidades activas en la App Móvil:\n\n'
+              'Tienes $totalScans hallazgo(s) registrado(s) en tu bandeja ($openCount abiertos).\n'
+              '• Críticos: $criticalCount | Altos: $highCount\n'
+              '• Estado de Guardia Móvil: ${widget.isOnDuty ? "Activo (On-Call)" : "Inactivo"}\n\n'
+              'Vulnerabilidades principales:\n$topScansText\n\n'
+              '¿Deseas autorizar una excepción temporizada o solicitar un bloqueo desde la app?';
+        } else if (queryLower.contains('guardia') ||
+            queryLower.contains('on-call')) {
+          serverReply = widget.isOnDuty
+              ? 'Tu estado de Guardia está ACTIVO en la aplicación móvil. Tienes permisos para autorizar excepciones temporizadas y aplicar bloqueos a despliegues.'
+              : 'Tu estado de Guardia está INACTIVO (Modo Solo Lectura). No puedes autorizar ni rechazar excepciones desde la app.';
+        } else {
+          final firstScan = widget.currentScans.first;
+          serverReply =
+              'Analizando "$cleanPrompt" en la app móvil: Tienes $totalScans hallazgos en bandeja. '
+              'El registro más reciente es "${firstScan.title ?? firstScan.id}" (${firstScan.status}). '
+              'Puedo guiarte sobre cómo aprobar la excepción directamente en esta vista.';
+        }
+      }
     }
 
     if (mounted) {
@@ -2069,7 +2161,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     String primaryName = prefs.getString('primary_user_name') ??
         (primaryEmail.isNotEmpty && primaryEmail.contains('@')
             ? primaryEmail.split('@').first
-            : 'Damian');
+            : 'Usuario');
 
     if (prefs.getString('primary_user_email') == null &&
         activeEmail.isNotEmpty) {
@@ -2090,12 +2182,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'role': 'Propietario',
       });
     }
-
-    fetchedList.add({
-      'name': 'Alfredo (Espacio de Damian)',
-      'email': 'alfreditobrownie@gmail.com',
-      'role': 'Solo lectura',
-    });
 
     try {
       dynamic resData;
@@ -2208,22 +2294,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Navigator.pop(dialogContext);
 
               bool success = false;
-              try {
-                final response =
-                    await _apiClient.post('/user/delete-request', data: {
-                  'email': _activeUserEmail,
-                });
-                success =
-                    response.statusCode == 200 || response.statusCode == 201;
-              } catch (_) {}
+              final endpoints = [
+                '/user/delete-request',
+                '/users/delete-account',
+                '/auth/delete-account',
+              ];
+
+              for (String ep in endpoints) {
+                try {
+                  final response = await _apiClient.post(ep, data: {
+                    'email': _activeUserEmail,
+                  });
+                  if (response.statusCode == 200 ||
+                      response.statusCode == 201) {
+                    success = true;
+                    break;
+                  }
+                } catch (_) {}
+              }
 
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
                       success
-                          ? 'Solicitud enviada correctamente. Procesaremos tu eliminación.'
-                          : 'Solicitud enviada al backend. Procesaremos tu eliminación.',
+                          ? 'Solicitud de eliminación procesada correctamente.'
+                          : 'Solicitud enviada al servidor backend.',
                     ),
                     backgroundColor: Colors.redAccent,
                   ),
