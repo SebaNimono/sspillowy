@@ -1004,7 +1004,6 @@ class _PillowChatScreenState extends State<PillowChatScreen> {
     });
   }
 
-  // Sanitizar respuestas del backend para corregir cualquier mención errónea al "Web Dashboard"
   String _sanitizeMobileResponse(String text) {
     var cleaned = text;
     cleaned = cleaned.replaceAll(
@@ -1107,7 +1106,6 @@ class _PillowChatScreenState extends State<PillowChatScreen> {
       }
     } catch (_) {}
 
-    // Si el backend responde textos genéricos o no responde, adaptar a la información de la App Móvil
     if (serverReply != null && serverReply.isNotEmpty) {
       serverReply = _sanitizeMobileResponse(serverReply);
     }
