@@ -16,7 +16,7 @@ import { motion, MotionConfig } from 'framer-motion';
 
 interface LandingPageProps {
   user: { email: string; name: string } | null;
-  onCuenta: () => void;
+  onCuenta: (mode?: 'login' | 'register') => void;
   onOpenConsole: () => void;
   onLogout: () => void;
 }
@@ -158,7 +158,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ user, onCuenta, onOpen
       setAccountOpen((open) => !open);
       return;
     }
-    onCuenta();
+    onCuenta('login');
   };
 
   return (
@@ -368,7 +368,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ user, onCuenta, onOpen
             SSO con GitHub, GitLab, Google o Microsoft. Sin segunda cuenta. El worker real (Semgrep primero) es el siguiente tramo de código; el Hub ya está para recorrer el flujo.
           </p>
           <div className="site-hero-actions">
-            <button className="btn btn-primary" onClick={user ? onOpenConsole : onCuenta}>
+            <button className="btn btn-primary" onClick={user ? onOpenConsole : () => onCuenta('register')}>
               <span>{user ? 'Abrir consola' : 'Empezar'}</span>
               <ArrowRight size={16} />
             </button>
@@ -394,7 +394,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ user, onCuenta, onOpen
             <span>Documentación</span>
             <a href="#documentacion">API y stack</a>
             <a href="#faq">FAQ</a>
-            <button type="button" onClick={user ? onOpenConsole : onCuenta}>{user ? 'Consola' : 'Empezar'}</button>
+            <button type="button" onClick={user ? onOpenConsole : () => onCuenta('register')}>{user ? 'Consola' : 'Empezar'}</button>
           </div>
           <div>
             <span>Legal</span>

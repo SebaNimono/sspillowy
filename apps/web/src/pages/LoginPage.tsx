@@ -39,6 +39,8 @@ interface LoginPageProps {
   onBack?: () => void;
   oauthError?: string | null;
   oauthDetail?: string | null;
+  initialMode?: 'login' | 'register' | 'forgot';
+  onModeChange?: (mode: 'login' | 'register' | 'forgot') => void;
 }
 
 const oauthErrorMessage = (code: string, detail?: string | null) => {
@@ -100,9 +102,44 @@ const oauthErrorMessage = (code: string, detail?: string | null) => {
   }
 };
 
-export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oauthError, oauthDetail }) => {
-  const [isRegister, setIsRegister] = useState(false);
-  const [isForgot, setIsForgot] = useState(false);
+export const LoginPage: React.FC<LoginPageProps> = ({
+  onLoginSuccess,
+  onBack,
+  oauthError,
+  oauthDetail,
+  initialMode = 'login',
+  onModeChange,
+}) => {
+  const [isRegister, setIsRegister] = useState(() => initialMode === 'register');
+  const [isForgot, setIsForgot] = useState(() => initialMode === 'forgot');
+
+  useEffect(() => {
+    setIsRegister(initialMode === 'register');
+    setIsForgot(initialMode === 'forgot');
+  }, [initialMode]);
+
+  const setMode = (mode: 'login' | 'register' | 'forgot') => {
+    if (mode === 'register') {
+      setIsRegister(true);
+      setIsForgot(false);
+      if (window.location.pathname !== '/register' && window.location.pathname !== '/registro') {
+        window.history.pushState({}, '', '/register');
+      }
+    } else if (mode === 'forgot') {
+      setIsForgot(true);
+      setIsRegister(false);
+      if (window.location.pathname !== '/forgot-password' && window.location.pathname !== '/recuperar-contrasena') {
+        window.history.pushState({}, '', '/forgot-password');
+      }
+    } else {
+      setIsRegister(false);
+      setIsForgot(false);
+      if (window.location.pathname !== '/login' && window.location.pathname !== '/iniciar-sesion') {
+        window.history.pushState({}, '', '/login');
+      }
+    }
+    onModeChange?.(mode);
+  };
   const [email, setEmail] = useState(getLastEmail);
   const [rememberedEmail, setRememberedEmail] = useState(getLastEmail);
   const [password, setPassword] = useState('');
@@ -195,7 +232,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oa
         const result = await registerWithPassword(email.trim(), password, fullName.trim() || undefined);
         if (result.requires_verification) {
           setPendingVerificationEmail(result.email);
-          setIsRegister(false);
+          setMode('login');
           setToast({
             id: Date.now().toString(),
             type: 'info',
@@ -417,7 +454,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oa
         >
           <button
             type="button"
-            onClick={() => { setIsRegister(false); setIsForgot(false); }}
+            onClick={() => setMode('login')}
             style={{
               flex: 1,
               padding: '0.45rem',
@@ -436,7 +473,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oa
           </button>
           <button
             type="button"
-            onClick={() => { setIsRegister(true); setIsForgot(false); }}
+            onClick={() => setMode('register')}
             style={{
               flex: 1,
               padding: '0.45rem',
@@ -499,7 +536,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oa
               type="button"
               className="site-footer-link"
               style={{ display: 'block', margin: '1rem auto 0', textAlign: 'center' }}
-              onClick={() => setIsForgot(false)}
+              onClick={() => setMode('login')}
             >
               Volver al inicio de sesión
             </button>
@@ -565,7 +602,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onBack, oa
               {!isRegister && (
                 <button
                   type="button"
-                  onClick={() => setIsForgot(true)}
+                  onClick={() => setMode('forgot')}
                   style={{ fontSize: '0.75rem', color: '#0969da', background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontWeight: 600 }}
                 >
                   ¿Olvidaste tu clave?

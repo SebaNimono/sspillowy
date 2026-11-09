@@ -28,9 +28,10 @@ const META: Record<
 interface LegalPageProps {
   doc: LegalDoc;
   onHome: () => void;
+  onNavigate?: (doc: LegalDoc) => void;
 }
 
-export const LegalPage: React.FC<LegalPageProps> = ({ doc, onHome }) => {
+export const LegalPage: React.FC<LegalPageProps> = ({ doc, onHome, onNavigate }) => {
   const meta = META[doc];
 
   return (
@@ -49,13 +50,40 @@ export const LegalPage: React.FC<LegalPageProps> = ({ doc, onHome }) => {
             <span>SSPILLOWY</span>
           </a>
           <nav className="site-nav-links site-legal-nav">
-            <a href="/privacidad" className={doc === 'privacidad' ? 'is-active' : ''}>
+            <a
+              href="/privacidad"
+              className={doc === 'privacidad' ? 'is-active' : ''}
+              onClick={(e) => {
+                if (onNavigate) {
+                  e.preventDefault();
+                  onNavigate('privacidad');
+                }
+              }}
+            >
               Privacidad
             </a>
-            <a href="/terminos" className={doc === 'terminos' ? 'is-active' : ''}>
+            <a
+              href="/terminos"
+              className={doc === 'terminos' ? 'is-active' : ''}
+              onClick={(e) => {
+                if (onNavigate) {
+                  e.preventDefault();
+                  onNavigate('terminos');
+                }
+              }}
+            >
               Términos
             </a>
-            <a href="/cookies" className={doc === 'cookies' ? 'is-active' : ''}>
+            <a
+              href="/cookies"
+              className={doc === 'cookies' ? 'is-active' : ''}
+              onClick={(e) => {
+                if (onNavigate) {
+                  e.preventDefault();
+                  onNavigate('cookies');
+                }
+              }}
+            >
               Cookies
             </a>
           </nav>

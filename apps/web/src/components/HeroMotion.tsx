@@ -5,7 +5,7 @@ import { fadeUp, staggerContainer } from '../motion/siteMotion';
 
 interface HeroMotionProps {
   user: { email: string; name: string } | null;
-  onCuenta: () => void;
+  onCuenta: (mode?: 'login' | 'register') => void;
   onOpenConsole: () => void;
 }
 
@@ -37,7 +37,7 @@ export const HeroMotion: React.FC<HeroMotionProps> = ({ user, onCuenta, onOpenCo
     <motion.div className="site-hero-actions" variants={fadeUp}>
       <motion.button
         className="btn btn-primary"
-        onClick={user ? onOpenConsole : onCuenta}
+        onClick={user ? onOpenConsole : () => onCuenta('register')}
         whileHover={{ scale: 1.02 }}
         whileTap={{ scale: 0.98 }}
       >

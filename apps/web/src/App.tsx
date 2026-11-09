@@ -41,47 +41,48 @@ import { AppToaster } from './components/Toast';
 import './styles/flat.css';
 
 type AppView = 'site' | 'login' | 'console' | LegalDoc | 'reset-password';
+export type LoginMode = 'login' | 'register' | 'forgot';
 
 const RESET_PASSWORD_PATH = '/restablecer-contrasena';
 
 const LEGAL_PATHS: Record<string, LegalDoc> = {
   '/privacidad': 'privacidad',
+  '/privacy': 'privacidad',
   '/terminos': 'terminos',
+  '/terms': 'terminos',
   '/cookies': 'cookies',
+};
+
+const RESET_PASSWORD_PATHS = new Set([
+  '/restablecer-contrasena',
+  '/reset-password',
+]);
+
+const AUTH_ROUTES: Record<string, LoginMode> = {
+  '/login': 'login',
+  '/iniciar-sesion': 'login',
+  '/signin': 'login',
+  '/register': 'register',
+  '/registro': 'register',
+  '/signup': 'register',
+  '/crear-cuenta': 'register',
+  '/forgot-password': 'forgot',
+  '/olvide-clave': 'forgot',
+  '/recuperar-contrasena': 'forgot',
+  '/recuperar': 'forgot',
 };
 
 const HASH_TO_LEGAL: Record<string, LegalDoc> = {
   '#privacidad': 'privacidad',
+  '#privacy': 'privacidad',
   '#terminos': 'terminos',
+  '#terms': 'terminos',
   '#cookies': 'cookies',
 };
 
 function normalizePath(pathname: string): string {
   if (!pathname || pathname === '/') return '/';
   return pathname.replace(/\/+$/, '') || '/';
-}
-
-function legalFromLocation(): LegalDoc | null {
-  const path = normalizePath(window.location.pathname);
-  if (LEGAL_PATHS[path]) return LEGAL_PATHS[path];
-  const hash = window.location.hash.toLowerCase();
-  return HASH_TO_LEGAL[hash] ?? null;
-}
-
-function resetTokenFromLocation(): string | null {
-  if (normalizePath(window.location.pathname) === RESET_PASSWORD_PATH) {
-    return new URLSearchParams(window.location.search).get('token');
-  }
-  return null;
-}
-
-function initialView(): AppView {
-  const legal = legalFromLocation();
-  if (legal) return legal;
-  if (resetTokenFromLocation()) return 'reset-password';
-  // Si hay sesión guardada, no mandar al landing al recargar (se valida contra la API al arrancar)
-  if (getStoredUser() && getStoredSessionId()) return 'console';
-  return 'site';
 }
 
 const CONSOLE_TAB_KEY = 'sspillowy_console_tab';
@@ -116,8 +117,76 @@ function initialConsoleTab(): string {
   return 'dashboard';
 }
 
-function pathForView(view: AppView): string {
+interface RouteInfo {
+  view: AppView;
+  legalDoc?: LegalDoc;
+  resetToken?: string | null;
+  loginMode?: LoginMode;
+  consoleTab?: string;
+}
+
+function parseCurrentRoute(): RouteInfo {
+  const pathname = normalizePath(window.location.pathname);
+  const search = window.location.search;
+  const hash = window.location.hash.toLowerCase();
+
+  // 1. Legal paths
+  if (LEGAL_PATHS[pathname]) {
+    return { view: LEGAL_PATHS[pathname], legalDoc: LEGAL_PATHS[pathname] };
+  }
+  if (HASH_TO_LEGAL[hash]) {
+    return { view: HASH_TO_LEGAL[hash], legalDoc: HASH_TO_LEGAL[hash] };
+  }
+
+  // 2. Reset password
+  if (RESET_PASSWORD_PATHS.has(pathname)) {
+    const token = new URLSearchParams(search).get('token');
+    return { view: 'reset-password', resetToken: token };
+  }
+
+  // 3. Auth routes (/login, /register, /forgot-password, etc.)
+  if (AUTH_ROUTES[pathname]) {
+    return { view: 'login', loginMode: AUTH_ROUTES[pathname] };
+  }
+
+  // 4. Console routes: /console, /console/:tab, /consola, or /:tab in VALID_TABS
+  if (pathname === '/console' || pathname === '/consola') {
+    return { view: 'console', consoleTab: initialConsoleTab() };
+  }
+  if (pathname.startsWith('/console/')) {
+    const tabCandidate = pathname.slice('/console/'.length);
+    if (VALID_TABS.has(tabCandidate)) {
+      return { view: 'console', consoleTab: tabCandidate };
+    }
+  }
+  const directTab = pathname.slice(1);
+  if (VALID_TABS.has(directTab)) {
+    return { view: 'console', consoleTab: directTab };
+  }
+
+  // 5. Default root /: if logged in, console; otherwise landing page (site)
+  if (getStoredUser() && getStoredSessionId()) {
+    return { view: 'console', consoleTab: initialConsoleTab() };
+  }
+
+  return { view: 'site' };
+}
+
+function pathForView(
+  view: AppView,
+  mode: LoginMode = 'login',
+  consoleTab = 'dashboard'
+): string {
   if (view === 'privacidad' || view === 'terminos' || view === 'cookies') return `/${view}`;
+  if (view === 'reset-password') return RESET_PASSWORD_PATH;
+  if (view === 'login') {
+    if (mode === 'register') return '/register';
+    if (mode === 'forgot') return '/forgot-password';
+    return '/login';
+  }
+  if (view === 'console') {
+    return consoleTab === 'dashboard' ? '/console' : `/console/${consoleTab}`;
+  }
   return '/';
 }
 
@@ -129,9 +198,10 @@ export const App: React.FC = () => (
 );
 
 const AppShell: React.FC = () => {
-  const [view, setView] = useState<AppView>(initialView);
-  const [resetToken, setResetToken] = useState<string | null>(() => resetTokenFromLocation());
-  const [activeTab, setActiveTabState] = useState<string>(initialConsoleTab);
+  const [view, setView] = useState<AppView>(() => parseCurrentRoute().view);
+  const [resetToken, setResetToken] = useState<string | null>(() => parseCurrentRoute().resetToken ?? null);
+  const [loginMode, setLoginMode] = useState<LoginMode>(() => parseCurrentRoute().loginMode ?? 'login');
+  const [activeTab, setActiveTabState] = useState<string>(() => parseCurrentRoute().consoleTab ?? initialConsoleTab());
   const [unreadCount, setUnreadCount] = useState(0);
   const [bootstrapping, setBootstrapping] = useState(true);
   const [oauthError, setOauthError] = useState<string | null>(null);
@@ -149,11 +219,16 @@ const AppShell: React.FC = () => {
     } catch {
       // ignore
     }
+    const targetPath = tab === 'dashboard' ? '/console' : `/console/${tab}`;
+    if (normalizePath(window.location.pathname) !== targetPath) {
+      window.history.pushState({}, '', targetPath);
+    }
   };
 
   const goHome = () => {
     window.history.pushState({}, '', '/');
     setView('site');
+    setResetToken(null);
     window.scrollTo(0, 0);
   };
 
@@ -175,6 +250,7 @@ const AppShell: React.FC = () => {
     setOauthError(null);
     setOauthDetail(null);
     setView('console');
+    window.history.replaceState({}, '', activeTab === 'dashboard' ? '/console' : `/console/${activeTab}`);
   };
 
   const expireSession = () => {
@@ -183,7 +259,9 @@ const AppShell: React.FC = () => {
     setSessionExpiresAt(null);
     setOauthError('session_ended');
     setOauthDetail(null);
+    setLoginMode('login');
     setView('login');
+    window.history.replaceState({}, '', '/login');
   };
 
   useEffect(() => {
@@ -228,21 +306,20 @@ const AppShell: React.FC = () => {
     }
 
     const onPop = () => {
-      const legal = legalFromLocation();
-      if (legal) {
-        setView(legal);
+      const route = parseCurrentRoute();
+      setView(route.view);
+      if (route.legalDoc) {
         setResetToken(null);
-        return;
-      }
-      const token = resetTokenFromLocation();
-      if (token) {
-        setResetToken(token);
-        setView('reset-password');
-        return;
-      }
-      if (normalizePath(window.location.pathname) === '/') {
+      } else if (route.view === 'reset-password') {
+        setResetToken(route.resetToken ?? null);
+      } else if (route.view === 'login') {
         setResetToken(null);
-        setView((current) => (current === 'login' || current === 'console' ? current : 'site'));
+        if (route.loginMode) setLoginMode(route.loginMode);
+      } else if (route.view === 'console') {
+        setResetToken(null);
+        if (route.consoleTab) setActiveTabState(route.consoleTab);
+      } else if (route.view === 'site') {
+        setResetToken(null);
       }
     };
     window.addEventListener('popstate', onPop);
@@ -253,12 +330,18 @@ const AppShell: React.FC = () => {
     const detail = params.get('oauth_detail');
 
     const clearQuery = () => {
-      window.history.replaceState({}, '', pathForView(legalFromLocation() ?? 'site'));
+      const currentRoute = parseCurrentRoute();
+      window.history.replaceState(
+        {},
+        '',
+        pathForView(currentRoute.view, currentRoute.loginMode ?? 'login', activeTab)
+      );
     };
 
     if (error) {
       setOauthError(error);
       setOauthDetail(detail);
+      setLoginMode('login');
       setView('login');
       clearQuery();
       setBootstrapping(false);
@@ -266,14 +349,15 @@ const AppShell: React.FC = () => {
     }
 
     if (params.get('email_verified') === '1') {
+      setLoginMode('login');
       setView('login');
       setBootstrapping(false);
       return () => window.removeEventListener('popstate', onPop);
     }
 
-    const resetTokenParam = resetTokenFromLocation();
-    if (resetTokenParam) {
-      setResetToken(resetTokenParam);
+    const currentRoute = parseCurrentRoute();
+    if (currentRoute.view === 'reset-password' && currentRoute.resetToken) {
+      setResetToken(currentRoute.resetToken);
       setView('reset-password');
       setBootstrapping(false);
       return () => window.removeEventListener('popstate', onPop);
@@ -369,7 +453,16 @@ const AppShell: React.FC = () => {
   }
 
   if (view === 'privacidad' || view === 'terminos' || view === 'cookies') {
-    return <LegalPage doc={view} onHome={goHome} />;
+    return (
+      <LegalPage
+        doc={view}
+        onHome={goHome}
+        onNavigate={(doc) => {
+          window.history.pushState({}, '', `/${doc}`);
+          setView(doc);
+        }}
+      />
+    );
   }
 
   if (view === 'reset-password' && resetToken) {
@@ -378,8 +471,9 @@ const AppShell: React.FC = () => {
         <ResetPasswordPage
           token={resetToken}
           onGoLogin={() => {
-            window.history.pushState({}, '', '/?password_reset=1');
+            window.history.pushState({}, '', '/login?password_reset=1');
             setResetToken(null);
+            setLoginMode('login');
             setView('login');
           }}
           onBack={goHome}
@@ -394,8 +488,15 @@ const AppShell: React.FC = () => {
       <>
         <LandingPage
           user={user}
-          onCuenta={() => setView('login')}
-          onOpenConsole={() => setView('console')}
+          onCuenta={(mode = 'login') => {
+            setLoginMode(mode);
+            setView('login');
+            window.history.pushState({}, '', mode === 'register' ? '/register' : '/login');
+          }}
+          onOpenConsole={() => {
+            window.history.pushState({}, '', activeTab === 'dashboard' ? '/console' : `/console/${activeTab}`);
+            setView('console');
+          }}
           onLogout={handleLogout}
         />
         <CookieBanner />
@@ -408,9 +509,11 @@ const AppShell: React.FC = () => {
       <>
         <LoginPage
           onLoginSuccess={handleLoginSuccess}
-          onBack={() => { setOauthError(null); setOauthDetail(null); setView('site'); }}
+          onBack={goHome}
           oauthError={oauthError}
           oauthDetail={oauthDetail}
+          initialMode={loginMode}
+          onModeChange={setLoginMode}
         />
         <CookieBanner />
       </>
