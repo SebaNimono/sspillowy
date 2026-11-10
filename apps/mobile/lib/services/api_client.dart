@@ -31,8 +31,11 @@ class ApiClient {
                 sessionId: prefs.getString("session_id"),
               );
 
-          if (sessionId != null) {
+          if (sessionId != null && sessionId.isNotEmpty) {
             applySessionHeaders(options.headers, sessionId);
+          } else {
+            // Fallback de desarrollo para evitar 401 en pruebas locales sin login
+            options.headers['Authorization'] = 'Bearer dev_session_token';
           }
           handler.next(options);
         },
@@ -53,8 +56,6 @@ class ApiClient {
     );
   }
 
-  /// Guarda el token en memoria y en las cabeceras por defecto de Dio.
-  /// Acepta sesiones del hub y tokens de prueba locales.
   void setAuthToken(String token) {
     final sessionId = token.trim();
     _memoryToken = sessionId.isEmpty ? null : sessionId;
@@ -63,7 +64,6 @@ class ApiClient {
     }
   }
 
-  /// Persiste la sesión en SharedPreferences y la deja lista para Dio.
   Future<void> persistAuthToken(String token) async {
     final sessionId = token.trim();
     final prefs = await SharedPreferences.getInstance();

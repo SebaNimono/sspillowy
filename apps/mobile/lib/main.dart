@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'core/services/notification_service.dart';
 import 'features/security_gate/presentation/screens/security_gate_bypasses_screen.dart';
+import 'repositories/incident_repository.dart';
 import 'services/api_client.dart';
 import 'services/auth_headers.dart';
 
@@ -66,10 +68,26 @@ class ScanModel {
           json['description']?.toString() ??
           json['message']?.toString() ??
           'Sin resumen de triage disponible.',
-      severity:
-          (json['severity'] ?? json['level'] ?? json['risk_level'] ?? 'HIGH')
-              .toString()
-              .toUpperCase(),
+      severity: () {
+        final rawSev = json['severity'] ??
+            json['level'] ??
+            json['risk_level'] ??
+            json['criticality'] ??
+            json['severity_level'] ??
+            json['priority'];
+        if (rawSev == null) return 'HIGH';
+        final str = rawSev.toString().toUpperCase();
+        if (str.contains('CRIT') ||
+            str == 'CRITICAL' ||
+            str == '9' ||
+            str == '10') {
+          return 'CRITICAL';
+        }
+        if (str.contains('HIGH') || str.contains('ALT')) {
+          return 'HIGH';
+        }
+        return str;
+      }(),
       repo: (json['repo'] ??
               json['repository'] ??
               json['repo_name'] ??
@@ -147,8 +165,14 @@ class AuthRepository {
   }
 }
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Inicialización del servicio de Notificaciones Push y handler de Deep Linking
+  await NotificationService.init((payload) {
+    debugPrint("Notificación seleccionada con payload: $payload");
+  });
+
   runApp(const SSPillowyApp());
 }
 
@@ -813,11 +837,17 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
   int _currentIndex = 0;
   List<ScanModel> _currentActiveScans = [];
   List<StringMap> _globalAuditLogs = [];
+  List _inAppNotifications = [];
+  final ApiClient _apiClient = ApiClient();
+
+  late final IncidentRepository _incidentRepository;
 
   @override
   void initState() {
     super.initState();
+    _incidentRepository = IncidentRepository(ApiClient());
     _loadPersistentAuditLogs();
+    _loadNotificationsFromApiAndPrefs();
   }
 
   Future<void> _loadPersistentAuditLogs() async {
@@ -837,6 +867,179 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
         'persistent_audit_logs', jsonEncode(_globalAuditLogs));
+  }
+
+  Future<void> _loadNotificationsFromApiAndPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedNotifsJson = prefs.getString('persistent_in_app_notifs');
+    List localNotifs = [];
+
+    if (savedNotifsJson != null && savedNotifsJson.isNotEmpty) {
+      try {
+        final List decoded = jsonDecode(savedNotifsJson);
+        localNotifs =
+            decoded.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      } catch (_) {}
+    }
+
+    try {
+      final token = prefs.getString('jwt_token');
+      if (token != null && token.isNotEmpty) {
+        _apiClient.setAuthToken(token);
+      }
+
+      final endpoints = [
+        '/notifications',
+        '/api/v1/notifications',
+        '/user/notifications',
+      ];
+
+      dynamic responseData;
+      for (final ep in endpoints) {
+        try {
+          final res = await _apiClient.get(ep);
+          if (res.statusCode == 200 && res.data != null) {
+            responseData = res.data;
+            break;
+          }
+        } catch (_) {}
+      }
+
+      if (responseData != null) {
+        List rawList = [];
+        if (responseData is List) {
+          rawList = responseData;
+        } else if (responseData is Map) {
+          rawList = responseData['notifications'] ??
+              responseData['data'] ??
+              responseData['items'] ??
+              [];
+        }
+
+        for (final item in rawList) {
+          if (item is Map) {
+            final id = (item['id'] ?? item['_id'] ?? '').toString();
+            final title =
+                (item['title'] ?? item['subject'] ?? 'Notificación').toString();
+            final body =
+                (item['body'] ?? item['message'] ?? item['description'] ?? '')
+                    .toString();
+            final type =
+                (item['type'] ?? item['category'] ?? 'INFO').toString();
+            final read = item['read'] == true || item['is_read'] == true;
+            final dateStr =
+                (item['created_at'] ?? item['date'] ?? '').toString();
+
+            if (id.isNotEmpty && !localNotifs.any((n) => n['id'] == id)) {
+              localNotifs.insert(0, {
+                'id': id,
+                'title': title,
+                'body': body,
+                'type': type,
+                'read': read,
+                'time': dateStr.isNotEmpty
+                    ? dateStr.substring(
+                        0, dateStr.length > 16 ? 16 : dateStr.length)
+                    : '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}',
+              });
+            }
+          }
+        }
+      }
+    } catch (_) {}
+
+    if (mounted) {
+      setState(() {
+        _inAppNotifications = localNotifs;
+      });
+      _savePersistentNotifications();
+    }
+  }
+
+  Future<void> _savePersistentNotifications() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+        'persistent_in_app_notifs', jsonEncode(_inAppNotifications));
+  }
+
+  Future<void> _addInAppNotification(
+      String title, String body, String type) async {
+    final newId = DateTime.now().millisecondsSinceEpoch.toString();
+    final newNotif = {
+      'id': newId,
+      'title': title,
+      'body': body,
+      'type': type,
+      'read': false,
+      'time':
+          '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}',
+    };
+
+    setState(() {
+      _inAppNotifications.insert(0, newNotif);
+    });
+    await _savePersistentNotifications();
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('jwt_token');
+      if (token != null && token.isNotEmpty) {
+        _apiClient.setAuthToken(token);
+      }
+      await _apiClient.post('/notifications', data: newNotif);
+    } catch (_) {}
+  }
+
+  Future<void> _markNotificationAsRead(int index) async {
+    final notifId = _inAppNotifications[index]['id'];
+    setState(() {
+      _inAppNotifications[index]['read'] = true;
+    });
+    await _savePersistentNotifications();
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('jwt_token');
+      if (token != null && token.isNotEmpty) {
+        _apiClient.setAuthToken(token);
+      }
+      await _apiClient
+          .post('/notifications/$notifId/read', data: {'read': true});
+    } catch (_) {}
+  }
+
+  Future<void> _markAllNotificationsAsRead() async {
+    setState(() {
+      for (var n in _inAppNotifications) {
+        n['read'] = true;
+      }
+    });
+    await _savePersistentNotifications();
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('jwt_token');
+      if (token != null && token.isNotEmpty) {
+        _apiClient.setAuthToken(token);
+      }
+      await _apiClient.post('/notifications/read-all', data: {});
+    } catch (_) {}
+  }
+
+  Future<void> _clearNotifications() async {
+    setState(() {
+      _inAppNotifications.clear();
+    });
+    await _savePersistentNotifications();
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('jwt_token');
+      if (token != null && token.isNotEmpty) {
+        _apiClient.setAuthToken(token);
+      }
+      await _apiClient.delete('/notifications');
+    } catch (_) {}
   }
 
   void _updateActiveScans(List<ScanModel> scans) {
@@ -860,12 +1063,19 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
         isOnDuty: widget.isOnDuty,
         onScansUpdated: _updateActiveScans,
         onAuditAdded: _addAuditLog,
+        onAddNotification: _addInAppNotification,
+        notifications: _inAppNotifications,
+        onMarkRead: _markNotificationAsRead,
+        onMarkAllRead: _markAllNotificationsAsRead,
+        onClearNotifs: _clearNotifications,
       ),
       PillowChatScreen(
         currentScans: _currentActiveScans,
         isOnDuty: widget.isOnDuty,
       ),
-      const SecurityGateBypassesScreen(),
+      SecurityGateBypassesScreen(
+        repository: _incidentRepository,
+      ),
       AuditHistoryScreen(
         auditLogs: _globalAuditLogs,
       ),
@@ -1061,11 +1271,14 @@ class _PillowChatScreenState extends State<PillowChatScreen> {
           .map((m) => {
                 'role': m['role'] == 'assistant' ? 'assistant' : 'user',
                 'text': m['text'] ?? '',
+                'content': m['text'] ?? '',
               })
           .toList();
 
       final bodyData = {
         'message': cleanPrompt,
+        'prompt': cleanPrompt,
+        'query': cleanPrompt,
         'user_key': userEmail,
         'page': 'mobile_app',
         'system_instruction':
@@ -1077,34 +1290,59 @@ class _PillowChatScreenState extends State<PillowChatScreen> {
           'findings': findingsPayload,
         },
         'history': historyPayload,
+        'messages': historyPayload,
       };
 
       dynamic response;
-      try {
-        response = await _apiClient.post('/pillow/chat', data: bodyData);
-      } catch (_) {
+      final endpoints = [
+        '/pillow/chat',
+        '/api/v1/pillow/chat',
+        '/ai/chat',
+        '/chat/completions',
+      ];
+
+      for (final ep in endpoints) {
         try {
-          response =
-              await _apiClient.post('/api/v1/pillow/chat', data: bodyData);
+          var res = await _apiClient.post(ep, data: bodyData);
+          if (res.statusCode == 200 && res.data != null) {
+            response = res;
+            break;
+          }
         } catch (_) {}
       }
 
-      if (response != null &&
-          response.statusCode == 200 &&
-          response.data != null) {
-        if (response.data is Map) {
-          serverReply = (response.data['reply'] ??
-                  response.data['content'] ??
-                  response.data['message'] ??
-                  response.data['response'] ??
-                  response.data['answer'] ??
-                  response.data['result'])
+      if (response != null && response.data != null) {
+        final raw = response.data;
+        if (raw is Map) {
+          final target = (raw['data'] is Map)
+              ? raw['data']
+              : (raw['result'] is Map)
+                  ? raw['result']
+                  : raw;
+
+          String? extractedChoice;
+          if (target['choices'] is List && target['choices'].isNotEmpty) {
+            extractedChoice =
+                target['choices'][0]['message']?['content']?.toString();
+          }
+
+          serverReply = (target['reply'] ??
+                  target['content'] ??
+                  target['message'] ??
+                  target['response'] ??
+                  target['answer'] ??
+                  target['output'] ??
+                  extractedChoice)
               ?.toString();
-        } else if (response.data is String) {
-          serverReply = response.data.toString();
+        } else if (raw is String) {
+          serverReply = raw;
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('Error al consultar Pillow IA: $e');
+      }
+    }
 
     if (serverReply != null && serverReply.isNotEmpty) {
       serverReply = _sanitizeMobileResponse(serverReply);
@@ -1278,6 +1516,11 @@ class ScanListScreen extends StatefulWidget {
   final bool isOnDuty;
   final ValueChanged<List<ScanModel>> onScansUpdated;
   final ValueChanged<StringMap> onAuditAdded;
+  final Function(String title, String body, String type) onAddNotification;
+  final List notifications;
+  final Function(int index) onMarkRead;
+  final VoidCallback onMarkAllRead;
+  final VoidCallback onClearNotifs;
 
   const ScanListScreen({
     super.key,
@@ -1285,6 +1528,11 @@ class ScanListScreen extends StatefulWidget {
     required this.isOnDuty,
     required this.onScansUpdated,
     required this.onAuditAdded,
+    required this.onAddNotification,
+    required this.notifications,
+    required this.onMarkRead,
+    required this.onMarkAllRead,
+    required this.onClearNotifs,
   });
 
   @override
@@ -1322,8 +1570,22 @@ class _ScanListScreenState extends State<ScanListScreen> {
   Future<void> _initScans() async {
     setState(() => _isLoading = true);
 
+    final prefs = await SharedPreferences.getInstance();
+    final jsonStr = prefs.getString('persistent_scans_list_v4');
+
+    Map<String, String> localStatusMap = {};
+    if (jsonStr != null) {
+      try {
+        final List decoded = jsonDecode(jsonStr);
+        for (var item in decoded) {
+          if (item is Map && item['id'] != null && item['status'] != null) {
+            localStatusMap[item['id'].toString()] = item['status'].toString();
+          }
+        }
+      } catch (_) {}
+    }
+
     try {
-      final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('jwt_token');
 
       if (token != null && token.isNotEmpty) {
@@ -1361,10 +1623,23 @@ class _ScanListScreenState extends State<ScanListScreen> {
         }
 
         if (rawData.isNotEmpty) {
-          _localScans = rawData
-              .map(
-                  (item) => ScanModel.fromJson(Map<String, dynamic>.from(item)))
-              .toList();
+          _localScans = rawData.map((item) {
+            final parsed = ScanModel.fromJson(Map<String, dynamic>.from(item));
+            final savedStatus = localStatusMap[parsed.id];
+            if (savedStatus != null) {
+              return ScanModel(
+                id: parsed.id,
+                title: parsed.title,
+                status: savedStatus,
+                severity: parsed.severity,
+                summary: parsed.summary,
+                repo: parsed.repo,
+                type: parsed.type,
+                createdAt: parsed.createdAt,
+              );
+            }
+            return parsed;
+          }).toList();
 
           await _saveScansToPrefs();
           _applySorting();
@@ -1380,9 +1655,6 @@ class _ScanListScreenState extends State<ScanListScreen> {
         debugPrint('-------------------------------------------');
       }
     }
-
-    final prefs = await SharedPreferences.getInstance();
-    final jsonStr = prefs.getString('persistent_scans_list_v4');
 
     if (jsonStr != null) {
       try {
@@ -1408,6 +1680,191 @@ class _ScanListScreenState extends State<ScanListScreen> {
       final nameB = (b.title ?? '').toLowerCase();
       return _sortAscending ? nameA.compareTo(nameB) : nameB.compareTo(nameA);
     });
+  }
+
+  void _showNotificationCenter(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF161B22),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (modalContext) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final unreadCount =
+                widget.notifications.where((n) => n['read'] == false).length;
+
+            return Container(
+              height: MediaQuery.of(context).size.height * 0.65,
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.notifications_active,
+                              color: Color(0xFF38BDF8)),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Centro de Notificaciones',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          if (unreadCount > 0) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.redAccent,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                '$unreadCount',
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ]
+                        ],
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.grey),
+                        onPressed: () => Navigator.pop(modalContext),
+                      ),
+                    ],
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      TextButton.icon(
+                        icon: const Icon(Icons.done_all,
+                            size: 16, color: Color(0xFF38BDF8)),
+                        label: const Text('Marcar todas leídas',
+                            style: TextStyle(
+                                color: Color(0xFF38BDF8), fontSize: 12)),
+                        onPressed: () {
+                          widget.onMarkAllRead();
+                          setModalState(() {});
+                          setState(() {});
+                        },
+                      ),
+                      TextButton.icon(
+                        icon: const Icon(Icons.delete_sweep,
+                            size: 16, color: Colors.grey),
+                        label: const Text('Limpiar',
+                            style: TextStyle(color: Colors.grey, fontSize: 12)),
+                        onPressed: () {
+                          widget.onClearNotifs();
+                          setModalState(() {});
+                          setState(() {});
+                        },
+                      ),
+                    ],
+                  ),
+                  const Divider(color: Color(0xFF30363D)),
+                  Expanded(
+                    child: widget.notifications.isEmpty
+                        ? const Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.notifications_off_outlined,
+                                    size: 50, color: Colors.grey),
+                                SizedBox(height: 8),
+                                Text('Sin notificaciones recientes',
+                                    style: TextStyle(color: Colors.grey)),
+                              ],
+                            ),
+                          )
+                        : ListView.builder(
+                            itemCount: widget.notifications.length,
+                            itemBuilder: (context, index) {
+                              final notif = widget.notifications[index];
+                              final isRead = notif['read'] == true;
+
+                              return Card(
+                                color: isRead
+                                    ? const Color(0xFF0D1117)
+                                    : const Color(0xFF21262D),
+                                margin: const EdgeInsets.only(bottom: 8),
+                                child: ListTile(
+                                  leading: CircleAvatar(
+                                    radius: 16,
+                                    backgroundColor: notif['type'] == 'BLOCK'
+                                        ? Colors.red.shade900
+                                        : Colors.amber.shade900,
+                                    child: Icon(
+                                      notif['type'] == 'BLOCK'
+                                          ? Icons.block
+                                          : Icons.shield,
+                                      size: 16,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  title: Text(
+                                    notif['title'] ?? 'Alerta',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                      fontWeight: isRead
+                                          ? FontWeight.normal
+                                          : FontWeight.bold,
+                                    ),
+                                  ),
+                                  subtitle: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        notif['body'] ?? '',
+                                        style: const TextStyle(
+                                            color: Colors.grey, fontSize: 12),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        notif['time'] ?? '',
+                                        style: const TextStyle(
+                                            color: Color(0xFF38BDF8),
+                                            fontSize: 10),
+                                      ),
+                                    ],
+                                  ),
+                                  trailing: isRead
+                                      ? null
+                                      : IconButton(
+                                          icon: const Icon(Icons.check_circle,
+                                              color: Color(0xFF38BDF8),
+                                              size: 20),
+                                          tooltip: 'Marcar como leída',
+                                          onPressed: () {
+                                            widget.onMarkRead(index);
+                                            setModalState(() {});
+                                            setState(() {});
+                                          },
+                                        ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   void _showDetailModal(BuildContext context, ScanModel scan) {
@@ -1629,17 +2086,48 @@ class _ScanListScreenState extends State<ScanListScreen> {
                                                             token);
                                                       }
 
-                                                      await _apiClient.post(
-                                                          '/findings/${scan.id}',
-                                                          data: {
+                                                      final endpoints = [
+                                                        '/findings/${scan.id}',
+                                                        '/bypasses',
+                                                        '/api/v1/findings/${scan.id}',
+                                                      ];
+
+                                                      for (final ep
+                                                          in endpoints) {
+                                                        try {
+                                                          await _apiClient
+                                                              .post(ep, data: {
                                                             'status':
                                                                 'EXEMPTED',
                                                             'duration_hours':
                                                                 selectedHours,
                                                             'justification':
                                                                 justificationText,
+                                                            'scan_id': scan.id,
                                                           });
+                                                          break;
+                                                        } catch (_) {}
+                                                      }
                                                     } catch (_) {}
+
+                                                    await NotificationService
+                                                        .showPushNotification(
+                                                      id: DateTime.now()
+                                                              .millisecondsSinceEpoch ~/
+                                                          1000,
+                                                      title:
+                                                          'Excepción Lanzada',
+                                                      body:
+                                                          'Se aprobó la excepción para "${scan.title}" por $selectedHours Horas.',
+                                                      payload:
+                                                          '/finding_detail?id=${scan.id}',
+                                                    );
+
+                                                    widget.onAddNotification(
+                                                      'Excepción Lanzada',
+                                                      'Se aprobó la excepción para "${scan.title}" por $selectedHours Horas.',
+                                                      'EXEMPTION',
+                                                    );
 
                                                     setState(() {
                                                       final idx = _localScans
@@ -1654,12 +2142,16 @@ class _ScanListScreenState extends State<ScanListScreen> {
                                                           severity:
                                                               scan.severity,
                                                           summary: scan.summary,
+                                                          repo: scan.repo,
+                                                          type: scan.type,
                                                           createdAt:
                                                               scan.createdAt,
                                                         );
-                                                        _saveScansToPrefs();
                                                       }
                                                     });
+                                                    await _saveScansToPrefs();
+                                                    widget.onScansUpdated(
+                                                        _localScans);
 
                                                     widget.onAuditAdded({
                                                       'id': scan.id,
@@ -1763,14 +2255,44 @@ class _ScanListScreenState extends State<ScanListScreen> {
                                                             token);
                                                       }
 
-                                                      await _apiClient.post(
-                                                          '/findings/${scan.id}',
-                                                          data: {
+                                                      final endpoints = [
+                                                        '/findings/${scan.id}',
+                                                        '/bypasses/block',
+                                                        '/api/v1/findings/${scan.id}',
+                                                      ];
+
+                                                      for (final ep
+                                                          in endpoints) {
+                                                        try {
+                                                          await _apiClient
+                                                              .post(ep, data: {
                                                             'status': 'BLOCKED',
                                                             'reason':
                                                                 reasonText,
+                                                            'scan_id': scan.id,
                                                           });
+                                                          break;
+                                                        } catch (_) {}
+                                                      }
                                                     } catch (_) {}
+
+                                                    await NotificationService
+                                                        .showPushNotification(
+                                                      id: DateTime.now()
+                                                              .millisecondsSinceEpoch ~/
+                                                          1000,
+                                                      title: 'Bloqueo Aplicado',
+                                                      body:
+                                                          'Se bloqueó el despliegue para "${scan.title}". Motivo: $reasonText',
+                                                      payload:
+                                                          '/finding_detail?id=${scan.id}',
+                                                    );
+
+                                                    widget.onAddNotification(
+                                                      'Bloqueo Aplicado',
+                                                      'Se bloqueó el despliegue para "${scan.title}". Motivo: $reasonText',
+                                                      'BLOCK',
+                                                    );
 
                                                     setState(() {
                                                       final idx = _localScans
@@ -1785,12 +2307,16 @@ class _ScanListScreenState extends State<ScanListScreen> {
                                                           severity:
                                                               scan.severity,
                                                           summary: scan.summary,
+                                                          repo: scan.repo,
+                                                          type: scan.type,
                                                           createdAt:
                                                               scan.createdAt,
                                                         );
-                                                        _saveScansToPrefs();
                                                       }
                                                     });
+                                                    await _saveScansToPrefs();
+                                                    widget.onScansUpdated(
+                                                        _localScans);
 
                                                     widget.onAuditAdded({
                                                       'id': scan.id,
@@ -1875,10 +2401,48 @@ class _ScanListScreenState extends State<ScanListScreen> {
       }).toList();
     }
 
+    final unreadCount =
+        widget.notifications.where((n) => n['read'] == false).length;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Bandeja de Hallazgos'),
         actions: [
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.notifications_outlined),
+                tooltip: 'Centro de Notificaciones',
+                onPressed: () => _showNotificationCenter(context),
+              ),
+              if (unreadCount > 0)
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: Colors.redAccent,
+                      shape: BoxShape.circle,
+                    ),
+                    constraints: const BoxConstraints(
+                      minWidth: 16,
+                      minHeight: 16,
+                    ),
+                    child: Text(
+                      '$unreadCount',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+            ],
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Recargar Bandeja',

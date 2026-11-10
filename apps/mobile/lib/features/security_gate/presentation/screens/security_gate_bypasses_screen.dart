@@ -1,10 +1,17 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import '../../../../services/bypass_service.dart';
+import '../../../../repositories/incident_repository.dart';
+
 import '../../../../screens/bypass_detail_screen.dart';
+import '../../../../services/bypass_service.dart';
 
 class SecurityGateBypassesScreen extends StatefulWidget {
-  const SecurityGateBypassesScreen({super.key});
+  final IncidentRepository? repository;
+
+  const SecurityGateBypassesScreen({
+    super.key,
+    this.repository,
+  });
 
   @override
   State<SecurityGateBypassesScreen> createState() =>
@@ -17,7 +24,8 @@ class _SecurityGateBypassesScreenState
   List<dynamic> _allBypasses = [];
   List<dynamic> _filteredBypasses = [];
   bool _isLoading = true;
-  String? _activeFilter; // null = Todos, 'hitl' = Temporizadas, 'block' = Bloqueos
+  String?
+      _activeFilter; // null = Todos, 'hitl' = Temporizadas, 'block' = Bloqueos
 
   @override
   void initState() {
@@ -28,7 +36,18 @@ class _SecurityGateBypassesScreenState
 
   Future<void> _fetchBypasses() async {
     setState(() => _isLoading = true);
-    final data = await _bypassService.getBypasses();
+
+    List<dynamic> data = [];
+    if (widget.repository != null) {
+      try {
+        data = await widget.repository!.getBypasses();
+      } catch (_) {
+        data = await _bypassService.getBypasses();
+      }
+    } else {
+      data = await _bypassService.getBypasses();
+    }
+
     if (mounted) {
       setState(() {
         _allBypasses = data;
@@ -111,7 +130,7 @@ class _SecurityGateBypassesScreenState
               style: TextStyle(color: Colors.grey, fontSize: 13),
             ),
             const SizedBox(height: 20),
-            
+
             // Tarjetas de Gobernanza (Botones Interactivos de Filtro)
             InkWell(
               borderRadius: BorderRadius.circular(8),
@@ -209,11 +228,14 @@ class _SecurityGateBypassesScreenState
                           itemBuilder: (context, index) {
                             final item = Map<String, dynamic>.from(
                                 _filteredBypasses[index]);
-                            final status =
-                                (item['status'] ?? 'pending').toString().toLowerCase();
+                            final status = (item['status'] ?? 'pending')
+                                .toString()
+                                .toLowerCase();
 
                             Color statusColor = Colors.orange;
-                            if (status == 'approved') statusColor = Colors.green;
+                            if (status == 'approved') {
+                              statusColor = Colors.green;
+                            }
                             if (status == 'rejected' || status == 'blocked') {
                               statusColor = Colors.red;
                             }
@@ -232,7 +254,9 @@ class _SecurityGateBypassesScreenState
                                   color: statusColor,
                                 ),
                                 title: Text(
-                                  item['rule'] ?? item['title'] ?? 'Bypass Request',
+                                  item['rule'] ??
+                                      item['title'] ??
+                                      'Bypass Request',
                                   style: const TextStyle(
                                       color: Colors.white,
                                       fontWeight: FontWeight.w500),
