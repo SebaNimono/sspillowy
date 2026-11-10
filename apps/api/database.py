@@ -168,6 +168,30 @@ def init_db() -> bool:
             )
             # Usuarios ya existentes (SSO o pruebas) siguen pudiendo entrar
             conn.execute(text("UPDATE users SET email_verified = TRUE WHERE email_verified IS NOT TRUE"))
+
+            # Endurecimiento Supabase / PostgreSQL: habilitar Row-Level Security (RLS) en todas las tablas
+            # del esquema public y revocar acceso directo desde roles PostgREST (anon, authenticated).
+            # El backend FastAPI conecta con el rol propietario (postgres) que tiene BYPASSRLS.
+            if not USING_SQLITE:
+                conn.execute(
+                    text(
+                        """
+                        DO $$
+                        DECLARE r RECORD;
+                        BEGIN
+                          FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP
+                            EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY;', r.tablename);
+                            BEGIN
+                              EXECUTE format('REVOKE ALL ON TABLE public.%I FROM anon, authenticated;', r.tablename);
+                            EXCEPTION WHEN undefined_object THEN
+                              NULL;
+                            END;
+                          END LOOP;
+                        END $$;
+                        """
+                    )
+                )
+
             conn.commit()
         return True
     except Exception as exc:
