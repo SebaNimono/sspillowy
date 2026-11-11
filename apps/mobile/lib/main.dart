@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import 'core/services/notification_service.dart';
+import 'services/notification_service.dart';
 import 'features/security_gate/presentation/screens/security_gate_bypasses_screen.dart';
 import 'repositories/incident_repository.dart';
 import 'services/api_client.dart';
@@ -132,6 +132,8 @@ class AuthRepository {
         final token = readSessionToken(response.data);
         if (token != null && token.isNotEmpty) {
           await apiClient.persistAuthToken(token);
+          await prefs.setString('jwt_token',
+              token); // <--- Guarda explícitamente el token de sesión
           await prefs.setString('user_email', email);
           await prefs.setString('primary_user_email', email);
           await prefs.setString('user_name', email.split('@').first);
@@ -168,8 +170,8 @@ class AuthRepository {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Inicialización del servicio de Notificaciones Push y handler de Deep Linking
-  await NotificationService.init((payload) {
+  // Inicialización corregida usando la firma oficial del servicio
+  await NotificationService.initSystemNotifications((payload) {
     debugPrint("Notificación seleccionada con payload: $payload");
   });
 
@@ -2110,8 +2112,9 @@ class _ScanListScreenState extends State<ScanListScreen> {
                                                       }
                                                     } catch (_) {}
 
+                                                    // Corrección de llamada al método oficial del NotificationService
                                                     await NotificationService
-                                                        .showPushNotification(
+                                                        .showLocalPush(
                                                       id: DateTime.now()
                                                               .millisecondsSinceEpoch ~/
                                                           1000,
@@ -2276,8 +2279,9 @@ class _ScanListScreenState extends State<ScanListScreen> {
                                                       }
                                                     } catch (_) {}
 
+                                                    // Corrección de llamada al método oficial del NotificationService
                                                     await NotificationService
-                                                        .showPushNotification(
+                                                        .showLocalPush(
                                                       id: DateTime.now()
                                                               .millisecondsSinceEpoch ~/
                                                           1000,
