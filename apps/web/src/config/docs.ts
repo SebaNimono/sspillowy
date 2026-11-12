@@ -1402,8 +1402,210 @@ jobs:
       },
     ],
   },
+  {
+    id: 'modos-escaneo-tags-widgets',
+    group: 'Cómo funciona',
+    title: 'Escaneo de 1 archivo (A+B), Tags y Widgets por Consulta',
+    summary: 'Cómo analizar un archivo suelto al instante, escanear una ruta específica del repo, etiquetar proyectos y crear widgets con consultas.',
+    blocks: [
+      { type: 'h', text: '1. Tres modalidades de análisis de código' },
+      {
+        type: 'p',
+        text: 'No siempre necesitas clonar ni analizar un repositorio entero de miles de archivos. SSPILLOWY ofrece tres modos complementarios según la etapa de desarrollo en la que estés:',
+      },
+      {
+        type: 'table',
+        head: ['Modo de escaneo', 'Cómo se lanza', 'Tiempo típico', 'Comportamiento sobre hallazgos previos'],
+        rows: [
+          [
+            'Repositorio completo',
+            'Repositorios → Escanear (dejando vacía la ruta específica)',
+            '30 s – 5 min',
+            'Reemplaza (SUPERSEDED) los hallazgos anteriores de los motores ejecutados y conserva decisiones HITL (falsos positivos / riesgos aceptados).',
+          ],
+          [
+            'Opción B · Archivo o carpeta específica del repo (`target_path`)',
+            'Repositorios → Escanear → indicar ruta relativa (ej. `apps/api/main.py` o `src/auth/`)',
+            '5 s – 25 s',
+            'Clona el repositorio pero ejecuta Semgrep, GitLeaks y Trivy únicamente sobre esa ruta. NO marca como SUPERSEDED los hallazgos del resto del repositorio.',
+          ],
+          [
+            'Opción A · Archivo único o snippet instantáneo (`/api/v1/scans/single-file`)',
+            'Botón "Analizar 1 archivo" en Dashboard, Repositorios o Escaneos',
+            '1 s – 3 s',
+            'Analiza en memoria/directorio efímero sin clonar Git. Opcionalmente puedes asociar y guardar los hallazgos en un repositorio.',
+          ],
+        ],
+      },
+      { type: 'h', text: '2. Etiquetas (Tags) de repositorios' },
+      {
+        type: 'p',
+        text: 'Cada repositorio admite múltiples etiquetas personalizadas (por ejemplo `#producción`, `#crítico`, `#pagos`, `#backend`, `#api`, `#pci`). Las etiquetas permiten:',
+      },
+      {
+        type: 'list',
+        items: [
+          'Filtrar con un clic la tabla de Repositorios y la tabla "Estado de Repositorios y Servicios" en el Dashboard.',
+          'Segmentar widgets personalizados por consulta (por ejemplo, graficar únicamente los hallazgos abiertos de repositorios con tag `#producción`).',
+          'Identificar rápidamente activos críticos durante una revisión de Security Gate o auditoría.',
+        ],
+      },
+      { type: 'h', text: '3. Constructor de Widgets basados en Consultas (`+ Crear Widget`)' },
+      {
+        type: 'p',
+        text: 'En Risk Posture (Dashboard) puedes pulsar "+ Crear Widget" para construir paneles a medida sobre tus datos en tiempo real:',
+      },
+      {
+        type: 'steps',
+        items: [
+          { title: 'Fuente de datos (FROM)', text: 'Elige entre Hallazgos (`findings`), Historial de escaneos (`scans`) o Repositorios (`repositories`).' },
+          { title: 'Filtros combinables (WHERE)', text: 'Filtra por severidad (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`), motor (`semgrep`, `trivy`, `gitleaks`, `owasp_zap`), estado HITL (`OPEN`, `IN_REVIEW`, `FIXED`, `FALSE_POSITIVE`) y etiqueta de repositorio (`#tag`).' },
+          { title: 'Agrupación (GROUP BY)', text: 'Agrupa los resultados por motor, severidad, repositorio, estado HITL o decisión del Security Gate.' },
+          { title: 'Visualización', text: 'Muestra el resultado como Gráfico de Barras, Tarjeta KPI + Chips o Tabla porcentual, eligiendo el ancho de columna (⅓, ½ o ancho completo).' },
+        ],
+      },
+      { type: 'goto', tab: 'dashboard', label: 'Probar en el Dashboard' },
+    ],
+  },
 
   // ───────────────────────── Referencia
+  {
+    id: 'especificacion-tecnica',
+    group: 'Referencia',
+    title: 'Especificación técnica, capacidades y límites',
+    summary: 'Referencia de ingeniería: qué hace y qué no hace el sistema, fórmulas matemáticas, deduplicación SHA-256 y seguridad de base de datos.',
+    blocks: [
+      {
+        type: 'p',
+        text: 'Esta sección documenta con precisión técnica el funcionamiento interno de SSPILLOWY, sus algoritmos deterministas y sus límites operativos.',
+      },
+      { type: 'h', text: '1. Matriz de capacidades reales vs. límites técnicos' },
+      {
+        type: 'table',
+        head: ['Dominio', 'Qué SÍ hace SSPILLOWY (Capacidad real)', 'Qué NO hace / Límite técnico actual'],
+        rows: [
+          [
+            'SAST (Semgrep)',
+            'Analiza código fuente estático con reglas OWASP Top 10 / CWE y motor determinista de respaldo para Python, JS/TS, Go, Java, PHP, Ruby y archivos de configuración.',
+            'No compila binarios cerrados (.exe, .dll, .so) ni ejecuta análisis dinámico de memoria en tiempo de ejecución.',
+          ],
+          [
+            'SCA y SBOM (Trivy)',
+            'Extrae dependencias de manifiestos y lockfiles, genera inventario CycloneDX 1.5, detecta CVEs y sugiere la versión mínima con parche (`fixed_version`).',
+            'Si el proyecto no incluye lockfile ni versiones fijadas en el manifiesto, no puede adivinar versiones transitivas no declaradas.',
+          ],
+          [
+            'Secretos (GitLeaks)',
+            'Detecta claves privadas, tokens de API (AWS, GitHub, Stripe, Slack, JWT) y credenciales hardcodeadas; enmascara el valor sensible y crea incidentes con checklist de 4 pasos.',
+            'No revoca automáticamente la clave en la cuenta de AWS/GitHub/Stripe del cliente ni hace `git push --force` sobre el repositorio remoto.',
+          ],
+          [
+            'DAST (OWASP ZAP)',
+            'Ejecuta inspección pasiva y de cabeceras HTTP/TLS/cookies/rutas expuestas sobre la URL configurada (`dast_url`).',
+            'No realiza ataques intrusivos de fuerza bruta, denegación de servicio (DoS) ni explotación activa destructiva contra producción.',
+          ],
+          [
+            'Asistente IA (Pillow)',
+            'Explica vulnerabilidades, estima probabilidad de falso positivo, propone parches de código y genera widgets en el dashboard bajo supervisión humana (HITL).',
+            'Nunca cierra hallazgos por su cuenta, nunca aprueba un Security Gate y nunca modifica archivos directamente en tu repositorio.',
+          ],
+          [
+            'Aislamiento y Base de Datos',
+            'Multi-espacio (`workspace_id`) con Row-Level Security (RLS) activo en todas las tablas del esquema `public` en PostgreSQL/Supabase y contraseñas con hash PBKDF2-SHA256.',
+            'Un repositorio Git no puede estar vinculado simultáneamente a dos espacios distintos para evitar fugas de telemetría entre organizaciones.',
+          ],
+        ],
+      },
+      { type: 'h', text: '2. Fórmulas matemáticas del sistema' },
+      {
+        type: 'code',
+        title: 'Health Score del Repositorio y Global (0 a 100)',
+        code: `# Penalización por hallazgos activos (OPEN o IN_REVIEW):
+penalty = (CRITICAL * 25) + (HIGH * 10) + (MEDIUM * 3) + (LOW * 1)
+repo_health_score = max(0, min(100, 100 - penalty))
+
+# Health Score global del espacio:
+overall_health_score = round(promedio(repo_health_score de cada repositorio monitoreado))`,
+      },
+      {
+        type: 'code',
+        title: 'Risk Score de Priorización y Deduplicación SHA-256',
+        code: `# Puntuación de riesgo ponderada para ordenar repositorios y componentes:
+risk_score = (CRITICAL * 10) + (HIGH * 5) + (MEDIUM * 2) + (LOW * 1)
+
+# Huella determinista (Fingerprint) para trazabilidad entre múltiples escaneos:
+fingerprint = SHA256(f"{repository_id}:{engine}:{rule_id}:{file_path}:{line_number}")`,
+      },
+      { type: 'h', text: '3. Precedencia del Security Gate' },
+      {
+        type: 'p',
+        text: 'Cuando finaliza un escaneo o cuando un pipeline CI/CD consulta `GET /api/v1/security-gates/check`, el motor evalúa en orden estricto:',
+      },
+      {
+        type: 'steps',
+        items: [
+          { title: '1. ¿Política deshabilitada?', text: 'Si `enabled = false`, devuelve `SKIPPED` (`allowed = true`).' },
+          { title: '2. ¿Umbrales cumplidos?', text: 'Cuenta únicamente hallazgos en estado `OPEN` o `IN_REVIEW`. Si `open_critical <= max_critical`, `open_high <= max_high` y (si `block_on_secrets = true`) `open_secrets == 0`, devuelve `PASSED` (`allowed = true`).' },
+          { title: '3. ¿Existe Bypass aprobado y vigente?', text: 'Si supera algún umbral pero existe una excepción con `status = APPROVED` y `expires_at > now()`, devuelve `BYPASSED` (`allowed = true`) dejando rastro en la bitácora.' },
+          { title: '4. Bloqueo determinista', text: 'En cualquier otro caso devuelve `BLOCKED` (`allowed = false`) con la lista exacta de motivos (`reasons`).' },
+        ],
+      },
+      { type: 'h', text: '4. Límites de tiempo y cuotas operativas' },
+      {
+        type: 'table',
+        head: ['Parámetro', 'Valor configurado', 'Comportamiento al superarse'],
+        rows: [
+          ['Timeout de clonado Git', '180 segundos', 'El escaneo pasa a estado `FAILED` con el detalle del error de red o autenticación.'],
+          ['Timeout por motor CLI (Semgrep / Trivy / GitLeaks)', '120 – 300 segundos', 'El motor se detiene de forma segura y el escaneo continúa con los demás motores seleccionados.'],
+          ['Expiración de escaneos huérfanos (`RUNNING`)', '20 minutos', 'El recolector marca automáticamente como `FAILED` cualquier job interrumpido por reinicio del contenedor.'],
+          ['Tamaño máximo en escaneo de 1 archivo', '512 KB por archivo', 'La API rechaza payloads mayores con código HTTP 400 para proteger la memoria del worker.'],
+          ['Cuota diaria de consultas a Pillow IA', '25 consultas / usuario / día', 'Se informa el límite diario y los motores deterministas siguen funcionando sin restricción.'],
+        ],
+      },
+    ],
+  },
+  {
+    id: 'pillowy-autonomous-agent',
+    group: 'Referencia',
+    title: 'Próximamente: Pillowy Autonomous Agent (Lab v2.0)',
+    summary: 'Arquitectura y hoja de ruta del próximo agente autónomo de remediación, pre-commit en terminal y vigilancia continua de zero-days.',
+    blocks: [
+      {
+        type: 'callout',
+        tone: 'info',
+        text: 'Esta sección describe las capacidades en hoja de ruta para Pillowy Lab v2.0. Actualmente están disponibles como vista previa conceptual y diseño de arquitectura.',
+      },
+      {
+        type: 'p',
+        text: 'Hoy Pillow funciona como un copiloto consultivo bajo el principio "Detecta, propone, firma". El siguiente paso en la evolución de SSPILLOWY es el **Pillowy Autonomous Agent**, diseñado para ejecutar tareas operativas de remediación manteniendo siempre la aprobación final humana (Human-in-the-Loop).',
+      },
+      { type: 'h', text: 'Fase 1 · Auto-PR Remediation Agent' },
+      {
+        type: 'list',
+        items: [
+          'Cuando confirmes un hallazgo en Fix Intelligence, podrás pulsar "Generar Pull Request con Agente Pillowy".',
+          'El agente creará una rama efímera (`fix/pillowy-<cve-o-regla>`), aplicará el parche sugerido en el archivo o actualizará el lockfile.',
+          'Antes de abrir el Pull Request en GitHub/GitLab, el agente ejecutará automáticamente el motor de escaneo de 1 archivo (`/api/v1/scans/single-file`) sobre el archivo modificado para verificar que la vulnerabilidad desapareció y que no se introdujeron nuevos hallazgos.',
+        ],
+      },
+      { type: 'h', text: 'Fase 2 · Pillow CLI & IDE Pre-Commit Gate' },
+      {
+        type: 'list',
+        items: [
+          'Utilidad ligera de línea de comandos (`npx pillowy scan --staged`) para ejecutar en la máquina del desarrollador o como hook `pre-commit` de Git.',
+          'Envía únicamente los archivos modificados en el commit al endpoint rápido de archivo único, bloqueando secretos o inyecciones SQL en menos de 2 segundos antes de que lleguen al repositorio remoto.',
+        ],
+      },
+      { type: 'h', text: 'Fase 3 · Continuous SBOM Zero-Day Watch' },
+      {
+        type: 'list',
+        items: [
+          'Cruza en segundo plano el último SBOM CycloneDX almacenado de cada repositorio contra nuevas alertas CVE publicadas diariamente, sin necesidad de volver a clonar ni re-escanear el repositorio.',
+          'Dispara automáticamente los Runbooks configurados cuando un paquete previamente sano pasa a estar afectado por un nuevo zero-day.',
+        ],
+      },
+    ],
+  },
   {
     id: GLOSSARY_SECTION_ID,
     group: 'Referencia',

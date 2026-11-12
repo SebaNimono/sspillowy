@@ -6,6 +6,7 @@ export interface Repository {
   dast_url?: string | null;
   provider?: RepoProvider | null;
   has_access_token?: boolean;
+  tags?: string[];
   is_active: boolean;
   health_score: number;
   open_criticals: number;
@@ -366,6 +367,7 @@ export async function createRepository(input: {
   dastUrl?: string;
   provider?: RepoProvider;
   accessToken?: string;
+  tags?: string[];
 }): Promise<Repository> {
   return request('/repositories', {
     method: 'POST',
@@ -377,13 +379,14 @@ export async function createRepository(input: {
       dast_url: input.dastUrl?.trim() || null,
       provider: input.provider ?? null,
       access_token: input.accessToken?.trim() || null,
+      tags: input.tags ?? [],
     }),
   });
 }
 
 export async function updateRepository(
   repositoryId: string,
-  changes: { name?: string; branch?: string; dast_url?: string; access_token?: string },
+  changes: { name?: string; branch?: string; dast_url?: string; access_token?: string; tags?: string[] },
 ): Promise<Repository> {
   return request(`/repositories/${repositoryId}`, {
     method: 'PATCH',
@@ -443,6 +446,7 @@ export async function triggerScan(
   engines: ScanEngine[] = ['semgrep', 'gitleaks', 'trivy'],
   triggeredBy = 'web_hub',
   targetUrl?: string,
+  targetPath?: string,
 ): Promise<Scan> {
   return request('/scans', {
     method: 'POST',
@@ -452,6 +456,54 @@ export async function triggerScan(
       triggered_by: triggeredBy,
       engines,
       ...(targetUrl?.trim() ? { target_url: targetUrl.trim() } : {}),
+      ...(targetPath?.trim() ? { target_path: targetPath.trim() } : {}),
+    }),
+  });
+}
+
+export interface SingleFileFinding {
+  id: string;
+  title: string;
+  description: string;
+  engine: 'semgrep' | 'gitleaks' | 'trivy';
+  severity: Finding['severity'];
+  file_path: string;
+  line_number: number;
+  cwe?: string | null;
+  owasp_category?: string | null;
+  iso_control?: string | null;
+  remediation: string;
+}
+
+export interface SingleFileScanResult {
+  filename: string;
+  elapsed_ms: number;
+  engines_executed: string[];
+  persisted_scan_id?: string | null;
+  total_findings: number;
+  critical_count: number;
+  high_count: number;
+  medium_count: number;
+  low_count: number;
+  findings: SingleFileFinding[];
+}
+
+export async function scanSingleFile(input: {
+  filename: string;
+  content: string;
+  engines?: ScanEngine[];
+  repositoryId?: string;
+  persist?: boolean;
+}): Promise<SingleFileScanResult> {
+  return request('/scans/single-file', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      filename: input.filename,
+      content: input.content,
+      engines: input.engines ?? ['semgrep', 'gitleaks', 'trivy'],
+      repository_id: input.repositoryId || null,
+      persist: Boolean(input.persist),
     }),
   });
 }

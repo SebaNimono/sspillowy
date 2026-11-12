@@ -72,8 +72,8 @@ export const DEFAULT_LAYOUT: WidgetLayoutItem[] = [
   { id: 'topRepos', span: 4 },
   { id: 'topComponents', span: 4 },
   { id: 'triage', span: 4 },
-  { id: 'engines', span: 12 },
-  { id: 'heatmap', span: 12 },
+  { id: 'engines', span: 6 },
+  { id: 'heatmap', span: 6 },
   { id: 'audit', span: 12 },
 ];
 
@@ -101,7 +101,7 @@ export const DEFAULT_DASHBOARD_CONFIG: DashboardConfig = {
   layout: structuredClone(DEFAULT_LAYOUT),
 };
 
-const STORAGE_KEY = 'sspillowy_dashboard_config_v2';
+const STORAGE_KEY = 'sspillowy_dashboard_config_v3';
 const VALID_SPANS = new Set<number>([3, 4, 5, 6, 8, 12]);
 
 function parseNumber(value: string | null, fallback: number): number {

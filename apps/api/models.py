@@ -109,6 +109,8 @@ class Repository(Base):
     provider = Column(String, nullable=True)
     # Token de solo lectura para repositorios privados, cifrado (repo_access.encrypt).
     access_token_enc = Column(Text, nullable=True)
+    # Etiquetas separadas por coma (ej. "producción,crítico,backend")
+    tags = Column(Text, nullable=True)
 
     @property
     def has_access_token(self) -> bool:

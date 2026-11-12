@@ -17,9 +17,11 @@ import {
   User,
   AlertCircle,
   ShieldCheck,
+  FileCode2,
 } from 'lucide-react';
 import { useI18n } from '../i18n/I18nProvider';
 import PageSkeleton from '../components/PageSkeleton';
+import { SingleFileScanModal } from '../components/SingleFileScanModal';
 import '../styles/scans.css';
 
 interface PageProps {
@@ -99,6 +101,7 @@ export const ScansPage: React.FC<PageProps> = ({
   const [repoFilter, setRepoFilter] = useState('all');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [showSingleFileModal, setShowSingleFileModal] = useState(false);
 
   const toggleExpanded = (id: string) => {
     setExpandedIds((prev) => {
@@ -348,6 +351,10 @@ export const ScansPage: React.FC<PageProps> = ({
           <option value="SKIPPED">Omitido</option>
           <option value="none">Sin gate</option>
         </select>
+        <button type="button" className="btn btn-primary" onClick={() => setShowSingleFileModal(true)}>
+          <FileCode2 size={14} />
+          <span>Analizar 1 archivo</span>
+        </button>
         <button type="button" className="btn btn-secondary" onClick={() => load()} disabled={loading}>
           <RefreshCw size={14} />
           <span>Actualizar</span>
@@ -559,6 +566,14 @@ export const ScansPage: React.FC<PageProps> = ({
           </div>
         )}
       </div>
+
+      {showSingleFileModal && (
+        <SingleFileScanModal
+          repositories={repos}
+          onClose={() => setShowSingleFileModal(false)}
+          onCompleted={() => load(true)}
+        />
+      )}
     </div>
   );
 };

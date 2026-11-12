@@ -71,6 +71,7 @@ from traceability import router as traceability_router  # noqa: E402
 from integrations import router as integrations_router, workspace_for_ci_key  # noqa: E402
 from repo_access import access_message, clean_url, detect_provider, encrypt, probe_access  # noqa: E402
 from repo_access import router as repo_access_router  # noqa: E402
+from single_file_scan import router as single_file_scan_router  # noqa: E402
 from workspaces import (  # noqa: E402
     WorkspaceCtx,
     adopt_orphans,
@@ -175,6 +176,7 @@ app.include_router(traceability_router)
 app.include_router(workspaces_router)
 app.include_router(integrations_router)
 app.include_router(repo_access_router)
+app.include_router(single_file_scan_router)
 app.include_router(metrics_router)
 
 # Estado de lectura de notificaciones por usuario ("email:id"; efímero por instancia)
@@ -255,11 +257,38 @@ def _refresh_repo_counters(db, repo: Repository) -> None:
     repo.health_score = max(0, min(100, 100 - penalty))
 
 
+def _parse_tags(raw: str | list | None) -> list[str]:
+    if not raw:
+        return []
+    if isinstance(raw, list):
+        return [str(t).strip()[:32] for t in raw if str(t).strip()][:12]
+    return [t.strip()[:32] for t in str(raw).split(",") if t.strip()][:12]
+
+
+def _serialize_tags(tags: list[str] | None) -> str | None:
+    cleaned = _parse_tags(tags)
+    return ",".join(dict.fromkeys(cleaned)) if cleaned else None
+
+
 def _repo_out(repo: Repository) -> RepositoryResponse:
-    out = RepositoryResponse.model_validate(repo)
-    if not out.provider:
-        out = out.model_copy(update={"provider": detect_provider(repo.url or "")})
-    return out
+    data = {
+        "id": repo.id,
+        "name": repo.name,
+        "url": repo.url,
+        "branch": repo.branch or "main",
+        "dast_url": repo.dast_url,
+        "provider": repo.provider or detect_provider(repo.url or ""),
+        "has_access_token": bool(repo.has_access_token),
+        "tags": _parse_tags(getattr(repo, "tags", None)),
+        "is_active": bool(repo.is_active),
+        "health_score": int(repo.health_score if repo.health_score is not None else 100),
+        "open_criticals": int(repo.open_criticals or 0),
+        "open_highs": int(repo.open_highs or 0),
+        "total_findings": int(repo.total_findings or 0),
+        "last_scan_at": repo.last_scan_at,
+        "created_at": repo.created_at or _now(),
+    }
+    return RepositoryResponse(**data)
 
 
 def _display_file_path(path: str | None) -> str | None:
@@ -586,6 +615,7 @@ def create_repository(repo: RepositoryCreate, ws: WorkspaceCtx = Depends(require
             dast_url=(repo.dast_url or "").strip() or None,
             provider=provider,
             access_token_enc=encrypt(token) if token else None,
+            tags=_serialize_tags(repo.tags),
             is_active=True,
             health_score=100,
             open_criticals=0,
@@ -628,6 +658,11 @@ def update_repository(repository_id: str, body: RepositoryUpdate, ws: WorkspaceC
         if body.dast_url is not None and (body.dast_url.strip() or None) != repo.dast_url:
             repo.dast_url = body.dast_url.strip() or None
             changes.append("URL de la aplicación")
+        if body.tags is not None:
+            new_tags = _serialize_tags(body.tags)
+            if new_tags != getattr(repo, "tags", None):
+                repo.tags = new_tags
+                changes.append("etiquetas (tags)")
         if body.access_token is not None:
             token = body.access_token.strip()
             if token:
@@ -808,6 +843,7 @@ def trigger_scan(
         triggered_by = (scan_in.triggered_by or "").strip()
         if triggered_by in ("", "web_hub", "manual_web"):
             triggered_by = ws.actor
+        target_path = (scan_in.target_path or "").replace("\\", "/").strip().lstrip("/") or None
         row = Scan(
             id=str(uuid.uuid4()),
             repository_id=scan_in.repository_id,
@@ -820,7 +856,7 @@ def trigger_scan(
             medium_count=0,
             low_count=0,
             progress_stage="queued",
-            progress_detail="En cola…",
+            progress_detail=f"En cola ({target_path})…" if target_path else "En cola…",
             created_at=_now(),
             completed_at=None,
         )
@@ -833,13 +869,14 @@ def trigger_scan(
             "SCAN_TRIGGERED",
             repo.name,
             f"Escaneo {row.id} encolado · {engines_label}"
+            + (f" · ruta {target_path}" if target_path else "")
             + (f" · DAST {target_url}" if target_url and "owasp_zap" in engines else "")
             + " (background).",
         )
         db.commit()
         db.refresh(row)
         scan_id = row.id
-        background_tasks.add_task(run_repo_scan_job, scan_id, engines, target_url)
+        background_tasks.add_task(run_repo_scan_job, scan_id, engines, target_url, target_path)
         return _scan_out(row)
     finally:
         db.close()

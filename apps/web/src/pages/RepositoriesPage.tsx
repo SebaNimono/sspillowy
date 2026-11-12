@@ -14,10 +14,11 @@ import {
   fetchScans,
   triggerScan,
 } from '../api/client';
-import { FolderGit2, Plus, Play, GitBranch, RefreshCw, Trash2, Webhook, Pencil, Lock } from 'lucide-react';
+import { FolderGit2, Plus, Play, GitBranch, RefreshCw, Trash2, Webhook, Pencil, Lock, FileCode2, Tag } from 'lucide-react';
 import { useI18n } from '../i18n/I18nProvider';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { AddRepoModal, EditRepoModal } from '../components/RepoModals';
+import { SingleFileScanModal } from '../components/SingleFileScanModal';
 import PageSkeleton from '../components/PageSkeleton';
 import { GithubWebhookPanel } from '../components/ConnectionPanels';
 import { PROVIDER_LABEL, ProviderLogo } from '../components/ProviderLogo';
@@ -147,6 +148,9 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
   );
   const [activeProfile, setActiveProfile] = useState<string | null>('full_code');
   const [scanDastUrl, setScanDastUrl] = useState('');
+  const [scanTargetPath, setScanTargetPath] = useState('');
+  const [showSingleFileModal, setShowSingleFileModal] = useState(false);
+  const [tagFilter, setTagFilter] = useState<string>('all');
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -342,6 +346,7 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
       setActiveProfile('full_code');
     }
     setScanDastUrl(repo.dast_url || '');
+    setScanTargetPath('');
   };
 
   const applyProfile = (profileId: string) => {
@@ -381,6 +386,7 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
     }
     const { id: repoId, name: repoName } = scanTarget;
     const targetOverride = scanEngines.owasp_zap ? scanDastUrl : undefined;
+    const cleanedPath = scanTargetPath.trim() || undefined;
     setScanTarget(null);
     try {
       const scan = await triggerScan(
@@ -388,6 +394,7 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
         engines,
         user?.email || user?.name || 'web_hub',
         targetOverride,
+        cleanedPath,
       );
       setActiveScans((prev) => ({
         ...prev,
@@ -403,7 +410,7 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
         id: Date.now().toString(),
         type: 'info',
         title: t('repos.scanning'),
-        message: `${engines.join(' + ')} · ${repoName}`,
+        message: `${engines.join(' + ')} · ${repoName}${cleanedPath ? ` (${cleanedPath})` : ''}`,
       });
     } catch (err) {
       setToast({
@@ -445,6 +452,15 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
       setDeleting(false);
     }
   };
+
+  const allTags = Array.from(
+    new Set(repos.flatMap((r) => (Array.isArray(r.tags) ? r.tags : []))),
+  ).sort();
+
+  const filteredRepos =
+    tagFilter === 'all'
+      ? repos
+      : repos.filter((r) => (r.tags || []).includes(tagFilter));
 
   const scanningNames = Object.values(activeScans).map((s) => s.repoName);
   const progressHint =
@@ -504,7 +520,15 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
             <span>{t('repos.monitored', { count: repos.length })}</span>
           </div>
 
-          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            <button
+              className="btn btn-secondary"
+              onClick={() => setShowSingleFileModal(true)}
+              title="Analizar un archivo único o snippet sin clonar todo el repositorio"
+            >
+              <FileCode2 size={15} color="#0969da" />
+              <span>Analizar 1 archivo</span>
+            </button>
             {integrations && (
               <button
                 className="btn btn-secondary"
@@ -529,6 +553,59 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
             </button>
           </div>
         </div>
+
+        {allTags.length > 0 && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              flexWrap: 'wrap',
+              padding: '0.6rem 1.25rem',
+              borderBottom: '1px solid #eef0f4',
+              background: '#f8fafc',
+            }}
+          >
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.73rem', fontWeight: 600, color: '#64748b', marginRight: 4 }}>
+              <Tag size={12} /> Filtrar por tag:
+            </span>
+            <button
+              type="button"
+              onClick={() => setTagFilter('all')}
+              style={{
+                padding: '0.2rem 0.6rem',
+                borderRadius: 999,
+                fontSize: '0.72rem',
+                fontWeight: 600,
+                border: tagFilter === 'all' ? '1px solid #2563eb' : '1px solid #d0d7de',
+                background: tagFilter === 'all' ? '#eff6ff' : '#ffffff',
+                color: tagFilter === 'all' ? '#1d4ed8' : '#475569',
+                cursor: 'pointer',
+              }}
+            >
+              Todos ({repos.length})
+            </button>
+            {allTags.map((tg) => (
+              <button
+                key={tg}
+                type="button"
+                onClick={() => setTagFilter(tagFilter === tg ? 'all' : tg)}
+                style={{
+                  padding: '0.2rem 0.6rem',
+                  borderRadius: 999,
+                  fontSize: '0.72rem',
+                  fontWeight: 600,
+                  border: tagFilter === tg ? '1px solid #2563eb' : '1px solid #d0d7de',
+                  background: tagFilter === tg ? '#eff6ff' : '#ffffff',
+                  color: tagFilter === tg ? '#1d4ed8' : '#475569',
+                  cursor: 'pointer',
+                }}
+              >
+                #{tg}
+              </button>
+            ))}
+          </div>
+        )}
 
         {loading ? (
           <PageSkeleton variant="table" rows={5} embedded />
@@ -560,7 +637,7 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
                 </tr>
               </thead>
               <tbody>
-                {repos.map((repo) => {
+                {filteredRepos.map((repo) => {
                   const scanning = Boolean(activeScans[repo.id]);
                   const stage = activeScans[repo.id]?.stage;
                   const stageLabel = stage ? STAGE_LABELS[stage] || stage : t('repos.scanning');
@@ -583,7 +660,7 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
                         )}
                       </td>
                       <td>
-                        <div className="rp-repo-name">
+                        <div className="rp-repo-name" style={{ flexWrap: 'wrap' }}>
                           <span title={PROVIDER_LABEL[(repo.provider || 'other') as RepoProvider]} style={{ display: 'inline-flex' }}>
                             <ProviderLogo provider={(repo.provider || 'other') as RepoProvider} size={16} />
                           </span>
@@ -593,6 +670,27 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
                               <Lock size={10} /> Privado
                             </span>
                           )}
+                          {(repo.tags || []).map((tg) => (
+                            <span
+                              key={tg}
+                              onClick={() => setTagFilter(tagFilter === tg ? 'all' : tg)}
+                              title={`Filtrar por #${tg}`}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                padding: '0.1rem 0.45rem',
+                                borderRadius: 999,
+                                fontSize: '0.68rem',
+                                fontWeight: 600,
+                                background: '#eff6ff',
+                                color: '#1d4ed8',
+                                border: '1px solid #bfdbfe',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              #{tg}
+                            </span>
+                          ))}
                         </div>
                         <div style={{ fontSize: '0.75rem', color: '#656d76', fontFamily: 'var(--font-mono)' }}>{repo.url}</div>
                       </td>
@@ -744,6 +842,31 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
                 </span>
               </label>
             ))}
+            <div style={{ marginTop: '0.75rem', marginBottom: '0.35rem' }}>
+              <label style={{ display: 'block', fontSize: '0.8rem', color: '#1f2328', marginBottom: '0.3rem', fontWeight: 600 }}>
+                Archivo o carpeta específica dentro del repositorio (opcional)
+              </label>
+              <input
+                type="text"
+                placeholder="Ej. apps/api/main.py o src/auth/"
+                value={scanTargetPath}
+                onChange={(e) => setScanTargetPath(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '0.6rem 0.7rem',
+                  borderRadius: '6px',
+                  border: '1px solid var(--border-default)',
+                  background: '#ffffff',
+                  color: '#1f2328',
+                  outline: 'none',
+                  fontSize: '0.84rem',
+                  fontFamily: 'var(--font-mono)',
+                }}
+              />
+              <p style={{ fontSize: '0.73rem', color: '#656d76', marginTop: '0.3rem' }}>
+                Déjalo vacío para analizar todo el repositorio, o escribe una ruta relativa para analizar únicamente ese archivo/directorio sin sobrescribir el resto de hallazgos.
+              </p>
+            </div>
             {scanEngines.owasp_zap && (
               <div style={{ marginTop: '0.75rem', marginBottom: '0.25rem' }}>
                 <label style={{ display: 'block', fontSize: '0.8rem', color: '#656d76', marginBottom: '0.35rem', fontWeight: 600 }}>
@@ -820,6 +943,14 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
       {editTarget && <EditRepoModal repo={editTarget} onClose={() => setEditTarget(null)} onSaved={handleRepoSaved} />}
 
       {showModal && <AddRepoModal onClose={() => setShowModal(false)} onCreated={handleRepoCreated} />}
+
+      {showSingleFileModal && (
+        <SingleFileScanModal
+          repositories={repos}
+          onClose={() => setShowSingleFileModal(false)}
+          onCompleted={() => loadRepos(true)}
+        />
+      )}
 
     </div>
   );

@@ -68,6 +68,7 @@ class RepositoryBase(BaseModel):
 class RepositoryCreate(RepositoryBase):
     provider: Optional[str] = None
     access_token: Optional[str] = None
+    tags: List[str] = Field(default_factory=list)
 
 class RepositoryUpdate(BaseModel):
     name: Optional[str] = None
@@ -75,6 +76,7 @@ class RepositoryUpdate(BaseModel):
     dast_url: Optional[str] = None
     # None = sin cambios; "" = quitar el token guardado.
     access_token: Optional[str] = None
+    tags: Optional[List[str]] = None
 
 class RepositoryResponse(RepositoryBase):
     model_config = ConfigDict(from_attributes=True)
@@ -82,6 +84,7 @@ class RepositoryResponse(RepositoryBase):
     id: str
     provider: Optional[str] = None
     has_access_token: bool = False
+    tags: List[str] = Field(default_factory=list)
     is_active: bool = True
     health_score: int = 100
     open_criticals: int = 0
@@ -99,6 +102,8 @@ class ScanCreate(BaseModel):
     engines: List[str] = Field(default_factory=lambda: ["semgrep", "gitleaks", "trivy"])
     # Override de URL DAST (si no, usa repo.dast_url o ZAP_DEFAULT_TARGET)
     target_url: Optional[str] = None
+    # Ruta o archivo específico dentro del repositorio (opcional)
+    target_path: Optional[str] = None
 
 
 class ScanResponse(BaseModel):

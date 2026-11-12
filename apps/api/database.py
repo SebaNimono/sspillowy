@@ -98,6 +98,7 @@ def init_db() -> bool:
             conn.execute(text("ALTER TABLE repositories ADD COLUMN IF NOT EXISTS dast_url TEXT"))
             conn.execute(text("ALTER TABLE repositories ADD COLUMN IF NOT EXISTS provider TEXT"))
             conn.execute(text("ALTER TABLE repositories ADD COLUMN IF NOT EXISTS access_token_enc TEXT"))
+            conn.execute(text("ALTER TABLE repositories ADD COLUMN IF NOT EXISTS tags TEXT"))
             conn.execute(text("ALTER TABLE scans ADD COLUMN IF NOT EXISTS gate_status TEXT"))
             conn.execute(text("ALTER TABLE scans ADD COLUMN IF NOT EXISTS gate_detail TEXT"))
             conn.execute(text("ALTER TABLE scans ADD COLUMN IF NOT EXISTS progress_stage TEXT"))

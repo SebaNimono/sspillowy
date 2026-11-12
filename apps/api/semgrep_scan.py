@@ -431,14 +431,20 @@ def _set_progress(db, scan: Scan, stage: str, detail: str = "") -> None:
 
 
 def run_semgrep_scan_job(
-    scan_id: str, engines: list[str] | None = None, target_url: str | None = None
+    scan_id: str,
+    engines: list[str] | None = None,
+    target_url: str | None = None,
+    target_path: str | None = None,
 ) -> None:
     """Alias histórico → job multi-motor."""
-    run_repo_scan_job(scan_id, engines, target_url)
+    run_repo_scan_job(scan_id, engines, target_url, target_path)
 
 
 def run_repo_scan_job(
-    scan_id: str, engines: list[str] | None = None, target_url: str | None = None
+    scan_id: str,
+    engines: list[str] | None = None,
+    target_url: str | None = None,
+    target_path: str | None = None,
 ) -> None:
     """Job en background: clone (o fixture) → motores SAST/SCA + DAST ZAP → Postgres."""
     from gitleaks_scan import gitleaks_available, persist_gitleaks_findings, run_gitleaks
@@ -533,12 +539,35 @@ def run_repo_scan_job(
         errors: list[str] = []
         engines_ok: list[str] = []
 
-        if "semgrep" in wanted and target is not None:
-            _set_progress(db, scan, "semgrep", "Ejecutando Semgrep…")
+        scan_subtarget: Path | None = target
+        cleaned_subpath = (target_path or "").replace("\\", "/").strip().lstrip("/")
+        if target is not None and cleaned_subpath:
+            candidate = (target / cleaned_subpath).resolve()
+            try:
+                candidate.relative_to(target.resolve())
+            except ValueError:
+                scan.status = "FAILED"
+                scan.completed_at = _now()
+                scan.progress_stage = "failed"
+                scan.progress_detail = f"Ruta fuera del repositorio: {cleaned_subpath}"
+                db.commit()
+                return
+            if not candidate.exists():
+                scan.status = "FAILED"
+                scan.completed_at = _now()
+                scan.progress_stage = "failed"
+                scan.progress_detail = f"No se encontró la ruta o archivo '{cleaned_subpath}' en la rama {scan.branch}."
+                db.commit()
+                return
+            scan_subtarget = candidate
+            source_note += f" (ruta: {cleaned_subpath})"
+
+        if "semgrep" in wanted and scan_subtarget is not None and target is not None:
+            _set_progress(db, scan, "semgrep", f"Ejecutando Semgrep{f' ({cleaned_subpath})' if cleaned_subpath else ''}…")
             t0 = time.monotonic()
             if semgrep_available():
                 try:
-                    sg_results = _run_semgrep(target)
+                    sg_results = _run_semgrep(scan_subtarget)
                     sg_counts = persist_semgrep_results(
                         db, scan=scan, repo=repo, results=sg_results, scan_root=target
                     )
@@ -558,12 +587,12 @@ def run_repo_scan_job(
                 errors.append("semgrep missing")
             _mark("semgrep", t0, "semgrep" in engines_ok)
 
-        if "gitleaks" in wanted and target is not None:
-            _set_progress(db, scan, "gitleaks", "Ejecutando GitLeaks…")
+        if "gitleaks" in wanted and scan_subtarget is not None and target is not None:
+            _set_progress(db, scan, "gitleaks", f"Ejecutando GitLeaks{f' ({cleaned_subpath})' if cleaned_subpath else ''}…")
             t0 = time.monotonic()
             if gitleaks_available():
                 try:
-                    gl_results = run_gitleaks(target)
+                    gl_results = run_gitleaks(scan_subtarget)
                     gl_counts = persist_gitleaks_findings(
                         db, scan=scan, repo=repo, results=gl_results, scan_root=target
                     )
@@ -583,25 +612,26 @@ def run_repo_scan_job(
                 errors.append("gitleaks missing")
             _mark("gitleaks", t0, "gitleaks" in engines_ok)
 
-        if "trivy" in wanted and target is not None:
-            _set_progress(db, scan, "trivy", "Ejecutando Trivy…")
+        if "trivy" in wanted and scan_subtarget is not None and target is not None:
+            _set_progress(db, scan, "trivy", f"Ejecutando Trivy{f' ({cleaned_subpath})' if cleaned_subpath else ''}…")
             t0 = time.monotonic()
             if trivy_available():
                 try:
                     tv_packages: list[dict] = []
-                    tv_results = run_trivy_fs(target, packages_out=tv_packages)
+                    tv_results = run_trivy_fs(scan_subtarget, packages_out=tv_packages)
                     tv_counts = persist_trivy_findings(
                         db, scan=scan, repo=repo, results=tv_results, scan_root=target
                     )
-                    try:
-                        from sbom import persist_sbom
+                    if not cleaned_subpath:
+                        try:
+                            from sbom import persist_sbom
 
-                        n_pkgs = persist_sbom(
-                            db, scan=scan, repo=repo, packages=tv_packages, scan_root=target
-                        )
-                        engine_notes.append(f"SBOM {n_pkgs} paquetes")
-                    except Exception as exc:
-                        _append_audit(db, "scan-worker", "SBOM_FAILED", repo.name, str(exc)[:400])
+                            n_pkgs = persist_sbom(
+                                db, scan=scan, repo=repo, packages=tv_packages, scan_root=target
+                            )
+                            engine_notes.append(f"SBOM {n_pkgs} paquetes")
+                        except Exception as exc:
+                            _append_audit(db, "scan-worker", "SBOM_FAILED", repo.name, str(exc)[:400])
                     count_parts.append(tv_counts)
                     engine_notes.append(f"Trivy {sum(tv_counts.values())}")
                     engines_ok.append("trivy")
@@ -664,8 +694,12 @@ def run_repo_scan_job(
             return
 
         scan.engines_ok = ",".join(engines_ok)
-        superseded = _supersede_previous_findings(
-            db, repo_id=repo.id, engines=engines_ok, keep_scan_id=scan.id
+        superseded = (
+            _supersede_previous_findings(
+                db, repo_id=repo.id, engines=engines_ok, keep_scan_id=scan.id
+            )
+            if not cleaned_subpath
+            else 0
         )
         if superseded:
             _append_audit(

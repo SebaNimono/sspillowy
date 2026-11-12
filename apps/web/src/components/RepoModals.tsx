@@ -13,6 +13,107 @@ import '../styles/repos.css';
 
 const PROVIDERS: RepoProvider[] = ['github', 'gitlab', 'bitbucket', 'azure', 'other'];
 
+export const PRESET_REPO_TAGS = [
+  'producción',
+  'crítico',
+  'pagos',
+  'backend',
+  'frontend',
+  'api',
+  'opensource',
+  'interno',
+];
+
+const TagPicker: React.FC<{
+  tags: string[];
+  onChange: (next: string[]) => void;
+}> = ({ tags, onChange }) => {
+  const [custom, setCustom] = useState('');
+
+  const toggle = (t: string) => {
+    if (tags.includes(t)) onChange(tags.filter((x) => x !== t));
+    else if (tags.length < 10) onChange([...tags, t]);
+  };
+
+  const addCustom = () => {
+    const clean = custom.trim().toLowerCase().replace(/,/g, '').slice(0, 24);
+    if (!clean) return;
+    if (!tags.includes(clean) && tags.length < 10) {
+      onChange([...tags, clean]);
+    }
+    setCustom('');
+  };
+
+  return (
+    <div className="rp-field">
+      <span>Etiquetas (Tags) del repositorio</span>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginTop: '0.2rem' }}>
+        {PRESET_REPO_TAGS.map((preset) => {
+          const active = tags.includes(preset);
+          return (
+            <button
+              key={preset}
+              type="button"
+              onClick={() => toggle(preset)}
+              style={{
+                padding: '0.22rem 0.6rem',
+                borderRadius: '999px',
+                fontSize: '0.74rem',
+                fontWeight: 600,
+                border: active ? '1px solid #2563eb' : '1px solid #d0d7de',
+                background: active ? '#eff6ff' : '#ffffff',
+                color: active ? '#1d4ed8' : '#4b5563',
+                cursor: 'pointer',
+              }}
+            >
+              #{preset}
+            </button>
+          );
+        })}
+        {tags
+          .filter((t) => !PRESET_REPO_TAGS.includes(t))
+          .map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => toggle(t)}
+              style={{
+                padding: '0.22rem 0.6rem',
+                borderRadius: '999px',
+                fontSize: '0.74rem',
+                fontWeight: 600,
+                border: '1px solid #2563eb',
+                background: '#eff6ff',
+                color: '#1d4ed8',
+                cursor: 'pointer',
+              }}
+            >
+              #{t} ×
+            </button>
+          ))}
+      </div>
+      <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.45rem' }}>
+        <input
+          type="text"
+          value={custom}
+          placeholder="Nueva etiqueta personalizada (ej. core-auth)…"
+          onChange={(e) => setCustom(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              addCustom();
+            }
+          }}
+          style={{ flex: 1 }}
+        />
+        <button type="button" className="btn btn-secondary" onClick={addCustom}>
+          Añadir tag
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const URL_PLACEHOLDER: Record<RepoProvider, string> = {
   github: 'https://github.com/mi-org/mi-repo',
   gitlab: 'https://gitlab.com/mi-grupo/mi-proyecto',
@@ -99,6 +200,7 @@ export const AddRepoModal: React.FC<{
   const [name, setName] = useState('');
   const [branch, setBranch] = useState('');
   const [appUrl, setAppUrl] = useState('');
+  const [tags, setTags] = useState<string[]>(['producción']);
   const [token, setToken] = useState('');
   const [access, setAccess] = useState<RepoAccessResult | null>(null);
   const [needsToken, setNeedsToken] = useState(false);
@@ -139,6 +241,7 @@ export const AddRepoModal: React.FC<{
         dastUrl: appUrl,
         provider,
         accessToken: needsToken ? token : undefined,
+        tags,
       });
       onCreated(repo);
     } catch (err) {
@@ -199,6 +302,8 @@ export const AddRepoModal: React.FC<{
               <span>Nombre para mostrar</span>
               <input type="text" value={name} placeholder="mi-repo" onChange={(e) => setName(e.target.value)} />
             </label>
+
+            <TagPicker tags={tags} onChange={setTags} />
 
             {access?.ok && (
               <p className="rp-ok">
@@ -274,6 +379,7 @@ export const EditRepoModal: React.FC<{
   const [name, setName] = useState(repo.name);
   const [branch, setBranch] = useState(repo.branch);
   const [appUrl, setAppUrl] = useState(repo.dast_url || '');
+  const [tags, setTags] = useState<string[]>(repo.tags || []);
   const [tokenMode, setTokenMode] = useState<'keep' | 'replace' | 'remove'>('keep');
   const [token, setToken] = useState('');
   const [busy, setBusy] = useState(false);
@@ -288,6 +394,7 @@ export const EditRepoModal: React.FC<{
       if (name.trim() !== repo.name) changes.name = name.trim();
       if (branch.trim() !== repo.branch) changes.branch = branch.trim();
       if (appUrl.trim() !== (repo.dast_url || '')) changes.dast_url = appUrl.trim();
+      if (JSON.stringify(tags) !== JSON.stringify(repo.tags || [])) changes.tags = tags;
       if (tokenMode === 'replace') changes.access_token = token.trim();
       if (tokenMode === 'remove') changes.access_token = '';
       onSaved(Object.keys(changes).length ? await updateRepository(repo.id, changes) : repo);
@@ -319,6 +426,8 @@ export const EditRepoModal: React.FC<{
           <span>URL donde está publicada la aplicación (opcional)</span>
           <input type="url" value={appUrl} placeholder="https://miapp.com" onChange={(e) => setAppUrl(e.target.value)} />
         </label>
+
+        <TagPicker tags={tags} onChange={setTags} />
 
         <div className="rp-private">
           <strong>

@@ -21,6 +21,15 @@ import { HeatmapCalendar } from '../components/HeatmapCalendar';
 import { AnimatedNumber } from '../components/AnimatedNumber';
 import { DashboardSettings } from '../components/DashboardSettings';
 import { PillowWidgetBoard } from '../components/PillowWidgetBoard';
+import { SingleFileScanModal } from '../components/SingleFileScanModal';
+import {
+  CustomQueryWidget,
+  CustomQueryWidgetCard,
+  PillowyAgentRoadmapCard,
+  QueryWidgetBuilderModal,
+  loadCustomQueryWidgets,
+  saveCustomQueryWidgets,
+} from '../components/QueryWidgetBuilderModal';
 import PageSkeleton from '../components/PageSkeleton';
 import { useI18n } from '../i18n/I18nProvider';
 import {
@@ -103,6 +112,8 @@ import {
   ScanLine,
   LayoutGrid,
   FolderGit2,
+  Plus,
+  FileCode2,
 } from 'lucide-react';
 import '../styles/dashboards.css';
 import '../styles/workspaces.css';
@@ -421,6 +432,11 @@ export const DashboardPage: React.FC<PageProps> = ({
   const [scans, setScans] = useState<Scan[]>([]);
   const [repositories, setRepositories] = useState<Repository[]>([]);
   const [serviceSearch, setServiceSearch] = useState('');
+  const [serviceTagFilter, setServiceTagFilter] = useState<string>('ALL');
+  const [auditFilter, setAuditFilter] = useState<'ALL' | 'GATE' | 'SCAN' | 'AI'>('ALL');
+  const [showQueryModal, setShowQueryModal] = useState(false);
+  const [showSingleFileModal, setShowSingleFileModal] = useState(false);
+  const [customQueryWidgets, setCustomQueryWidgets] = useState<CustomQueryWidget[]>(() => loadCustomQueryWidgets());
   const [loadError, setLoadError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
@@ -804,8 +820,18 @@ export const DashboardPage: React.FC<PageProps> = ({
     return bestIdx;
   }, [derived.series]);
 
+  const allRepoTags = useMemo(
+    () => Array.from(new Set(repositories.flatMap((r) => (Array.isArray(r.tags) ? r.tags : [])))).sort(),
+    [repositories],
+  );
+
   const serviceRows = useMemo(() => {
-    const repoRows = repositories.map((repo) => {
+    const filteredRepos =
+      serviceTagFilter === 'ALL'
+        ? repositories
+        : repositories.filter((r) => (r.tags || []).includes(serviceTagFilter));
+
+    const repoRows = filteredRepos.map((repo) => {
       const repoFindings = active.filter((f) => f.repository_id === repo.id);
       const crit = repoFindings.filter((f) => f.severity === 'CRITICAL').length;
       const high = repoFindings.filter((f) => f.severity === 'HIGH').length;
@@ -824,6 +850,7 @@ export const DashboardPage: React.FC<PageProps> = ({
         status,
         statusLabel,
         service: repo.name,
+        tags: repo.tags || [],
         url: repo.url || `branch: ${repo.branch || 'main'}`,
         uptime: `${Math.max(0, Math.min(100, repo.health_score ?? 100))}%`,
         uptimeTone: (repo.health_score ?? 100) >= 80 ? 'good' : (repo.health_score ?? 100) >= 55 ? 'warn' : 'bad',
@@ -833,25 +860,29 @@ export const DashboardPage: React.FC<PageProps> = ({
       };
     });
 
-    const engineRows = ENGINES.map((eng) => {
-      const engFindings = active.filter((f) => f.engine === eng.key);
-      const crit = engFindings.filter((f) => f.severity === 'CRITICAL').length;
-      const high = engFindings.filter((f) => f.severity === 'HIGH').length;
-      const status: 'up' | 'degraded' | 'down' = crit > 0 ? 'degraded' : 'up';
-      const cleanPct = active.length ? Math.max(65, Math.round((1 - engFindings.length / Math.max(active.length, 10)) * 100)) : 100;
-      return {
-        id: `eng-${eng.key}`,
-        status,
-        statusLabel: status === 'up' ? 'Activo' : 'Con alertas',
-        service: eng.label,
-        url: `motor://${eng.key}.sspillowy.local`,
-        uptime: `${cleanPct}%`,
-        uptimeTone: crit === 0 ? 'good' : 'warn',
-        response: `${engFindings.length} activos (${crit} C / ${high} H)`,
-        responseTone: crit > 0 ? 'bad' : high > 0 ? 'warn' : 'good',
-        tab: 'findings',
-      };
-    });
+    const engineRows =
+      serviceTagFilter !== 'ALL'
+        ? []
+        : ENGINES.map((eng) => {
+            const engFindings = active.filter((f) => f.engine === eng.key);
+            const crit = engFindings.filter((f) => f.severity === 'CRITICAL').length;
+            const high = engFindings.filter((f) => f.severity === 'HIGH').length;
+            const status: 'up' | 'degraded' | 'down' = crit > 0 ? 'degraded' : 'up';
+            const cleanPct = active.length ? Math.max(65, Math.round((1 - engFindings.length / Math.max(active.length, 10)) * 100)) : 100;
+            return {
+              id: `eng-${eng.key}`,
+              status,
+              statusLabel: status === 'up' ? 'Activo' : 'Con alertas',
+              service: eng.label,
+              tags: [] as string[],
+              url: `motor://${eng.key}.sspillowy.local`,
+              uptime: `${cleanPct}%`,
+              uptimeTone: crit === 0 ? 'good' : 'warn',
+              response: `${engFindings.length} activos (${crit} C / ${high} H)`,
+              responseTone: crit > 0 ? 'bad' : high > 0 ? 'warn' : 'good',
+              tab: 'findings',
+            };
+          });
 
     const combined = [...repoRows, ...engineRows];
     const q = serviceSearch.trim().toLowerCase();
@@ -860,9 +891,10 @@ export const DashboardPage: React.FC<PageProps> = ({
       (r) =>
         r.service.toLowerCase().includes(q) ||
         r.url.toLowerCase().includes(q) ||
-        r.statusLabel.toLowerCase().includes(q),
+        r.statusLabel.toLowerCase().includes(q) ||
+        r.tags.some((t) => t.toLowerCase().includes(q)),
     );
-  }, [repositories, active, scans, serviceSearch]);
+  }, [repositories, active, scans, serviceSearch, serviceTagFilter]);
 
   const exportDashboardCsv = () => {
     const headers = ['Estado', 'Servicio / Repositorio', 'URL / Endpoint', 'Health / Cumplimiento', 'Detalle / Hallazgos'];
@@ -902,6 +934,33 @@ export const DashboardPage: React.FC<PageProps> = ({
     });
   };
 
+  const handleAddQueryWidget = (w: CustomQueryWidget) => {
+    setCustomQueryWidgets((prev) => {
+      const next = [w, ...prev];
+      saveCustomQueryWidgets(next);
+      return next;
+    });
+  };
+
+  const handleDeleteQueryWidget = (id: string) => {
+    setCustomQueryWidgets((prev) => {
+      const next = prev.filter((w) => w.id !== id);
+      saveCustomQueryWidgets(next);
+      return next;
+    });
+  };
+
+  const filteredAuditEvents = useMemo(() => {
+    if (auditFilter === 'ALL') return events;
+    return events.filter((ev) => {
+      const act = (ev.action || '').toUpperCase();
+      if (auditFilter === 'GATE') return act.includes('GATE');
+      if (auditFilter === 'SCAN') return act.includes('SCAN') || act.includes('FINDING');
+      if (auditFilter === 'AI') return act.includes('BYPASS') || act.includes('AI') || act.includes('PILLOW');
+      return true;
+    });
+  }, [events, auditFilter]);
+
   const scopeLabel = !view?.repository_names.length
     ? t('dashboard.orgWide')
     : view.repository_names.length <= 2
@@ -932,6 +991,24 @@ export const DashboardPage: React.FC<PageProps> = ({
             arranging={arranging}
             onArrangingChange={setArranging}
           />
+          <button
+            type="button"
+            className="dw-tool-btn ss-pill-btn"
+            onClick={() => setShowQueryModal(true)}
+            title="Crear un widget personalizado a partir de una consulta"
+          >
+            <Plus size={14} />
+            <span>Crear Widget</span>
+          </button>
+          <button
+            type="button"
+            className="dw-tool-btn ss-pill-btn"
+            onClick={() => setShowSingleFileModal(true)}
+            title="Analizar un archivo único o snippet al instante"
+          >
+            <FileCode2 size={14} />
+            <span>Analizar 1 archivo</span>
+          </button>
           {onOpenList && (
             <button type="button" className="dw-tool-btn ss-pill-btn" onClick={onOpenList} title={t('dashboard.viewAllDashboards')}>
               <LayoutGrid size={14} />
@@ -1220,13 +1297,34 @@ export const DashboardPage: React.FC<PageProps> = ({
                         <span title="Estado en tiempo real de tus repositorios monitoreados y motores DevSecOps">
                           <Info size={14} />
                         </span>
+                        {allRepoTags.length > 0 && (
+                          <div className="ss-tag-filter-strip">
+                            <button
+                              type="button"
+                              className={`ss-tag-chip ${serviceTagFilter === 'ALL' ? 'is-active' : ''}`}
+                              onClick={() => setServiceTagFilter('ALL')}
+                            >
+                              Todos
+                            </button>
+                            {allRepoTags.map((tg) => (
+                              <button
+                                key={tg}
+                                type="button"
+                                className={`ss-tag-chip ${serviceTagFilter === tg ? 'is-active' : ''}`}
+                                onClick={() => setServiceTagFilter(serviceTagFilter === tg ? 'ALL' : tg)}
+                              >
+                                #{tg}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       <div className="ss-service-actions">
                         <label className="ss-service-search">
                           <Search size={14} />
                           <input
                             type="search"
-                            placeholder="Buscar repositorio o motor..."
+                            placeholder="Buscar repositorio, tag o motor..."
                             value={serviceSearch}
                             onChange={(e) => setServiceSearch(e.target.value)}
                           />
@@ -1258,7 +1356,16 @@ export const DashboardPage: React.FC<PageProps> = ({
                                   {row.statusLabel}
                                 </span>
                               </td>
-                              <td className="ss-service-name">{row.service}</td>
+                              <td className="ss-service-name">
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                  <span>{row.service}</span>
+                                  {row.tags.map((tg) => (
+                                    <span key={tg} className="ss-repo-tag-badge">
+                                      #{tg}
+                                    </span>
+                                  ))}
+                                </div>
+                              </td>
                               <td className="ss-service-url">{row.url}</td>
                               <td>
                                 <span className={`ss-metric-text ss-metric-text--${row.uptimeTone}`}>{row.uptime}</span>
@@ -1479,41 +1586,54 @@ export const DashboardPage: React.FC<PageProps> = ({
 
             if (item.id === 'engines') {
               return (
-                <Widget key="engines" title={t('dashboard.wEnginesTitle')} icon={<Layers size={18} color="#0969da" />} span={item.span} onOpen={goFindings} {...dragProps}>
-                  <div className="dw-matrix-wrap">
-                    <table className="dw-matrix">
+                <Widget
+                  key="engines"
+                  title={t('dashboard.wEnginesTitle')}
+                  icon={<Layers size={17} color="#2563eb" />}
+                  span={item.span}
+                  chip={
+                    <span className="ss-chart-pill">
+                      <span>{active.length} activos</span>
+                    </span>
+                  }
+                  onOpen={goFindings}
+                  {...dragProps}
+                >
+                  <div className="ss-service-table-wrap">
+                    <table className="ss-service-table ss-engine-matrix-table">
                       <thead>
                         <tr>
                           <th>{t('dashboard.wEnginesCol')}</th>
                           {TREND_SEVERITIES.map((s) => (
-                            <th key={s}>{t(`severity.${s}`)}</th>
+                            <th key={s} style={{ textAlign: 'center' }}>
+                              {t(`severity.${s}`)}
+                            </th>
                           ))}
-                          <th>{t('dashboard.wEnginesTotal')}</th>
+                          <th style={{ textAlign: 'right' }}>{t('dashboard.wEnginesTotal')}</th>
                         </tr>
                       </thead>
                       <tbody>
                         {engineMatrix.rows.map((r) => (
-                          <tr key={r.key}>
-                            <td>
-                              <ScanLine size={13} /> {r.label}
+                          <tr key={r.key} onClick={goFindings} style={{ cursor: 'pointer' }}>
+                            <td className="ss-service-name">
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                <ScanLine size={14} color="#2563eb" />
+                                {r.label}
+                              </span>
                             </td>
                             {TREND_SEVERITIES.map((s) => {
                               const v = r.counts[s];
-                              const alpha = v ? 0.12 + (v / engineMatrix.max) * 0.6 : 0;
                               return (
-                                <td
-                                  key={s}
-                                  className="dw-matrix-cell"
-                                  style={{
-                                    background: v ? `color-mix(in srgb, ${PASTEL_SEVERITY[s]} ${Math.round(alpha * 100)}%, #ffffff)` : undefined,
-                                    color: alpha > 0.55 ? '#1f2328' : v ? PASTEL_SEVERITY[s] : '#afb8c1',
-                                  }}
-                                >
-                                  {v || '·'}
+                                <td key={s} style={{ textAlign: 'center' }}>
+                                  <span
+                                    className={`ss-matrix-badge ${v > 0 ? `ss-matrix-badge--${s.toLowerCase()}` : 'ss-matrix-badge--zero'}`}
+                                  >
+                                    {v || '0'}
+                                  </span>
                                 </td>
                               );
                             })}
-                            <td className="dw-matrix-total">{r.total}</td>
+                            <td style={{ textAlign: 'right', fontWeight: 700, color: '#111827' }}>{r.total}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -1524,17 +1644,41 @@ export const DashboardPage: React.FC<PageProps> = ({
             }
 
             if (item.id === 'heatmap') {
+              const activeDaysCount = heatmap.cells.filter((c) => c.count > 0).length;
               return (
                 <Widget
                   key="heatmap"
                   title={t('dashboard.wHeatmapTitle')}
-                  icon={<Flame size={18} color="#cf222e" />}
+                  icon={<Flame size={17} color="#ef4444" />}
                   span={item.span}
-                  chip={<span className="dash-chip">{t('dashboard.wHeatmapChip', { count: heatmap.total_findings_period })}</span>}
+                  chip={
+                    <span className="ss-chart-pill">
+                      <Calendar size={12} />
+                      <span>{t('dashboard.wHeatmapChip', { count: heatmap.total_findings_period })}</span>
+                    </span>
+                  }
                   {...dragProps}
                 >
                   {heatmap.cells.length > 0 && heatmap.total_findings_period > 0 ? (
-                    <HeatmapCalendar data={heatmap} />
+                    <div className="ss-heatmap-split">
+                      <div className="ss-heatmap-cal">
+                        <HeatmapCalendar data={heatmap} />
+                      </div>
+                      <div className="ss-heatmap-stats">
+                        <div className="ss-heatmap-stat-box">
+                          <span>Total periodo (12 sem.)</span>
+                          <strong>{heatmap.total_findings_period}</strong>
+                        </div>
+                        <div className="ss-heatmap-stat-box">
+                          <span>Pico diario máximo</span>
+                          <strong>{heatmap.max_count} hallazgos</strong>
+                        </div>
+                        <div className="ss-heatmap-stat-box">
+                          <span>Días con detecciones</span>
+                          <strong>{activeDaysCount} días</strong>
+                        </div>
+                      </div>
+                    </div>
                   ) : (
                     <Empty text={t('dashboard.wHeatmapEmpty')} />
                   )}
@@ -1547,28 +1691,70 @@ export const DashboardPage: React.FC<PageProps> = ({
                 <Widget
                   key="audit"
                   title={t('dashboard.wAuditTitle')}
-                  icon={<Terminal size={18} color="#0969da" />}
+                  icon={<Terminal size={17} color="#2563eb" />}
                   span={item.span}
-                  chip={<span className="dash-chip">{t('dashboard.wAuditChip', { count: Math.min(events.length, 8) })}</span>}
+                  chip={
+                    <div className="ss-audit-tabs">
+                      {(
+                        [
+                          { id: 'ALL' as const, label: 'Todos' },
+                          { id: 'GATE' as const, label: 'Security Gate' },
+                          { id: 'SCAN' as const, label: 'Escaneos' },
+                          { id: 'AI' as const, label: 'IA / Bypass' },
+                        ]
+                      ).map((tab) => (
+                        <button
+                          key={tab.id}
+                          type="button"
+                          className={`ss-audit-tab ${auditFilter === tab.id ? 'is-active' : ''}`}
+                          onClick={() => setAuditFilter(tab.id)}
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
+                    </div>
+                  }
                   {...dragProps}
                 >
-                  {events.length ? (
-                    <div className="dash-events">
-                      {events.slice(0, 8).map((event) => {
-                        const color = actionColor(event.action);
-                        return (
-                          <div key={event.id} className="dash-event">
-                            <span className="dash-event-dot" style={{ background: color }} />
-                            <div className="dash-event-body">
-                              <div className="dash-event-top">
-                                <strong style={{ color }}>{event.action}</strong>
-                                <span>{event.target}</span>
-                              </div>
-                              <p>{event.detail}</p>
-                            </div>
-                          </div>
-                        );
-                      })}
+                  {filteredAuditEvents.length ? (
+                    <div className="ss-service-table-wrap">
+                      <table className="ss-service-table ss-audit-table">
+                        <thead>
+                          <tr>
+                            <th>Evento</th>
+                            <th>Repositorio / Destino</th>
+                            <th>Detalle técnico</th>
+                            <th>Hora</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredAuditEvents.slice(0, 8).map((event) => {
+                            const color = actionColor(event.action);
+                            return (
+                              <tr key={event.id}>
+                                <td>
+                                  <span className="ss-audit-action-pill" style={{ color, borderColor: `${color}33`, background: `${color}10` }}>
+                                    <i style={{ background: color }} />
+                                    {event.action}
+                                  </span>
+                                </td>
+                                <td className="ss-service-name">{event.target}</td>
+                                <td className="ss-service-url">{event.detail}</td>
+                                <td className="ss-audit-time">
+                                  {event.created_at
+                                    ? new Date(event.created_at).toLocaleString('es-CL', {
+                                        day: '2-digit',
+                                        month: 'short',
+                                        hour: '2-digit',
+                                        minute: '2-digit',
+                                      })
+                                    : 'Reciente'}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     </div>
                   ) : (
                     <Empty text={t('dashboard.wAuditEmpty')} />
@@ -1579,22 +1765,60 @@ export const DashboardPage: React.FC<PageProps> = ({
 
             return null;
           })}
+
+          {customQueryWidgets.map((qw) => (
+            <CustomQueryWidgetCard
+              key={qw.id}
+              widget={qw}
+              findings={findings}
+              scans={scans}
+              repositories={repositories}
+              onDelete={handleDeleteQueryWidget}
+            />
+          ))}
         </div>
       )}
 
       {!loading && dataReady && derived.sevActive.CRITICAL > thresholds.critical_max && (
-        <div className="dw-alert">
-          <AlertOctagon size={16} />
-          <span>
-            {t('dashboard.critAlert', { count: derived.sevActive.CRITICAL, max: thresholds.critical_max })}
-          </span>
-          <button type="button" className="btn btn-secondary fm-btn-sm" onClick={goFindings}>
-            {t('dashboard.goToMatrix')}
+        <div className="dw-alert ss-crit-banner">
+          <div className="ss-crit-banner-left">
+            <span className="ss-crit-icon">
+              <AlertOctagon size={16} />
+            </span>
+            <div>
+              <strong>Alerta de umbral crítico superado</strong>
+              <span>
+                {t('dashboard.critAlert', { count: derived.sevActive.CRITICAL, max: thresholds.critical_max })}
+              </span>
+            </div>
+          </div>
+          <button type="button" className="ss-export-btn" onClick={goFindings}>
+            <span>{t('dashboard.goToMatrix')} →</span>
           </button>
         </div>
       )}
 
       <PillowWidgetBoard widgets={pillowWidgets} stats={stats} onRemove={handleRemovePillowWidget} />
+
+      <PillowyAgentRoadmapCard onNavigate={onNavigate} />
+
+      <QueryWidgetBuilderModal
+        open={showQueryModal}
+        onClose={() => setShowQueryModal(false)}
+        onSave={handleAddQueryWidget}
+        availableTags={allRepoTags}
+        findings={findings}
+        scans={scans}
+        repositories={repositories}
+      />
+
+      {showSingleFileModal && (
+        <SingleFileScanModal
+          repositories={repositories}
+          onClose={() => setShowSingleFileModal(false)}
+          onCompleted={load}
+        />
+      )}
     </div>
   );
 };
