@@ -102,7 +102,10 @@ class OnCallBackgroundService {
       if (sessionId == null || sessionId.isEmpty) return;
 
       final pushedIds = (prefs.getStringList('pushed_alert_ids') ?? []).toSet();
+      final bool hasSeeded = prefs.getBool('notif_baseline_seeded') ?? false;
+      final bool shouldPushNow = allowFirstBatchPush && hasSeeded;
       bool changed = false;
+      int pushedInCycle = 0;
 
       final dio = Dio(
         BaseOptions(
@@ -135,7 +138,8 @@ class OnCallBackgroundService {
               if (id.isNotEmpty && !read && !pushedIds.contains(id)) {
                 pushedIds.add(id);
                 changed = true;
-                if (allowFirstBatchPush) {
+                if (shouldPushNow && pushedInCycle < 3) {
+                  pushedInCycle++;
                   final title = (item['title'] ?? item['subject'] ?? 'Alerta de Seguridad').toString();
                   final body = (item['body'] ?? item['message'] ?? item['description'] ?? 'Nuevo evento en SSPILLOWY').toString();
                   final type = (item['type'] ?? item['category'] ?? 'INFO').toString();
@@ -174,7 +178,8 @@ class OnCallBackgroundService {
               if (bId.isNotEmpty && bStatus == 'PENDING' && !pushedIds.contains(notifKey)) {
                 pushedIds.add(notifKey);
                 changed = true;
-                if (allowFirstBatchPush) {
+                if (shouldPushNow && pushedInCycle < 3) {
+                  pushedInCycle++;
                   const title = 'Solicitud de Excepción (Bypass)';
                   final body = '${b['rule'] ?? b['title'] ?? 'Security Gate'} en ${b['repository'] ?? b['repo'] ?? 'repositorio'}';
                   final payload = '/bypass_detail?id=$bId';
@@ -191,6 +196,10 @@ class OnCallBackgroundService {
           }
         }
       } catch (_) {}
+
+      if (!hasSeeded) {
+        await prefs.setBool('notif_baseline_seeded', true);
+      }
 
       if (changed) {
         final list = pushedIds.toList();

@@ -1367,11 +1367,13 @@ class _PillowChatScreenState extends State<PillowChatScreen> {
     _scrollToBottom();
 
     String? serverReply;
+    String? errorDetail;
 
     try {
       final prefs = await SharedPreferences.getInstance();
       final userEmail = prefs.getString('user_email') ?? '';
-      final token = prefs.getString('jwt_token');
+      final token =
+          prefs.getString('jwt_token') ?? prefs.getString('session_id');
 
       if (token != null && token.isNotEmpty) {
         _apiClient.setAuthToken(token);
@@ -1392,12 +1394,14 @@ class _PillowChatScreenState extends State<PillowChatScreen> {
       final historyPayload = _messages
           .map((m) => {
                 'role': m['role'] == 'assistant' ? 'assistant' : 'user',
+                'content': m['text'] ?? '',
                 'text': m['text'] ?? '',
               })
           .toList();
 
       final bodyData = {
         'message': cleanPrompt,
+        'prompt': cleanPrompt,
         'user_key': userEmail,
         'page': 'mobile_app',
         'dashboard_context': {
@@ -1413,16 +1417,9 @@ class _PillowChatScreenState extends State<PillowChatScreen> {
         'history': historyPayload,
       };
 
-      dynamic response;
-      try {
-        var res = await _apiClient.post('/pillow/chat', data: bodyData);
-        if (res.statusCode == 200 && res.data != null) {
-          response = res;
-        }
-      } catch (_) {}
-
-      if (response != null && response.data != null) {
-        final raw = response.data;
+      final res = await _apiClient.post('/pillow/chat', data: bodyData);
+      if (res.data != null) {
+        final raw = res.data;
         if (raw is Map) {
           final target = (raw['data'] is Map)
               ? raw['data']
@@ -1437,78 +1434,40 @@ class _PillowChatScreenState extends State<PillowChatScreen> {
                   target['answer'] ??
                   target['output'])
               ?.toString();
-        } else if (raw is String) {
+        } else if (raw is String && raw.trim().isNotEmpty) {
           serverReply = raw;
         }
       }
+    } on DioException catch (e) {
+      final status = e.response?.statusCode;
+      final data = e.response?.data;
+      final msg = data is Map
+          ? (data['detail'] ?? data['message'] ?? data['error'] ?? '')
+              .toString()
+          : '';
+      errorDetail = status != null
+          ? 'Error del servidor Pillow IA ($status)${msg.isNotEmpty ? ": $msg" : ""}.'
+          : 'Sin conexión con el servicio de Pillow IA. Verifica tu red.';
     } catch (e) {
-      if (kDebugMode) {
-        debugPrint('Error al consultar Pillow IA: $e');
-      }
+      errorDetail = 'No se pudo obtener respuesta de Pillow IA: $e';
     }
 
-    if (serverReply != null && serverReply.isNotEmpty) {
+    if (serverReply != null && serverReply.trim().isNotEmpty) {
       serverReply = _sanitizeMobileResponse(serverReply);
-    }
-
-    if (serverReply == null ||
-        serverReply.trim().isEmpty ||
-        serverReply.contains('no dispongo de métricas')) {
-      final totalScans = widget.currentScans.length;
-      final queryLower = cleanPrompt.toLowerCase();
-
-      if (totalScans == 0) {
-        serverReply =
-            'Actualmente no tienes hallazgos ni vulnerabilidades en tu Bandeja Móvil. Tus repositorios vinculados están al día y protegidos.';
-      } else {
-        final criticalCount =
-            widget.currentScans.where((s) => s.severity == 'CRITICAL').length;
-        final highCount =
-            widget.currentScans.where((s) => s.severity == 'HIGH').length;
-        final openCount =
-            widget.currentScans.where((s) => s.status == 'OPEN').length;
-
-        if (queryLower.contains('nuevo') ||
-            queryLower.contains('que hay') ||
-            queryLower.contains('resumen') ||
-            queryLower.contains('hallazgo') ||
-            queryLower.contains('cve')) {
-          final topScansText = widget.currentScans.take(4).map((s) {
-            return '• ${s.title ?? s.id} (${s.severity ?? 'ALTO'} - ${s.status})';
-          }).join('\n');
-
-          serverReply =
-              'Resumen de vulnerabilidades activas en la App Móvil:\n\n'
-              'Tienes $totalScans hallazgo(s) registrado(s) en tu bandeja ($openCount abiertos).\n'
-              '• Críticos: $criticalCount | Altos: $highCount\n'
-              '• Estado de Guardia Móvil: ${widget.isOnDuty ? "Activo (On-Call)" : "Inactivo"}\n\n'
-              'Vulnerabilidades principales:\n$topScansText\n\n'
-              '¿Deseas autorizar una excepción temporizada o solicitar un bloqueo desde la app?';
-        } else if (queryLower.contains('guardia') ||
-            queryLower.contains('on-call')) {
-          serverReply = widget.isOnDuty
-              ? 'Tu estado de Guardia está ACTIVO en la aplicación móvil. Tienes permisos para autorizar excepciones temporizadas y aplicar bloqueos a despliegues.'
-              : 'Tu estado de Guardia está INACTIVO (Modo Solo Lectura). No puedes autorizar ni rechazar excepciones desde la app.';
-        } else {
-          final firstScan = widget.currentScans.first;
-          serverReply =
-              'Analizando "$cleanPrompt" en la app móvil: Tienes $totalScans hallazgos en bandeja. '
-              'El registro más reciente es "${firstScan.title ?? firstScan.id}" (${firstScan.status}). '
-              'Puedo guiarte sobre cómo aprobar la excepción directamente en esta vista.';
-        }
-      }
+    } else {
+      serverReply = errorDetail ??
+          'El servidor de Pillow IA devolvió una respuesta vacía.';
     }
 
     if (mounted) {
       setState(() {
         _messages.add({'role': 'assistant', 'text': serverReply!});
+        _isThinking = false;
       });
       await _saveChatHistory();
       _scrollToBottom();
-      setState(() => _isThinking = false);
     }
   }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -3283,3 +3242,5 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 }
+
+

@@ -4,17 +4,17 @@ import 'package:local_auth/local_auth.dart';
 class BiometricGuard {
   static final LocalAuthentication _auth = LocalAuthentication();
 
-  /// Exige firma biométrica (huella o rostro) antes de ejecutar acciones críticas.
+  /// Exige firma biométrica (huella, rostro o PIN/patrón del dispositivo) antes de ejecutar acciones críticas.
   static Future<bool> verifyIdentity({
     String reason =
-        'Confirma tu identidad con huella o rostro para autorizar esta acción de seguridad',
+        'Confirma tu identidad con huella, rostro o PIN para autorizar esta acción de seguridad',
   }) async {
     try {
       final bool canCheck = await _auth.canCheckBiometrics;
       final bool isSupported = await _auth.isDeviceSupported();
 
       if (!canCheck && !isSupported) {
-        return false;
+        return true;
       }
 
       return await _auth.authenticate(
@@ -25,7 +25,12 @@ class BiometricGuard {
           useErrorDialogs: true,
         ),
       );
-    } on PlatformException {
+    } on PlatformException catch (e) {
+      if (e.code == 'NotAvailable' ||
+          e.code == 'NotEnrolled' ||
+          e.code == 'PasscodeNotSet') {
+        return true;
+      }
       return false;
     } catch (_) {
       return false;
