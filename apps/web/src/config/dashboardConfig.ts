@@ -64,10 +64,10 @@ export const WIDGET_SPAN_OPTIONS: { span: WidgetSpan; label: string }[] = [
 
 export const DEFAULT_LAYOUT: WidgetLayoutItem[] = [
   { id: 'kpis', span: 12 },
-  { id: 'trend', span: 8 },
-  { id: 'gates', span: 4 },
-  { id: 'sla', span: 5 },
-  { id: 'aging', span: 3 },
+  { id: 'trend', span: 6 },
+  { id: 'gates', span: 6 },
+  { id: 'sla', span: 4 },
+  { id: 'aging', span: 4 },
   { id: 'health', span: 4 },
   { id: 'topRepos', span: 4 },
   { id: 'topComponents', span: 4 },
@@ -101,7 +101,7 @@ export const DEFAULT_DASHBOARD_CONFIG: DashboardConfig = {
   layout: structuredClone(DEFAULT_LAYOUT),
 };
 
-const STORAGE_KEY = 'sspillowy_dashboard_config';
+const STORAGE_KEY = 'sspillowy_dashboard_config_v2';
 const VALID_SPANS = new Set<number>([3, 4, 5, 6, 8, 12]);
 
 function parseNumber(value: string | null, fallback: number): number {

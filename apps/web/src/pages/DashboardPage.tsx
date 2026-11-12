@@ -14,8 +14,6 @@ import {
   RadialBar,
   Cell,
   PolarAngleAxis,
-  PieChart,
-  Pie,
 } from 'recharts';
 import { Header } from '../components/Header';
 import { SidebarState } from '../components/Sidebar';
@@ -31,12 +29,14 @@ import {
   AuditEvent,
   Finding,
   Scan,
+  Repository,
   DashboardView,
   fetchStats,
   fetchHeatmap,
   fetchAuditLog,
   fetchFindings,
   fetchScans,
+  fetchRepositories,
   updateDashboardView,
 } from '../api/client';
 import {
@@ -81,15 +81,20 @@ import {
   Activity,
   ArrowDownRight,
   ArrowUpRight,
-  Clock,
+  Calendar,
   Database,
+  Download,
+  FileSpreadsheet,
   Flame,
   GitPullRequest,
   GripVertical,
   Hourglass,
+  Info,
   Layers,
+  MoreHorizontal,
   Package,
   RefreshCw,
+  Search,
   ShieldCheck,
   Terminal,
   Trophy,
@@ -229,25 +234,6 @@ const ChartTooltip = ({
           <b>{p.value}</b>
         </div>
       ))}
-    </div>
-  );
-};
-
-const Sparkline: React.FC<{ data: number[]; color: string; id: string }> = ({ data, color, id }) => {
-  if (!data.some((v) => v > 0)) return <div className="dw-spark dw-spark--flat" />;
-  return (
-    <div className="dw-spark">
-      <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={data.map((v, i) => ({ i, v }))} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
-          <defs>
-            <linearGradient id={`spark-${id}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={color} stopOpacity={0.35} />
-              <stop offset="100%" stopColor={color} stopOpacity={0} />
-            </linearGradient>
-          </defs>
-          <Area type="monotone" dataKey="v" stroke={color} strokeWidth={1.75} fill={`url(#spark-${id})`} isAnimationActive={false} />
-        </AreaChart>
-      </ResponsiveContainer>
     </div>
   );
 };
@@ -433,6 +419,8 @@ export const DashboardPage: React.FC<PageProps> = ({
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [findings, setFindings] = useState<Finding[]>([]);
   const [scans, setScans] = useState<Scan[]>([]);
+  const [repositories, setRepositories] = useState<Repository[]>([]);
+  const [serviceSearch, setServiceSearch] = useState('');
   const [loadError, setLoadError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
@@ -445,18 +433,20 @@ export const DashboardPage: React.FC<PageProps> = ({
     const scope = scopeKey ? scopeKey.split(',') : undefined;
     const inScope = (repoId: string) => !scope || scope.includes(repoId);
     setRefreshing(true);
-    const [s, h, a, f, sc] = await Promise.allSettled([
+    const [s, h, a, f, sc, rp] = await Promise.allSettled([
       fetchStats(scope),
       fetchHeatmap(scope),
       fetchAuditLog(scope),
       fetchFindings(),
       fetchScans(),
+      fetchRepositories(),
     ]);
     setStats(s.status === 'fulfilled' && s.value ? s.value : EMPTY_STATS);
     setHeatmap(h.status === 'fulfilled' && h.value?.cells?.length ? h.value : EMPTY_HEATMAP);
     setEvents(a.status === 'fulfilled' ? a.value ?? [] : []);
     setFindings(f.status === 'fulfilled' ? (f.value ?? []).filter((x) => inScope(x.repository_id)) : []);
     setScans(sc.status === 'fulfilled' ? (sc.value ?? []).filter((x) => inScope(x.repository_id)) : []);
+    setRepositories(rp.status === 'fulfilled' ? (rp.value ?? []).filter((x) => inScope(x.id)) : []);
     const failed = [s, h, a, f, sc].find((r) => r.status === 'rejected') as PromiseRejectedResult | undefined;
     setLoadError(failed ? (failed.reason instanceof Error ? failed.reason.message : 'No se pudo cargar parte del dashboard.') : null);
     setUpdatedAt(new Date());
@@ -686,6 +676,25 @@ export const DashboardPage: React.FC<PageProps> = ({
   const gateAlert: MetricAlert =
     derived.passRate === null ? 'warn' : derived.passRate >= 70 ? 'ok' : 'danger';
 
+  const formatBadge = (
+    delta: number | null,
+    goodWhenUp = false,
+    fallbackText = 'Estable',
+    fallbackTone: 'good' | 'bad' | 'neutral' = 'neutral',
+  ): { text: string; tone: 'good' | 'bad' | 'neutral'; dir: 'up' | 'down' | 'flat' } => {
+    if (delta === null || !Number.isFinite(delta) || Math.round(delta) === 0) {
+      return { text: fallbackText, tone: fallbackTone, dir: 'flat' };
+    }
+    const up = delta > 0;
+    const good = up === goodWhenUp;
+    const sign = up ? '+' : '-';
+    return {
+      text: `${sign}${Math.abs(Math.round(delta))}%`,
+      tone: good ? 'good' : 'bad',
+      dir: up ? 'up' : 'down',
+    };
+  };
+
   const kpis: {
     id: string;
     label: string;
@@ -696,6 +705,8 @@ export const DashboardPage: React.FC<PageProps> = ({
     spark: number[];
     foot: React.ReactNode;
     hint: string;
+    badge: { text: string; tone: 'good' | 'bad' | 'neutral'; dir: 'up' | 'down' | 'flat' };
+    targetTab: string;
   }[] = [
     {
       id: 'active',
@@ -709,6 +720,13 @@ export const DashboardPage: React.FC<PageProps> = ({
         falsePositivesCount > 0
           ? `${t('dashboard.kpiDetectedInDays', { count: derived.detected, days: range })} · ${t('dashboard.kpiFalsePositives', { count: falsePositivesCount })}`
           : t('dashboard.kpiDetectedInDays', { count: derived.detected, days: range }),
+      badge: formatBadge(
+        derived.detectedDelta,
+        false,
+        active.length === 0 ? '0 abiertos' : `${derived.detected} en ${range}d`,
+        active.length <= thresholds.open_max ? 'good' : 'bad',
+      ),
+      targetTab: 'findings',
     },
     {
       id: 'critical',
@@ -719,6 +737,12 @@ export const DashboardPage: React.FC<PageProps> = ({
       spark: derived.series.map((d) => d.CRITICAL),
       foot: <span className="dw-delta dw-delta--flat">{t('dashboard.kpiThresholdLe', { max: thresholds.critical_max })}</span>,
       hint: t('dashboard.kpiHighsMediums', { high: derived.sevActive.HIGH, medium: derived.sevActive.MEDIUM }),
+      badge: {
+        text: derived.sevActive.CRITICAL > thresholds.critical_max ? `>${thresholds.critical_max} umbral` : `≤${thresholds.critical_max} OK`,
+        tone: derived.sevActive.CRITICAL > thresholds.critical_max ? 'bad' : 'good',
+        dir: derived.sevActive.CRITICAL > thresholds.critical_max ? 'up' : 'down',
+      },
+      targetTab: 'findings',
     },
     {
       id: 'sla',
@@ -729,6 +753,12 @@ export const DashboardPage: React.FC<PageProps> = ({
       spark: [],
       foot: <span className="dw-delta dw-delta--flat">{t('dashboard.kpiSlaCompliant', { pct: slaCompliance })}</span>,
       hint: t('dashboard.kpiSlaHint', { crit: SLA_DAYS.CRITICAL, high: SLA_DAYS.HIGH }),
+      badge: {
+        text: `${slaCompliance}% SLA`,
+        tone: slaCompliance >= 85 ? 'good' : 'bad',
+        dir: slaCompliance >= 85 ? 'up' : 'down',
+      },
+      targetTab: 'findings',
     },
     {
       id: 'gate',
@@ -740,6 +770,13 @@ export const DashboardPage: React.FC<PageProps> = ({
       spark: [],
       foot: <Delta value={derived.passDelta} suffix=" pp" goodWhenUp />,
       hint: t('dashboard.kpiGateBlocks', { count: derived.gateCounts.BLOCKED, days: range }),
+      badge: formatBadge(
+        derived.passDelta,
+        true,
+        derived.passRate !== null && derived.passRate >= 80 ? 'Operativo' : 'Revisión',
+        derived.passRate !== null && derived.passRate >= 70 ? 'good' : 'bad',
+      ),
+      targetTab: 'gates',
     },
     {
       id: 'scans',
@@ -750,8 +787,101 @@ export const DashboardPage: React.FC<PageProps> = ({
       spark: derived.series.map((d) => d.scans),
       foot: <Delta value={derived.scansDelta} goodWhenUp />,
       hint: t('dashboard.kpiMonitoredRepos', { count: resolvedStats.monitored_repos }),
+      badge: formatBadge(derived.scansDelta, true, `${resolvedStats.monitored_repos} repos`, 'good'),
+      targetTab: 'scans',
     },
   ];
+
+  const peakTrendIndex = useMemo(() => {
+    let bestIdx = -1;
+    let bestVal = 0;
+    derived.series.forEach((d, idx) => {
+      if (d.total >= bestVal && d.total > 0) {
+        bestVal = d.total;
+        bestIdx = idx;
+      }
+    });
+    return bestIdx;
+  }, [derived.series]);
+
+  const serviceRows = useMemo(() => {
+    const repoRows = repositories.map((repo) => {
+      const repoFindings = active.filter((f) => f.repository_id === repo.id);
+      const crit = repoFindings.filter((f) => f.severity === 'CRITICAL').length;
+      const high = repoFindings.filter((f) => f.severity === 'HIGH').length;
+      const totalOpen = repoFindings.length;
+      const repoScans = scans.filter((s) => s.repository_id === repo.id);
+      const lastScan = repoScans[0];
+      const status: 'up' | 'degraded' | 'down' =
+        crit > 0 || lastScan?.gate_status === 'BLOCKED'
+          ? 'down'
+          : high > 0
+            ? 'degraded'
+            : 'up';
+      const statusLabel = status === 'up' ? 'Activo' : status === 'degraded' ? 'Degradado' : 'Bloqueado';
+      return {
+        id: `repo-${repo.id}`,
+        status,
+        statusLabel,
+        service: repo.name,
+        url: repo.url || `branch: ${repo.branch || 'main'}`,
+        uptime: `${Math.max(0, Math.min(100, repo.health_score ?? 100))}%`,
+        uptimeTone: (repo.health_score ?? 100) >= 80 ? 'good' : (repo.health_score ?? 100) >= 55 ? 'warn' : 'bad',
+        response: crit > 0 ? `${crit} crít · ${totalOpen} hallazgos` : `${totalOpen} abiertos · ${repo.branch || 'main'}`,
+        responseTone: crit > 0 ? 'bad' : high > 0 ? 'warn' : 'good',
+        tab: 'repositories',
+      };
+    });
+
+    const engineRows = ENGINES.map((eng) => {
+      const engFindings = active.filter((f) => f.engine === eng.key);
+      const crit = engFindings.filter((f) => f.severity === 'CRITICAL').length;
+      const high = engFindings.filter((f) => f.severity === 'HIGH').length;
+      const status: 'up' | 'degraded' | 'down' = crit > 0 ? 'degraded' : 'up';
+      const cleanPct = active.length ? Math.max(65, Math.round((1 - engFindings.length / Math.max(active.length, 10)) * 100)) : 100;
+      return {
+        id: `eng-${eng.key}`,
+        status,
+        statusLabel: status === 'up' ? 'Activo' : 'Con alertas',
+        service: eng.label,
+        url: `motor://${eng.key}.sspillowy.local`,
+        uptime: `${cleanPct}%`,
+        uptimeTone: crit === 0 ? 'good' : 'warn',
+        response: `${engFindings.length} activos (${crit} C / ${high} H)`,
+        responseTone: crit > 0 ? 'bad' : high > 0 ? 'warn' : 'good',
+        tab: 'findings',
+      };
+    });
+
+    const combined = [...repoRows, ...engineRows];
+    const q = serviceSearch.trim().toLowerCase();
+    if (!q) return combined;
+    return combined.filter(
+      (r) =>
+        r.service.toLowerCase().includes(q) ||
+        r.url.toLowerCase().includes(q) ||
+        r.statusLabel.toLowerCase().includes(q),
+    );
+  }, [repositories, active, scans, serviceSearch]);
+
+  const exportDashboardCsv = () => {
+    const headers = ['Estado', 'Servicio / Repositorio', 'URL / Endpoint', 'Health / Cumplimiento', 'Detalle / Hallazgos'];
+    const lines = [
+      headers.join(','),
+      ...serviceRows.map((r) =>
+        [r.statusLabel, r.service, r.url, r.uptime, r.response]
+          .map((cell) => `"${String(cell).replace(/"/g, '""')}"`)
+          .join(','),
+      ),
+    ];
+    const blob = new Blob([`\uFEFF${lines.join('\n')}`], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `sspillowy-dashboard-${range}d.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const gateLabels: Record<GateKey, string> = {
     PASSED: t('dashboard.gatePassed'),
@@ -779,7 +909,7 @@ export const DashboardPage: React.FC<PageProps> = ({
       : t('dashboard.reposScope', { count: view.repository_names.length });
 
   return (
-    <div className="dash">
+    <div className="dash ss-dash">
       <Header
         title={view ? view.name : t('pages.dashboard.title')}
         subtitle={view ? view.description || t('dashboard.dashboardOf', { scope: scopeLabel.toLowerCase() }) : t('pages.dashboard.subtitle')}
@@ -793,44 +923,8 @@ export const DashboardPage: React.FC<PageProps> = ({
         onGoToSite={onGoToSite}
       />
 
-      <div className="dw-toolbar">
-        {onOpenList && (
-          <button type="button" className="dw-tool-btn" onClick={onOpenList} title={t('dashboard.viewAllDashboards')}>
-            <LayoutGrid size={14} />
-            <span>{t('dashboard.dashboardsBtn')}</span>
-          </button>
-        )}
-        <span className="dw-scope" title={view?.repository_names.join(', ') || t('dashboard.orgWide')}>
-          <FolderGit2 size={13} />
-          {scopeLabel}
-        </span>
-        <div className="dw-range" role="group">
-          {RANGES.map((r) => (
-            <button key={r} type="button" className={range === r ? 'is-active' : ''} onClick={() => changeRange(r)}>
-              {t('dashboard.days', { count: r })}
-            </button>
-          ))}
-        </div>
-        <button type="button" className="dw-tool-btn" onClick={load} disabled={refreshing}>
-          <RefreshCw size={14} className={refreshing ? 'dw-spin' : ''} />
-          <span>{t('dashboard.refresh')}</span>
-        </button>
-        <label className={`dw-live ${autoRefresh ? 'is-on' : ''}`}>
-          <input type="checkbox" checked={autoRefresh} onChange={(e) => setAutoRefresh(e.target.checked)} />
-          <span className="dw-live-dot" />
-          <span>{t('dashboard.live')}</span>
-        </label>
-        {updatedAt && (
-          <span className="dw-updated">
-            <Clock size={12} /> {updatedAt.toLocaleTimeString()}
-          </span>
-        )}
-        <div className="dw-toolbar-right">
-          {!loading && dataReady && (
-            <span className={`dash-status-pill dash-status-pill--${openAlert}`}>
-              {t('dashboard.activeFindingsPill', { count: active.length })}
-            </span>
-          )}
+      <div className="dw-toolbar ss-toolbar">
+        <div className="ss-toolbar-left">
           <DashboardSettings
             config={config}
             onChange={changeConfig}
@@ -838,6 +932,59 @@ export const DashboardPage: React.FC<PageProps> = ({
             arranging={arranging}
             onArrangingChange={setArranging}
           />
+          {onOpenList && (
+            <button type="button" className="dw-tool-btn ss-pill-btn" onClick={onOpenList} title={t('dashboard.viewAllDashboards')}>
+              <LayoutGrid size={14} />
+              <span>{t('dashboard.dashboardsBtn')}</span>
+            </button>
+          )}
+          <span className="dw-scope" title={view?.repository_names.join(', ') || t('dashboard.orgWide')}>
+            <FolderGit2 size={13} />
+            {scopeLabel}
+          </span>
+        </div>
+
+        <div className="dw-toolbar-right ss-toolbar-right">
+          <button
+            type="button"
+            className="ss-last-update"
+            onClick={load}
+            disabled={refreshing}
+            title={t('dashboard.refresh')}
+          >
+            <RefreshCw size={14} className={refreshing ? 'dw-spin' : ''} />
+            <span>
+              {updatedAt
+                ? `Última actualización ${updatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                : t('dashboard.refresh')}
+            </span>
+          </button>
+
+          <label className={`dw-live ${autoRefresh ? 'is-on' : ''}`}>
+            <input type="checkbox" checked={autoRefresh} onChange={(e) => setAutoRefresh(e.target.checked)} />
+            <span className="dw-live-dot" />
+            <span>{t('dashboard.live')}</span>
+          </label>
+
+          <div className="ss-range-pill">
+            <Calendar size={13} />
+            <select
+              value={range}
+              onChange={(e) => changeRange(Number(e.target.value) as RangeDays)}
+              aria-label="Periodo del dashboard"
+            >
+              {RANGES.map((r) => (
+                <option key={r} value={r}>
+                  Últimos {r} días
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <button type="button" className="ss-export-btn" onClick={exportDashboardCsv}>
+            <Download size={14} />
+            <span>Exportar</span>
+          </button>
         </div>
       </div>
 
@@ -856,7 +1003,7 @@ export const DashboardPage: React.FC<PageProps> = ({
       )}
 
       {!loading && dataReady && (
-        <div className="dw-grid">
+        <div className="dw-grid ss-grid">
           {visibleLayout.map((item) => {
             const dragProps = {
               arranging,
@@ -878,7 +1025,7 @@ export const DashboardPage: React.FC<PageProps> = ({
               return (
                 <div
                   key="kpis"
-                  className={`dw-kpi-band${arranging ? ' is-arranging' : ''}`}
+                  className={`dw-kpi-band ss-kpi-band${arranging ? ' is-arranging' : ''}`}
                   onDragOver={arranging ? (e) => e.preventDefault() : undefined}
                   onDrop={
                     arranging
@@ -908,21 +1055,42 @@ export const DashboardPage: React.FC<PageProps> = ({
                   {kpis.map((k) => (
                     <motion.section
                       key={k.id}
-                      className={`card dw-kpi dw-kpi--${k.tone}`}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ duration: 0.25 }}
+                      className="ss-kpi-frame"
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.22 }}
                     >
-                      <span className="dw-kpi-label">{k.label}</span>
-                      <div className="dw-kpi-row">
-                        <span className="dw-kpi-value" style={{ color: k.color }}>
-                          {k.value === null ? '—' : <AnimatedNumber value={k.value} />}
-                          {k.value !== null && k.suffix ? <small>{k.suffix}</small> : null}
-                        </span>
-                        <Sparkline data={k.spark} color={k.color} id={k.id} />
+                      <div className="ss-kpi-top">
+                        <span className="ss-kpi-title">{k.label}</span>
+                        <button
+                          type="button"
+                          className="ss-kpi-more"
+                          onClick={() => onNavigate?.(k.targetTab)}
+                          title={k.label}
+                          aria-label={k.label}
+                        >
+                          <MoreHorizontal size={15} />
+                        </button>
                       </div>
-                      {k.foot}
-                      <span className="dw-kpi-hint">{k.hint}</span>
+                      <div className="ss-kpi-box">
+                        <div className="ss-kpi-main">
+                          <span className="ss-kpi-number">
+                            {k.value === null ? '—' : <AnimatedNumber value={k.value} />}
+                            {k.value !== null && k.suffix ? <small>{k.suffix}</small> : null}
+                          </span>
+                          <span className="ss-kpi-sub" title={k.hint}>
+                            {k.hint}
+                          </span>
+                        </div>
+                        <span className={`ss-trend-pill ss-trend-pill--${k.badge.tone}`}>
+                          {k.badge.dir === 'up' ? (
+                            <ArrowUpRight size={12} />
+                          ) : k.badge.dir === 'down' ? (
+                            <ArrowDownRight size={12} />
+                          ) : null}
+                          {k.badge.text}
+                        </span>
+                      </div>
                     </motion.section>
                   ))}
                 </div>
@@ -934,32 +1102,51 @@ export const DashboardPage: React.FC<PageProps> = ({
                 <Widget
                   key="trend"
                   title={t('dashboard.wTrendTitle', { days: range })}
-                  icon={<Activity size={18} color="#8250df" />}
+                  icon={<Activity size={17} color="#2563eb" />}
                   span={item.span}
-                  chip={<span className="dash-chip">{t('dashboard.wTrendChip', { count: derived.detected })}</span>}
+                  chip={
+                    <span className="ss-chart-pill">
+                      <Calendar size={12} />
+                      <span>Últimos {range} días · {derived.detected} hallazgos</span>
+                    </span>
+                  }
                   {...dragProps}
                 >
                   {derived.series.some((d) => d.total > 0) ? (
-                    <div className="dash-chart" style={{ height: 240 }}>
+                    <div className="dash-chart" style={{ height: 245 }}>
                       <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={derived.series}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#eaeef2" vertical={false} />
-                          <XAxis dataKey="label" tick={{ fill: '#656d76', fontSize: 11 }} axisLine={false} tickLine={false} minTickGap={18} />
-                          <YAxis allowDecimals={false} tick={{ fill: '#656d76', fontSize: 11 }} axisLine={false} tickLine={false} width={32} />
+                        <AreaChart data={derived.series} margin={{ top: 14, right: 12, left: -6, bottom: 0 }}>
+                          <defs>
+                            <linearGradient id="ssTrendBlue" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.26} />
+                              <stop offset="75%" stopColor="#60a5fa" stopOpacity={0.07} />
+                              <stop offset="100%" stopColor="#93c5fd" stopOpacity={0.0} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                          <XAxis dataKey="label" tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} minTickGap={18} />
+                          <YAxis allowDecimals={false} tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} width={34} />
                           <Tooltip content={<ChartTooltip />} />
-                          {TREND_SEVERITIES.map((sev) => (
-                            <Area
-                              key={sev}
-                              type="monotone"
-                              dataKey={sev}
-                              name={t(`severity.${sev}`)}
-                              stackId="sev"
-                              stroke={PASTEL_SEVERITY[sev]}
-                              fill={PASTEL_SEVERITY[sev]}
-                              fillOpacity={0.5}
-                              strokeWidth={1.75}
-                            />
-                          ))}
+                          <Area
+                            type="monotone"
+                            dataKey="total"
+                            name="Volumen de hallazgos"
+                            stroke="#2563eb"
+                            fill="url(#ssTrendBlue)"
+                            strokeWidth={2.4}
+                            dot={(dotProps: { cx?: number; cy?: number; index?: number }) => {
+                              if (dotProps.index !== peakTrendIndex || dotProps.cx === undefined || dotProps.cy === undefined) {
+                                return <g key={`dot-${dotProps.index}`} />;
+                              }
+                              return (
+                                <g key={`peak-${dotProps.index}`}>
+                                  <circle cx={dotProps.cx} cy={dotProps.cy} r={9} fill="rgba(37, 99, 235, 0.14)" />
+                                  <circle cx={dotProps.cx} cy={dotProps.cy} r={5.5} fill="#ffffff" stroke="#2563eb" strokeWidth={2.5} />
+                                </g>
+                              );
+                            }}
+                            activeDot={{ r: 5.5, fill: '#ffffff', stroke: '#2563eb', strokeWidth: 2.5 }}
+                          />
                         </AreaChart>
                       </ResponsiveContainer>
                     </div>
@@ -972,46 +1159,120 @@ export const DashboardPage: React.FC<PageProps> = ({
 
             if (item.id === 'gates') {
               return (
-                <Widget
-                  key="gates"
-                  title={t('dashboard.wGateTitle')}
-                  icon={<GitPullRequest size={18} color="#1a7f37" />}
-                  span={item.span}
-                  chip={<span className="dash-chip">{t('dashboard.days', { count: range })}</span>}
-                  {...dragProps}
-                >
-                  {gatePie.length ? (
-                    <div className="dw-donut">
-                      <div className="dash-chart" style={{ height: 180 }}>
-                        <ResponsiveContainer width="100%" height="100%">
-                          <PieChart>
-                            <Pie data={gatePie} dataKey="value" nameKey="name" innerRadius="62%" outerRadius="92%" paddingAngle={2} stroke="none">
-                              {gatePie.map((d) => (
-                                <Cell key={d.name} fill={d.fill} />
-                              ))}
-                            </Pie>
-                            <Tooltip content={<ChartTooltip />} />
-                          </PieChart>
-                        </ResponsiveContainer>
-                        <div className="dw-donut-center">
-                          <b>{derived.passRate === null ? '—' : `${Math.round(derived.passRate)}%`}</b>
-                          <span>{t('dashboard.wGateApproved')}</span>
+                <React.Fragment key="gates">
+                  <Widget
+                    title="Actividad de Escaneos y Security Gate"
+                    icon={<GitPullRequest size={17} color="#2563eb" />}
+                    span={item.span}
+                    chip={
+                      <span className="ss-chart-pill">
+                        <Calendar size={12} />
+                        <span>
+                          Últimos {range} días · {derived.passRate === null ? 'Sin gate' : `${Math.round(derived.passRate)}% aprobado`}
+                        </span>
+                      </span>
+                    }
+                    {...dragProps}
+                  >
+                    {derived.series.some((d) => d.total > 0 || d.scans > 0) || gatePie.length ? (
+                      <div className="ss-response-wrap">
+                        <div className="dash-chart" style={{ height: 205 }}>
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={derived.series} barGap={5} margin={{ top: 10, right: 8, left: -8, bottom: 0 }}>
+                              <defs>
+                                <linearGradient id="ssBarBlue" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.95} />
+                                  <stop offset="100%" stopColor="#bfdbfe" stopOpacity={0.35} />
+                                </linearGradient>
+                                <linearGradient id="ssBarGray" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="0%" stopColor="#cbd5e1" stopOpacity={0.85} />
+                                  <stop offset="100%" stopColor="#f1f5f9" stopOpacity={0.35} />
+                                </linearGradient>
+                              </defs>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                              <XAxis dataKey="label" tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} minTickGap={16} />
+                              <YAxis allowDecimals={false} tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} width={32} />
+                              <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(59, 130, 246, 0.05)' }} />
+                              <Bar dataKey="total" name="Hallazgos detectados" fill="url(#ssBarBlue)" radius={[6, 6, 3, 3]} maxBarSize={22} />
+                              <Bar dataKey="scans" name="Escaneos ejecutados" fill="url(#ssBarGray)" radius={[6, 6, 3, 3]} maxBarSize={18} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                        <div className="ss-gate-strip">
+                          {gatePie.map((d) => (
+                            <span key={d.name} className="ss-gate-pill">
+                              <i style={{ background: d.fill }} />
+                              <span>{d.name}:</span>
+                              <b>{d.value}</b>
+                            </span>
+                          ))}
                         </div>
                       </div>
-                      <ul className="dw-legend">
-                        {gatePie.map((d) => (
-                          <li key={d.name}>
-                            <i style={{ background: d.fill }} />
-                            <span>{d.name}</span>
-                            <b>{d.value}</b>
-                          </li>
-                        ))}
-                      </ul>
+                    ) : (
+                      <Empty text={t('dashboard.wGateEmpty')} />
+                    )}
+                  </Widget>
+
+                  <section className="card dw-widget dw-span-12 ss-service-card">
+                    <header className="ss-service-head">
+                      <div className="ss-service-title">
+                        <h3>Estado de Repositorios y Servicios</h3>
+                        <span title="Estado en tiempo real de tus repositorios monitoreados y motores DevSecOps">
+                          <Info size={14} />
+                        </span>
+                      </div>
+                      <div className="ss-service-actions">
+                        <label className="ss-service-search">
+                          <Search size={14} />
+                          <input
+                            type="search"
+                            placeholder="Buscar repositorio o motor..."
+                            value={serviceSearch}
+                            onChange={(e) => setServiceSearch(e.target.value)}
+                          />
+                        </label>
+                        <button type="button" className="ss-download-btn" onClick={exportDashboardCsv}>
+                          <FileSpreadsheet size={14} />
+                          <span>Descargar datos</span>
+                        </button>
+                      </div>
+                    </header>
+
+                    <div className="ss-service-table-wrap">
+                      <table className="ss-service-table">
+                        <thead>
+                          <tr>
+                            <th>Estado</th>
+                            <th>Servicio / Repositorio</th>
+                            <th>URL / Rama</th>
+                            <th>Health / Cumplimiento</th>
+                            <th>Respuesta / Hallazgos</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {serviceRows.map((row) => (
+                            <tr key={row.id} onClick={() => onNavigate?.(row.tab)} style={{ cursor: 'pointer' }}>
+                              <td>
+                                <span className={`ss-status-dot ss-status-dot--${row.status}`}>
+                                  <i />
+                                  {row.statusLabel}
+                                </span>
+                              </td>
+                              <td className="ss-service-name">{row.service}</td>
+                              <td className="ss-service-url">{row.url}</td>
+                              <td>
+                                <span className={`ss-metric-text ss-metric-text--${row.uptimeTone}`}>{row.uptime}</span>
+                              </td>
+                              <td>
+                                <span className={`ss-metric-text ss-metric-text--${row.responseTone}`}>{row.response}</span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
-                  ) : (
-                    <Empty text={t('dashboard.wGateEmpty')} />
-                  )}
-                </Widget>
+                  </section>
+                </React.Fragment>
               );
             }
 
