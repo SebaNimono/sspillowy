@@ -244,6 +244,7 @@ class _SSPillowyAppState extends State<SSPillowyApp> {
 
   Future<void> _handleLogout() async {
     try {
+      await OnCallBackgroundService.stopIfRunning();
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('jwt_token');
       await prefs.remove('session_id');
@@ -266,6 +267,11 @@ class _SSPillowyAppState extends State<SSPillowyApp> {
     });
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('is_on_duty', nextVal);
+    if (nextVal) {
+      await OnCallBackgroundService.ensureStarted();
+    } else {
+      await OnCallBackgroundService.stopIfRunning();
+    }
   }
 
   @override
@@ -875,6 +881,7 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
     _incidentRepository = IncidentRepository(_apiClient);
     _bypassService = BypassService(Dio());
     _loadPersistentAuditLogs();
+    OnCallBackgroundService.ensureStarted();
     _loadNotificationsFromApiAndPrefs(triggerSystemPush: false);
 
     // Polling automático cada 15s cuando el usuario está En Guardia (On-Call)
