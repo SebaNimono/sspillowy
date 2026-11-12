@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+Allow: /privacidad
+Allow: /terminos
+Allow: /cookies
+Allow: /login
+Allow: /register
+Disallow: /console
+Disallow: /api/
+
+Sitemap: https://sspillowy.com/sitemap.xml

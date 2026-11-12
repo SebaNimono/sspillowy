@@ -168,7 +168,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ user, onCuenta, onOpen
       <header className="site-nav">
         <div className="site-nav-inner">
           <a href="#inicio" className="site-brand">
-            <img src="/sspillowy_favicon.png" alt="" width={22} height={22} />
+            <img src="/sspillowy_favicon.png" alt="Logo de SSPILLOWY" width={22} height={22} />
             <span>SSPILLOWY</span>
           </a>
 

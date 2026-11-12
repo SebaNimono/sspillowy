@@ -4,6 +4,7 @@ import { LoginPage } from './pages/LoginPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { LandingPage } from './pages/LandingPage';
 import { LegalPage, LegalDoc } from './pages/LegalPage';
+import { NotFoundPage } from './pages/NotFoundPage';
 import { UsersPage } from './pages/UsersPage';
 import { AcceptInvitePage } from './pages/AcceptInvitePage';
 import { DashboardPage } from './pages/DashboardPage';
@@ -42,8 +43,29 @@ import { CookieBanner } from './components/CookieBanner';
 import { AppToaster } from './components/Toast';
 import './styles/flat.css';
 
-type AppView = 'site' | 'login' | 'console' | LegalDoc | 'reset-password' | 'accept-invite';
+type AppView = 'site' | 'login' | 'console' | LegalDoc | 'reset-password' | 'accept-invite' | 'not-found';
 export type LoginMode = 'login' | 'register' | 'forgot';
+
+const TAB_TITLES: Record<string, string> = {
+  dashboard: 'Risk Posture · SSPILLOWY',
+  velocity: 'Security Velocity · SSPILLOWY',
+  executive: 'Resumen Ejecutivo · SSPILLOWY',
+  findings: 'Priorización Contextual (HITL) · SSPILLOWY',
+  sbom: 'Supply Chain (SBOM) · SSPILLOWY',
+  fixIntel: 'Fix Intelligence · SSPILLOWY',
+  repositories: 'Repositorios · SSPILLOWY',
+  scans: 'Escaneos · SSPILLOWY',
+  gates: 'Security Gates y Excepciones · SSPILLOWY',
+  secrets: 'Secret Management · SSPILLOWY',
+  runbooks: 'Automatizaciones · SSPILLOWY',
+  observability: 'Observabilidad · SSPILLOWY',
+  users: 'Espacios y Miembros · SSPILLOWY',
+  reports: 'Cumplimiento Normativo · SSPILLOWY',
+  traceability: 'Trazabilidad y Auditoría · SSPILLOWY',
+  notifications: 'Notificaciones · SSPILLOWY',
+  docs: 'Documentación · SSPILLOWY',
+  integrations: 'Integraciones CI/CD · SSPILLOWY',
+};
 
 const INVITATION_PATHS = new Set([
   '/invitacion',
@@ -51,7 +73,6 @@ const INVITATION_PATHS = new Set([
   '/accept-invite',
   '/join',
 ]);
-
 
 const RESET_PASSWORD_PATH = '/restablecer-contrasena';
 
@@ -176,6 +197,7 @@ function parseCurrentRoute(): RouteInfo {
     if (VALID_TABS.has(tabCandidate)) {
       return { view: 'console', consoleTab: tabCandidate };
     }
+    return { view: 'not-found' };
   }
   const directTab = pathname.slice(1);
   if (VALID_TABS.has(directTab)) {
@@ -183,11 +205,21 @@ function parseCurrentRoute(): RouteInfo {
   }
 
   // 5. Default root /: if logged in, console; otherwise landing page (site)
-  if (getStoredUser() && getStoredSessionId()) {
-    return { view: 'console', consoleTab: initialConsoleTab() };
+  const params = new URLSearchParams(search);
+  const hasAuthCallback =
+    params.has('sspillowy_session') ||
+    params.has('oauth_error') ||
+    params.get('email_verified') === '1';
+
+  if (pathname === '/' || hasAuthCallback) {
+    if (getStoredUser() && getStoredSessionId()) {
+      return { view: 'console', consoleTab: initialConsoleTab() };
+    }
+    return { view: 'site' };
   }
 
-  return { view: 'site' };
+  // 6. Cualquier otra ruta desconocida → 404 personalizada
+  return { view: 'not-found' };
 }
 
 function pathForView(
@@ -206,6 +238,9 @@ function pathForView(
   }
   if (view === 'console') {
     return consoleTab === 'dashboard' ? '/console' : `/console/${consoleTab}`;
+  }
+  if (view === 'not-found') {
+    return window.location.pathname || '/404';
   }
   return '/';
 }
@@ -232,6 +267,30 @@ const AppShell: React.FC = () => {
     getStoredSessionId() ? getStoredUser() : null,
   );
   const [sessionExpiresAt, setSessionExpiresAt] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (view === 'site') {
+      document.title = 'SSPILLOWY — Plataforma Open Source de Gobernanza DevSecOps';
+    } else if (view === 'login') {
+      if (loginMode === 'register') document.title = 'Crear cuenta · SSPILLOWY';
+      else if (loginMode === 'forgot') document.title = 'Recuperar contraseña · SSPILLOWY';
+      else document.title = 'Iniciar sesión · SSPILLOWY';
+    } else if (view === 'privacidad') {
+      document.title = 'Política de Privacidad · SSPILLOWY';
+    } else if (view === 'terminos') {
+      document.title = 'Términos y Condiciones · SSPILLOWY';
+    } else if (view === 'cookies') {
+      document.title = 'Política de Cookies · SSPILLOWY';
+    } else if (view === 'reset-password') {
+      document.title = 'Restablecer contraseña · SSPILLOWY';
+    } else if (view === 'accept-invite') {
+      document.title = 'Invitación a Espacio de Trabajo · SSPILLOWY';
+    } else if (view === 'not-found') {
+      document.title = '404 Ruta no encontrada · SSPILLOWY';
+    } else if (view === 'console') {
+      document.title = TAB_TITLES[activeTab] || 'Consola DevSecOps · SSPILLOWY';
+    }
+  }, [view, loginMode, activeTab]);
 
   const setActiveTab = (tab: string) => {
     setActiveTabState(tab);
@@ -353,7 +412,7 @@ const AppShell: React.FC = () => {
         setResetToken(null);
         setInviteToken(null);
         if (route.consoleTab) setActiveTabState(route.consoleTab);
-      } else if (route.view === 'site') {
+      } else if (route.view === 'site' || route.view === 'not-found') {
         setResetToken(null);
         setInviteToken(null);
       }
@@ -492,6 +551,24 @@ const AppShell: React.FC = () => {
       <div style={{ minHeight: '100vh', background: '#f6f8fa', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#656d76', fontSize: '0.85rem', fontWeight: 600 }}>
         Conectando sesión…
       </div>
+    );
+  }
+
+  if (view === 'not-found') {
+    return (
+      <NotFoundPage
+        isAuthenticated={Boolean(user)}
+        onGoHome={goHome}
+        onGoConsole={() => {
+          window.history.pushState({}, '', activeTab === 'dashboard' ? '/console' : `/console/${activeTab}`);
+          setView('console');
+        }}
+        onGoLogin={() => {
+          window.history.pushState({}, '', '/login');
+          setLoginMode('login');
+          setView('login');
+        }}
+      />
     );
   }
 

@@ -123,7 +123,7 @@ const Mark: React.FC<{ id: LogoId; size: number }> = ({ id, size }) => {
     case 'bandit':
     case 'nuclei':
     case 'trufflehog':
-      return <img src={`/integrations/${id}.png`} width={size} height={size} alt="" draggable={false} />;
+      return <img src={`/integrations/${id}.png`} width={size} height={size} alt={`Logo de ${id}`} draggable={false} />;
     default:
       return null;
   }

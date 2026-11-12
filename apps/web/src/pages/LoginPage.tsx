@@ -382,7 +382,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
       {onBack && (
         <button type="button" className="login-back" onClick={onBack}>
-          <img src="/sspillowy_favicon.png" alt="" width={18} height={18} />
+          <img src="/sspillowy_favicon.png" alt="Logo de SSPILLOWY" width={18} height={18} />
           <span>SSPILLOWY</span>
         </button>
       )}

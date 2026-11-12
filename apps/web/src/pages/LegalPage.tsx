@@ -46,7 +46,7 @@ export const LegalPage: React.FC<LegalPageProps> = ({ doc, onHome, onNavigate })
               onHome();
             }}
           >
-            <img src="/sspillowy_favicon.png" alt="" width={22} height={22} />
+            <img src="/sspillowy_favicon.png" alt="Logo de SSPILLOWY" width={22} height={22} />
             <span>SSPILLOWY</span>
           </a>
           <nav className="site-nav-links site-legal-nav">
@@ -91,6 +91,23 @@ export const LegalPage: React.FC<LegalPageProps> = ({ doc, onHome, onNavigate })
       </header>
 
       <main className="site-shell site-legal-main">
+        <nav aria-label="Migas de pan" style={{ fontSize: '0.78rem', color: '#656d76', marginBottom: '0.75rem' }}>
+          <a
+            href="/"
+            onClick={(e) => {
+              e.preventDefault();
+              onHome();
+            }}
+            style={{ color: '#0969da', textDecoration: 'none', fontWeight: 600 }}
+          >
+            Inicio
+          </a>
+          <span style={{ margin: '0 0.45rem' }}>/</span>
+          <span>Legal</span>
+          <span style={{ margin: '0 0.45rem' }}>/</span>
+          <span>{meta.title}</span>
+        </nav>
+
         <a
           href="/"
           className="site-legal-back"
@@ -127,7 +144,7 @@ export const LegalPage: React.FC<LegalPageProps> = ({ doc, onHome, onNavigate })
         <div className="site-shell site-footer-grid">
           <div>
             <strong>SSPILLOWY</strong>
-                      </div>
+          </div>
           <div>
             <span>Legal</span>
             <a href="/privacidad">Privacidad</a>
