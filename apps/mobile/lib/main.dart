@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'services/notification_service.dart';
+import 'services/on_call_background_service.dart';
 import 'services/biometric_guard.dart';
 import 'services/bypass_service.dart';
 import 'screens/bypass_detail_screen.dart';
@@ -185,6 +186,8 @@ void main() async {
     }
   });
 
+  await OnCallBackgroundService.initialize();
+
   runApp(const SSPillowyApp());
 }
 
@@ -212,10 +215,12 @@ class _SSPillowyAppState extends State<SSPillowyApp> {
       final token =
           prefs.getString('jwt_token') ?? prefs.getString('session_id');
       final isLoggedInPref = prefs.getBool('is_logged_in') ?? false;
+      final savedOnDuty = prefs.getBool('is_on_duty') ?? true;
 
       if (!mounted) return;
       setState(() {
         _isLoggedIn = (token != null && token.isNotEmpty) && isLoggedInPref;
+        _isOnDuty = savedOnDuty;
         _isLoading = false;
       });
     } catch (_) {
@@ -230,6 +235,7 @@ class _SSPillowyAppState extends State<SSPillowyApp> {
   Future<void> _handleLoginSuccess() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('is_logged_in', true);
+    await prefs.setBool('is_on_duty', _isOnDuty);
     if (!mounted) return;
     setState(() {
       _isLoggedIn = true;
@@ -253,10 +259,13 @@ class _SSPillowyAppState extends State<SSPillowyApp> {
     });
   }
 
-  void _toggleOnDuty(bool? val) {
+  void _toggleOnDuty(bool? val) async {
+    final nextVal = val ?? true;
     setState(() {
-      _isOnDuty = val ?? true;
+      _isOnDuty = nextVal;
     });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('is_on_duty', nextVal);
   }
 
   @override
@@ -943,12 +952,6 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
       } catch (_) {}
     }
 
-    for (final existing in localNotifs) {
-      if (existing['id'] != null) {
-        _pushedAlertIds.add(existing['id'].toString());
-      }
-    }
-
     try {
       final token =
           prefs.getString('jwt_token') ?? prefs.getString('session_id');
@@ -996,19 +999,21 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
                 ? '/bypass_detail?id=$findingId'
                 : '/finding_detail?id=$findingId';
 
-            if (id.isNotEmpty && !localNotifs.any((n) => n['id'] == id)) {
-              localNotifs.insert(0, {
-                'id': id,
-                'title': title,
-                'body': body,
-                'type': type,
-                'payload': payload,
-                'read': read,
-                'time': dateStr.isNotEmpty
-                    ? dateStr.substring(
-                        0, dateStr.length > 16 ? 16 : dateStr.length)
-                    : '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}',
-              });
+            if (id.isNotEmpty) {
+              if (!localNotifs.any((n) => n['id'] == id)) {
+                localNotifs.insert(0, {
+                  'id': id,
+                  'title': title,
+                  'body': body,
+                  'type': type,
+                  'payload': payload,
+                  'read': read,
+                  'time': dateStr.isNotEmpty
+                      ? dateStr.substring(
+                          0, dateStr.length > 16 ? 16 : dateStr.length)
+                      : '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}',
+                });
+              }
 
               if (triggerSystemPush &&
                   widget.isOnDuty &&
@@ -1035,24 +1040,24 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
             final bId = (b['id'] ?? '').toString();
             final bStatus = (b['status'] ?? '').toString().toUpperCase();
             final notifKey = 'bypass_$bId';
-            if (bId.isNotEmpty &&
-                bStatus == 'PENDING' &&
-                !localNotifs.any((n) => n['id'] == notifKey)) {
+            if (bId.isNotEmpty && bStatus == 'PENDING') {
               const title = 'Solicitud de Excepción (Bypass)';
               final body =
                   '${b['rule'] ?? b['title'] ?? 'Security Gate'} en ${b['repository'] ?? b['repo'] ?? 'repositorio'}';
               final payload = '/bypass_detail?id=$bId';
 
-              localNotifs.insert(0, {
-                'id': notifKey,
-                'title': title,
-                'body': body,
-                'type': 'BYPASS',
-                'payload': payload,
-                'read': false,
-                'time':
-                    '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}',
-              });
+              if (!localNotifs.any((n) => n['id'] == notifKey)) {
+                localNotifs.insert(0, {
+                  'id': notifKey,
+                  'title': title,
+                  'body': body,
+                  'type': 'BYPASS',
+                  'payload': payload,
+                  'read': false,
+                  'time':
+                      '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}',
+                });
+              }
 
               if (triggerSystemPush &&
                   widget.isOnDuty &&
@@ -1722,9 +1727,9 @@ class _ScanListScreenState extends State<ScanListScreen> {
         }
 
         if (rawData.isNotEmpty) {
-          // Sincronización real: siempre prevalece el estado actual del servidor/Web
           _localScans = rawData
-              .map((item) => ScanModel.fromJson(Map<String, dynamic>.from(item)))
+              .map(
+                  (item) => ScanModel.fromJson(Map<String, dynamic>.from(item)))
               .toList();
 
           await _saveScansToPrefs();
@@ -2157,7 +2162,6 @@ class _ScanListScreenState extends State<ScanListScreen> {
                                                   if (justificationText
                                                           .length >=
                                                       10) {
-                                                    // Firma biométrica obligatoria
                                                     final verified =
                                                         await BiometricGuard
                                                             .verifyIdentity(
@@ -2349,7 +2353,6 @@ class _ScanListScreenState extends State<ScanListScreen> {
                                                       reasonController.text
                                                           .trim();
                                                   if (reasonText.length >= 3) {
-                                                    // Firma biométrica obligatoria
                                                     final verified =
                                                         await BiometricGuard
                                                             .verifyIdentity(
@@ -2838,8 +2841,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _fetchUsersAndProfiles() async {
     final prefs = await SharedPreferences.getInstance();
-    final token =
-        prefs.getString('jwt_token') ?? prefs.getString('session_id');
+    final token = prefs.getString('jwt_token') ?? prefs.getString('session_id');
 
     String activeEmail = prefs.getString('user_email') ?? '';
     String primaryEmail = prefs.getString('primary_user_email') ?? activeEmail;
@@ -2888,13 +2890,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
               final name = rawName.isNotEmpty
                   ? rawName
                   : (email.isNotEmpty ? email.split('@').first : 'Miembro');
-              final role = (item['role_label'] ?? item['role'] ?? 'Miembro')
-                  .toString();
+              final role =
+                  (item['role_label'] ?? item['role'] ?? 'Miembro').toString();
 
               if (email.isNotEmpty) {
                 final existingIdx = fetchedList.indexWhere((p) =>
-                    p['email'].toString().toLowerCase() ==
-                    email.toLowerCase());
+                    p['email'].toString().toLowerCase() == email.toLowerCase());
                 if (existingIdx != -1) {
                   fetchedList[existingIdx] = {
                     'name': name,
@@ -2918,8 +2919,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           for (var inv in invitations) {
             if (inv is Map) {
               final email = (inv['email'] ?? '').toString().trim();
-              final role = (inv['role_label'] ?? inv['role'] ?? 'Miembro')
-                  .toString();
+              final role =
+                  (inv['role_label'] ?? inv['role'] ?? 'Miembro').toString();
               if (email.isNotEmpty &&
                   !fetchedList.any((p) =>
                       p['email'].toString().toLowerCase() ==
@@ -3056,8 +3057,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     final currentProfileObj = _availableProfiles.firstWhere(
       (p) =>
-          p['email'].toString().toLowerCase() ==
-          _activeUserEmail.toLowerCase(),
+          p['email'].toString().toLowerCase() == _activeUserEmail.toLowerCase(),
       orElse: () => {'role': 'Propietario'},
     );
     final bool isReadOnly = (currentProfileObj['role'] ?? '')
