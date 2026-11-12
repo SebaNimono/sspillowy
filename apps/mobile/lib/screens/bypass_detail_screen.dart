@@ -1,5 +1,6 @@
 ﻿import 'package:flutter/material.dart';
-import '../../services/bypass_service.dart';
+import '../services/biometric_guard.dart';
+import '../services/bypass_service.dart';
 
 class BypassDetailScreen extends StatefulWidget {
   final String bypassId;
@@ -42,7 +43,7 @@ class _BypassDetailScreenState extends State<BypassDetailScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                '¿Estás seguro de que deseas $actionText esta excepción de seguridad?',
+                '¿Estás seguro de que deseas $actionText esta excepción de seguridad? Se requerirá tu huella o rostro.',
               ),
               const SizedBox(height: 12),
               TextField(
@@ -77,6 +78,25 @@ class _BypassDetailScreenState extends State<BypassDetailScreen> {
   }
 
   Future<void> _submitDecision(bool isApprove, String reason) async {
+    final authenticated = await BiometricGuard.verifyIdentity(
+      reason: isApprove
+          ? 'Confirma con huella o rostro para APROBAR esta excepción'
+          : 'Confirma con huella o rostro para RECHAZAR esta excepción',
+    );
+
+    if (!mounted) return;
+
+    if (!authenticated) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'Autenticación biométrica cancelada o fallida. Acción no autorizada.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     final success = isApprove
@@ -94,17 +114,17 @@ class _BypassDetailScreenState extends State<BypassDetailScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Excepción ${isApprove ? "aprobada" : "rechazada"} con éxito.',
+            'Excepción ${isApprove ? "aprobada" : "rechazada"} y sincronizada con la Consola Web.',
           ),
           backgroundColor: isApprove ? Colors.green : Colors.red,
         ),
       );
-      // Retornar true a la pantalla anterior para refrescar la lista global
       Navigator.pop(context, true);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Error al procesar la solicitud. Intente nuevamente.'),
+          content:
+              Text('Error al sincronizar con el servidor. Intente nuevamente.'),
           backgroundColor: Colors.orange,
         ),
       );
@@ -128,7 +148,9 @@ class _BypassDetailScreenState extends State<BypassDetailScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _data['rule'] ?? _data['title'] ?? 'Excepción de Seguridad',
+                      _data['rule'] ??
+                          _data['title'] ??
+                          'Excepción de Seguridad',
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -137,11 +159,31 @@ class _BypassDetailScreenState extends State<BypassDetailScreen> {
                     ),
                     const Divider(height: 20, color: Colors.grey),
                     _buildDetailRow('Estado:', _status),
-                    _buildDetailRow('Repositorio:', _data['repository'] ?? 'No especificado'),
-                    _buildDetailRow('Solicitado Por:', _data['requestedBy'] ?? 'Sistema'),
-                    _buildDetailRow('Justificación:', _data['reason'] ?? _data['note'] ?? 'Sin detalle'),
-                    if (_data['createdAt'] != null)
-                      _buildDetailRow('Fecha:', _data['createdAt'].toString()),
+                    _buildDetailRow(
+                        'Repositorio:',
+                        (_data['repository'] ??
+                                _data['repo'] ??
+                                'No especificado')
+                            .toString()),
+                    _buildDetailRow(
+                        'Solicitado Por:',
+                        (_data['requestedBy'] ??
+                                _data['requested_by'] ??
+                                'Sistema')
+                            .toString()),
+                    _buildDetailRow(
+                        'Justificación:',
+                        (_data['reason'] ??
+                                _data['justification'] ??
+                                _data['note'] ??
+                                'Sin detalle')
+                            .toString()),
+                    if (_data['createdAt'] != null ||
+                        _data['created_at'] != null)
+                      _buildDetailRow(
+                          'Fecha:',
+                          (_data['createdAt'] ?? _data['created_at'])
+                              .toString()),
                   ],
                 ),
               ),
@@ -159,7 +201,7 @@ class _BypassDetailScreenState extends State<BypassDetailScreen> {
                         padding: const EdgeInsets.all(12),
                       ),
                       onPressed: () => _confirmAndExecuteAction(true),
-                      icon: const Icon(Icons.check),
+                      icon: const Icon(Icons.fingerprint),
                       label: const Text('Aprobar'),
                     ),
                   ),
@@ -171,7 +213,7 @@ class _BypassDetailScreenState extends State<BypassDetailScreen> {
                         padding: const EdgeInsets.all(12),
                       ),
                       onPressed: () => _confirmAndExecuteAction(false),
-                      icon: const Icon(Icons.close),
+                      icon: const Icon(Icons.fingerprint),
                       label: const Text('Rechazar'),
                     ),
                   ),
@@ -193,13 +235,15 @@ class _BypassDetailScreenState extends State<BypassDetailScreen> {
             width: 120,
             child: Text(
               label,
-              style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.w500),
+              style: const TextStyle(
+                  color: Colors.grey, fontWeight: FontWeight.w500),
             ),
           ),
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w400),
+              style: const TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.w400),
             ),
           ),
         ],

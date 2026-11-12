@@ -17,25 +17,44 @@ class BypassService {
             'Accept': 'application/json',
           };
 
+  Future _buildAuthHeaders({
+    String? token,
+    String? workspaceId,
+    String? sessionId,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final effectiveToken = token ??
+        prefs.getString('jwt_token') ??
+        prefs.getString('session_id') ??
+        prefs.getString('auth_token');
+    final effectiveSession = sessionId ?? effectiveToken;
+
+    return {
+      if (effectiveToken != null && effectiveToken.isNotEmpty)
+        'Authorization': 'Bearer $effectiveToken',
+      if (effectiveSession != null && effectiveSession.isNotEmpty)
+        'X-Session-Id': effectiveSession,
+      if (workspaceId != null && workspaceId.isNotEmpty)
+        'X-Workspace-Id': workspaceId,
+    };
+  }
+
   Future<List<dynamic>> getBypasses({
     String? token,
     String? workspaceId,
     String? sessionId,
   }) async {
     final prefs = await SharedPreferences.getInstance();
-    final effectiveToken = token ?? prefs.getString('auth_token');
+    final headers = await _buildAuthHeaders(
+      token: token,
+      workspaceId: workspaceId,
+      sessionId: sessionId,
+    );
 
     try {
       final response = await dio.get(
         '/api/v1/security-gates/bypasses',
-        options: Options(
-          headers: {
-            if (effectiveToken != null && effectiveToken.isNotEmpty)
-              'Authorization': 'Bearer $effectiveToken',
-            if (sessionId != null) 'X-Session-Id': sessionId,
-            if (workspaceId != null) 'X-Workspace-Id': workspaceId,
-          },
-        ),
+        options: Options(headers: headers),
       );
 
       List<dynamic> resultList = [];
@@ -53,9 +72,7 @@ class BypassService {
         }
       }
 
-      // Sincroniza la caché local siempre con la respuesta real del backend
       await prefs.setString(_cacheKey, jsonEncode(resultList));
-
       return resultList;
     } catch (e) {
       debugPrint('Error en getBypasses (Backend): $e. Cargando caché local...');
@@ -81,8 +98,11 @@ class BypassService {
     String? workspaceId,
     String? sessionId,
   }) async {
-    final prefs = await SharedPreferences.getInstance();
-    final effectiveToken = token ?? prefs.getString('auth_token');
+    final headers = await _buildAuthHeaders(
+      token: token,
+      workspaceId: workspaceId,
+      sessionId: sessionId,
+    );
 
     try {
       final response = await dio.post(
@@ -90,14 +110,7 @@ class BypassService {
         data: {
           'note': reason ?? 'Procesado desde la app móvil',
         },
-        options: Options(
-          headers: {
-            if (effectiveToken != null && effectiveToken.isNotEmpty)
-              'Authorization': 'Bearer $effectiveToken',
-            if (sessionId != null) 'X-Session-Id': sessionId,
-            if (workspaceId != null) 'X-Workspace-Id': workspaceId,
-          },
-        ),
+        options: Options(headers: headers),
       );
       return response.statusCode == 200 || response.statusCode == 201;
     } catch (e) {

@@ -47,22 +47,12 @@ class NotificationService {
       },
     );
 
-    // Solicitar permisos explícitos para Android 13+ y crear canal de notificaciones
+    // Solicitar permiso explícito en Android 13+
     final androidImplementation =
         _localNotifications.resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>();
-
     if (androidImplementation != null) {
       await androidImplementation.requestNotificationsPermission();
-
-      const AndroidNotificationChannel channel = AndroidNotificationChannel(
-        'sspillowy_channel',
-        'Alertas On-Call',
-        description: 'Canal de notificaciones emergentes de seguridad',
-        importance: Importance.max,
-      );
-
-      await androidImplementation.createNotificationChannel(channel);
     }
   }
 
@@ -91,7 +81,7 @@ class NotificationService {
     await _localNotifications.show(id, title, body, details, payload: payload);
   }
 
-  // 3. Métodos HTTP de sincronización con la API (Soporta respuestas directas y envueltas)
+  // 3. Métodos HTTP existentes de sincronización con la API
   Future<List<NotificationModel>> fetchNotifications() async {
     try {
       final response = await http.get(
@@ -100,20 +90,13 @@ class NotificationService {
       );
 
       if (response.statusCode == 200) {
-        final dynamic decodedData = json.decode(response.body);
-        List<dynamic> rawList = [];
-
-        if (decodedData is List) {
-          rawList = decodedData;
-        } else if (decodedData is Map<String, dynamic>) {
-          if (decodedData['notifications'] is List) {
-            rawList = decodedData['notifications'] as List<dynamic>;
-          } else if (decodedData['data'] is List) {
-            rawList = decodedData['data'] as List<dynamic>;
-          }
-        }
-
-        return rawList.map((json) => NotificationModel.fromJson(json)).toList();
+        final dynamic decoded = json.decode(response.body);
+        final List<dynamic> data = decoded is List
+            ? decoded
+            : (decoded is Map && decoded['notifications'] is List
+                ? decoded['notifications'] as List<dynamic>
+                : []);
+        return data.map((json) => NotificationModel.fromJson(json)).toList();
       } else {
         throw Exception(
             'Error al cargar notificaciones (${response.statusCode})');
@@ -125,16 +108,15 @@ class NotificationService {
   }
 
   Future<bool> markAsRead(String notificationId) async {
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/v1/notifications/$notificationId/read'),
-        headers: _headers,
-      );
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/v1/notifications/$notificationId/read'),
+      headers: _headers,
+    );
 
-      return response.statusCode == 200 || response.statusCode == 204;
-    } catch (e) {
-      debugPrint('Error en markAsRead: $e');
-      return false;
+    if (response.statusCode == 200 || response.statusCode == 204) {
+      return true;
+    } else {
+      throw Exception('Error al marcar notificación como leída');
     }
   }
 }

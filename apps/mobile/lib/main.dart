@@ -1,17 +1,25 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'services/notification_service.dart';
+import 'services/biometric_guard.dart';
+import 'services/bypass_service.dart';
+import 'screens/bypass_detail_screen.dart';
 import 'features/security_gate/presentation/screens/security_gate_bypasses_screen.dart';
 import 'repositories/incident_repository.dart';
 import 'services/api_client.dart';
 import 'services/auth_headers.dart';
 
 typedef StringMap = Map<String, String>;
+
+final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
+final StreamController<String> notificationTapStream =
+    StreamController<String>.broadcast();
 
 class ScanModel {
   final String id;
@@ -63,7 +71,8 @@ class ScanModel {
           'Repositorio / CWE sin título',
       status:
           (json['status'] ?? json['state'] ?? 'OPEN').toString().toUpperCase(),
-      summary: json['pillow_summary']?.toString() ??
+      summary: json['ai_summary']?.toString() ??
+          json['pillow_summary']?.toString() ??
           json['summary']?.toString() ??
           json['description']?.toString() ??
           json['message']?.toString() ??
@@ -132,8 +141,7 @@ class AuthRepository {
         final token = readSessionToken(response.data);
         if (token != null && token.isNotEmpty) {
           await apiClient.persistAuthToken(token);
-          await prefs.setString('jwt_token',
-              token); // <--- Guarda explícitamente el token de sesión
+          await prefs.setString('jwt_token', token);
           await prefs.setString('user_email', email);
           await prefs.setString('primary_user_email', email);
           await prefs.setString('user_name', email.split('@').first);
@@ -170,9 +178,11 @@ class AuthRepository {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Inicialización corregida usando la firma oficial del servicio
   await NotificationService.initSystemNotifications((payload) {
     debugPrint("Notificación seleccionada con payload: $payload");
+    if (payload != null && payload.isNotEmpty) {
+      notificationTapStream.add(payload);
+    }
   });
 
   runApp(const SSPillowyApp());
@@ -233,6 +243,7 @@ class _SSPillowyAppState extends State<SSPillowyApp> {
       await prefs.remove('session_id');
       await prefs.remove('user_email');
       await prefs.remove('primary_user_email');
+      await prefs.remove('primary_user_name');
       await prefs.remove('user_name');
       await prefs.setBool('is_logged_in', false);
     } catch (_) {}
@@ -262,6 +273,7 @@ class _SSPillowyAppState extends State<SSPillowyApp> {
     }
 
     return MaterialApp(
+      navigatorKey: rootNavigatorKey,
       title: 'SSPILLOWY',
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark(useMaterial3: true).copyWith(
@@ -841,15 +853,60 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
   List<StringMap> _globalAuditLogs = [];
   List _inAppNotifications = [];
   final ApiClient _apiClient = ApiClient();
+  Timer? _onCallPollingTimer;
+  StreamSubscription<String>? _notifTapSub;
+  final Set<String> _pushedAlertIds = {};
 
   late final IncidentRepository _incidentRepository;
+  late final BypassService _bypassService;
 
   @override
   void initState() {
     super.initState();
-    _incidentRepository = IncidentRepository(ApiClient());
+    _incidentRepository = IncidentRepository(_apiClient);
+    _bypassService = BypassService(Dio());
     _loadPersistentAuditLogs();
-    _loadNotificationsFromApiAndPrefs();
+    _loadNotificationsFromApiAndPrefs(triggerSystemPush: false);
+
+    // Polling automático cada 15s cuando el usuario está En Guardia (On-Call)
+    _onCallPollingTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (widget.isOnDuty) {
+        _loadNotificationsFromApiAndPrefs(triggerSystemPush: true);
+      }
+    });
+
+    // Deep linking al tocar una notificación nativa del celular
+    _notifTapSub = notificationTapStream.stream.listen((payload) {
+      _handleNotificationPayload(payload);
+    });
+  }
+
+  @override
+  void dispose() {
+    _onCallPollingTimer?.cancel();
+    _notifTapSub?.cancel();
+    super.dispose();
+  }
+
+  void _handleNotificationPayload(String payload) {
+    if (!mounted) return;
+    if (payload.contains('bypass')) {
+      final idMatch = RegExp(r'id=([^&]+)').firstMatch(payload);
+      final bypassId = idMatch?.group(1);
+      setState(() => _currentIndex = 2);
+      if (bypassId != null && bypassId.isNotEmpty) {
+        rootNavigatorKey.currentState?.push(
+          MaterialPageRoute(
+            builder: (_) => BypassDetailScreen(
+              bypassId: bypassId,
+              bypassService: _bypassService,
+            ),
+          ),
+        );
+      }
+    } else if (payload.contains('finding')) {
+      setState(() => _currentIndex = 0);
+    }
   }
 
   Future<void> _loadPersistentAuditLogs() async {
@@ -871,7 +928,9 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
         'persistent_audit_logs', jsonEncode(_globalAuditLogs));
   }
 
-  Future<void> _loadNotificationsFromApiAndPrefs() async {
+  Future<void> _loadNotificationsFromApiAndPrefs({
+    bool triggerSystemPush = false,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
     final savedNotifsJson = prefs.getString('persistent_in_app_notifs');
     List localNotifs = [];
@@ -884,28 +943,27 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
       } catch (_) {}
     }
 
+    for (final existing in localNotifs) {
+      if (existing['id'] != null) {
+        _pushedAlertIds.add(existing['id'].toString());
+      }
+    }
+
     try {
-      final token = prefs.getString('jwt_token');
+      final token =
+          prefs.getString('jwt_token') ?? prefs.getString('session_id');
       if (token != null && token.isNotEmpty) {
         _apiClient.setAuthToken(token);
       }
 
-      final endpoints = [
-        '/notifications',
-        '/api/v1/notifications',
-        '/user/notifications',
-      ];
-
+      // 1. Consultar notificaciones generales desde el backend
       dynamic responseData;
-      for (final ep in endpoints) {
-        try {
-          final res = await _apiClient.get(ep);
-          if (res.statusCode == 200 && res.data != null) {
-            responseData = res.data;
-            break;
-          }
-        } catch (_) {}
-      }
+      try {
+        final res = await _apiClient.get('/notifications');
+        if (res.statusCode == 200 && res.data != null) {
+          responseData = res.data;
+        }
+      } catch (_) {}
 
       if (responseData != null) {
         List rawList = [];
@@ -922,7 +980,8 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
           if (item is Map) {
             final id = (item['id'] ?? item['_id'] ?? '').toString();
             final title =
-                (item['title'] ?? item['subject'] ?? 'Notificación').toString();
+                (item['title'] ?? item['subject'] ?? 'Alerta de Seguridad')
+                    .toString();
             final body =
                 (item['body'] ?? item['message'] ?? item['description'] ?? '')
                     .toString();
@@ -931,6 +990,11 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
             final read = item['read'] == true || item['is_read'] == true;
             final dateStr =
                 (item['created_at'] ?? item['date'] ?? '').toString();
+            final findingId =
+                (item['finding_id'] ?? item['resource_id'] ?? '').toString();
+            final payload = type.toUpperCase().contains('BYPASS')
+                ? '/bypass_detail?id=$findingId'
+                : '/finding_detail?id=$findingId';
 
             if (id.isNotEmpty && !localNotifs.any((n) => n['id'] == id)) {
               localNotifs.insert(0, {
@@ -938,16 +1002,73 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
                 'title': title,
                 'body': body,
                 'type': type,
+                'payload': payload,
                 'read': read,
                 'time': dateStr.isNotEmpty
                     ? dateStr.substring(
                         0, dateStr.length > 16 ? 16 : dateStr.length)
                     : '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}',
               });
+
+              if (triggerSystemPush &&
+                  widget.isOnDuty &&
+                  !read &&
+                  !_pushedAlertIds.contains(id)) {
+                _pushedAlertIds.add(id);
+                await NotificationService.showLocalPush(
+                  id: id.hashCode.abs() % 100000,
+                  title: title,
+                  body: body,
+                  payload: payload,
+                );
+              }
             }
           }
         }
       }
+
+      // 2. Consultar solicitudes de Bypass pendientes creadas desde la Web/CI
+      try {
+        final bypasses = await _bypassService.getBypasses();
+        for (final b in bypasses) {
+          if (b is Map) {
+            final bId = (b['id'] ?? '').toString();
+            final bStatus = (b['status'] ?? '').toString().toUpperCase();
+            final notifKey = 'bypass_$bId';
+            if (bId.isNotEmpty &&
+                bStatus == 'PENDING' &&
+                !localNotifs.any((n) => n['id'] == notifKey)) {
+              const title = 'Solicitud de Excepción (Bypass)';
+              final body =
+                  '${b['rule'] ?? b['title'] ?? 'Security Gate'} en ${b['repository'] ?? b['repo'] ?? 'repositorio'}';
+              final payload = '/bypass_detail?id=$bId';
+
+              localNotifs.insert(0, {
+                'id': notifKey,
+                'title': title,
+                'body': body,
+                'type': 'BYPASS',
+                'payload': payload,
+                'read': false,
+                'time':
+                    '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}',
+              });
+
+              if (triggerSystemPush &&
+                  widget.isOnDuty &&
+                  !_pushedAlertIds.contains(notifKey)) {
+                _pushedAlertIds.add(notifKey);
+                await NotificationService.showLocalPush(
+                  id: notifKey.hashCode.abs() % 100000,
+                  title: title,
+                  body: body,
+                  payload: payload,
+                );
+              }
+            }
+          }
+        }
+      } catch (_) {}
     } catch (_) {}
 
     if (mounted) {
@@ -981,19 +1102,11 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
       _inAppNotifications.insert(0, newNotif);
     });
     await _savePersistentNotifications();
-
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('jwt_token');
-      if (token != null && token.isNotEmpty) {
-        _apiClient.setAuthToken(token);
-      }
-      await _apiClient.post('/notifications', data: newNotif);
-    } catch (_) {}
   }
 
   Future<void> _markNotificationAsRead(int index) async {
     final notifId = _inAppNotifications[index]['id'];
+    final payload = (_inAppNotifications[index]['payload'] ?? '').toString();
     setState(() {
       _inAppNotifications[index]['read'] = true;
     });
@@ -1008,6 +1121,10 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
       await _apiClient
           .post('/notifications/$notifId/read', data: {'read': true});
     } catch (_) {}
+
+    if (payload.isNotEmpty) {
+      _handleNotificationPayload(payload);
+    }
   }
 
   Future<void> _markAllNotificationsAsRead() async {
@@ -1033,15 +1150,6 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
       _inAppNotifications.clear();
     });
     await _savePersistentNotifications();
-
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('jwt_token');
-      if (token != null && token.isNotEmpty) {
-        _apiClient.setAuthToken(token);
-      }
-      await _apiClient.delete('/notifications');
-    } catch (_) {}
   }
 
   void _updateActiveScans(List<ScanModel> scans) {
@@ -1273,18 +1381,17 @@ class _PillowChatScreenState extends State<PillowChatScreen> {
           .map((m) => {
                 'role': m['role'] == 'assistant' ? 'assistant' : 'user',
                 'text': m['text'] ?? '',
-                'content': m['text'] ?? '',
               })
           .toList();
 
       final bodyData = {
         'message': cleanPrompt,
-        'prompt': cleanPrompt,
-        'query': cleanPrompt,
         'user_key': userEmail,
         'page': 'mobile_app',
-        'system_instruction':
-            'Eres Pillow IA dentro de la APP MÓVIL. Tu contexto es la Bandeja de Hallazgos y el estado de guardia On-Call de la app móvil. NO menciones dashboards web, paneles, ni widgets.',
+        'dashboard_context': {
+          'app_type': 'mobile',
+          'on_duty': widget.isOnDuty,
+        },
         'page_context': {
           'app_type': 'mobile',
           'total_findings': widget.currentScans.length,
@@ -1292,26 +1399,15 @@ class _PillowChatScreenState extends State<PillowChatScreen> {
           'findings': findingsPayload,
         },
         'history': historyPayload,
-        'messages': historyPayload,
       };
 
       dynamic response;
-      final endpoints = [
-        '/pillow/chat',
-        '/api/v1/pillow/chat',
-        '/ai/chat',
-        '/chat/completions',
-      ];
-
-      for (final ep in endpoints) {
-        try {
-          var res = await _apiClient.post(ep, data: bodyData);
-          if (res.statusCode == 200 && res.data != null) {
-            response = res;
-            break;
-          }
-        } catch (_) {}
-      }
+      try {
+        var res = await _apiClient.post('/pillow/chat', data: bodyData);
+        if (res.statusCode == 200 && res.data != null) {
+          response = res;
+        }
+      } catch (_) {}
 
       if (response != null && response.data != null) {
         final raw = response.data;
@@ -1322,19 +1418,12 @@ class _PillowChatScreenState extends State<PillowChatScreen> {
                   ? raw['result']
                   : raw;
 
-          String? extractedChoice;
-          if (target['choices'] is List && target['choices'].isNotEmpty) {
-            extractedChoice =
-                target['choices'][0]['message']?['content']?.toString();
-          }
-
           serverReply = (target['reply'] ??
                   target['content'] ??
                   target['message'] ??
                   target['response'] ??
                   target['answer'] ??
-                  target['output'] ??
-                  extractedChoice)
+                  target['output'])
               ?.toString();
         } else if (raw is String) {
           serverReply = raw;
@@ -1575,20 +1664,9 @@ class _ScanListScreenState extends State<ScanListScreen> {
     final prefs = await SharedPreferences.getInstance();
     final jsonStr = prefs.getString('persistent_scans_list_v4');
 
-    Map<String, String> localStatusMap = {};
-    if (jsonStr != null) {
-      try {
-        final List decoded = jsonDecode(jsonStr);
-        for (var item in decoded) {
-          if (item is Map && item['id'] != null && item['status'] != null) {
-            localStatusMap[item['id'].toString()] = item['status'].toString();
-          }
-        }
-      } catch (_) {}
-    }
-
     try {
-      final token = prefs.getString('jwt_token');
+      final token =
+          prefs.getString('jwt_token') ?? prefs.getString('session_id');
 
       if (token != null && token.isNotEmpty) {
         _apiClient.setAuthToken(token);
@@ -1601,7 +1679,17 @@ class _ScanListScreenState extends State<ScanListScreen> {
         var res = await _apiClient.get('/findings');
         statusCode = res.statusCode ?? 0;
         responseData = res.data;
-      } catch (_) {
+      } on DioException catch (e) {
+        if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
+          await prefs.remove('jwt_token');
+          await prefs.remove('session_id');
+          await prefs.setBool('is_logged_in', false);
+          if (mounted) {
+            setState(() => _isLoading = false);
+            widget.onLogout();
+          }
+          return;
+        }
         try {
           var res = await _apiClient.get('/scans');
           statusCode = res.statusCode ?? 0;
@@ -1624,24 +1712,20 @@ class _ScanListScreenState extends State<ScanListScreen> {
               [];
         }
 
-        if (rawData.isNotEmpty) {
-          _localScans = rawData.map((item) {
-            final parsed = ScanModel.fromJson(Map<String, dynamic>.from(item));
-            final savedStatus = localStatusMap[parsed.id];
-            if (savedStatus != null) {
-              return ScanModel(
-                id: parsed.id,
-                title: parsed.title,
-                status: savedStatus,
-                severity: parsed.severity,
-                summary: parsed.summary,
-                repo: parsed.repo,
-                type: parsed.type,
-                createdAt: parsed.createdAt,
-              );
+        if (rawData.isEmpty) {
+          try {
+            var repoRes = await _apiClient.get('/repositories');
+            if (repoRes.statusCode == 200 && repoRes.data is List) {
+              rawData = repoRes.data as List;
             }
-            return parsed;
-          }).toList();
+          } catch (_) {}
+        }
+
+        if (rawData.isNotEmpty) {
+          // Sincronización real: siempre prevalece el estado actual del servidor/Web
+          _localScans = rawData
+              .map((item) => ScanModel.fromJson(Map<String, dynamic>.from(item)))
+              .toList();
 
           await _saveScansToPrefs();
           _applySorting();
@@ -1801,6 +1885,10 @@ class _ScanListScreenState extends State<ScanListScreen> {
                                     : const Color(0xFF21262D),
                                 margin: const EdgeInsets.only(bottom: 8),
                                 child: ListTile(
+                                  onTap: () {
+                                    Navigator.pop(modalContext);
+                                    widget.onMarkRead(index);
+                                  },
                                   leading: CircleAvatar(
                                     radius: 16,
                                     backgroundColor: notif['type'] == 'BLOCK'
@@ -1978,7 +2066,7 @@ class _ScanListScreenState extends State<ScanListScreen> {
                                   : Colors.grey.shade800,
                               padding: const EdgeInsets.symmetric(vertical: 12),
                             ),
-                            icon: const Icon(Icons.shield_outlined,
+                            icon: const Icon(Icons.fingerprint,
                                 color: Colors.white),
                             label: const Text('Excepción',
                                 style: TextStyle(color: Colors.white)),
@@ -2004,7 +2092,7 @@ class _ScanListScreenState extends State<ScanListScreen> {
                                                   CrossAxisAlignment.start,
                                               children: [
                                                 const Text(
-                                                  '¿Autorizar el pase a producción con esta vulnerabilidad activa?',
+                                                  '¿Autorizar el pase a producción con esta vulnerabilidad activa? Se solicitará huella o rostro.',
                                                   style: TextStyle(
                                                       fontSize: 13,
                                                       color: Colors.grey),
@@ -2069,6 +2157,27 @@ class _ScanListScreenState extends State<ScanListScreen> {
                                                   if (justificationText
                                                           .length >=
                                                       10) {
+                                                    // Firma biométrica obligatoria
+                                                    final verified =
+                                                        await BiometricGuard
+                                                            .verifyIdentity(
+                                                      reason:
+                                                          'Confirma con huella o rostro para lanzar la excepción',
+                                                    );
+                                                    if (!verified) {
+                                                      setDialogState(() {
+                                                        inlineError =
+                                                            'Firma biométrica requerida para autorizar.';
+                                                      });
+                                                      return;
+                                                    }
+
+                                                    if (!dialogContext
+                                                            .mounted ||
+                                                        !bottomSheetContext
+                                                            .mounted) {
+                                                      return;
+                                                    }
                                                     Navigator.pop(
                                                         dialogContext);
                                                     Navigator.pop(
@@ -2088,31 +2197,31 @@ class _ScanListScreenState extends State<ScanListScreen> {
                                                             token);
                                                       }
 
-                                                      final endpoints = [
-                                                        '/findings/${scan.id}',
-                                                        '/bypasses',
-                                                        '/api/v1/findings/${scan.id}',
-                                                      ];
-
-                                                      for (final ep
-                                                          in endpoints) {
-                                                        try {
-                                                          await _apiClient
-                                                              .post(ep, data: {
+                                                      await _apiClient.patch(
+                                                          '/findings/${scan.id}',
+                                                          data: {
                                                             'status':
                                                                 'EXEMPTED',
                                                             'duration_hours':
                                                                 selectedHours,
                                                             'justification':
                                                                 justificationText,
-                                                            'scan_id': scan.id,
                                                           });
-                                                          break;
-                                                        } catch (_) {}
-                                                      }
+
+                                                      try {
+                                                        await _apiClient.post(
+                                                            '/security-gates/bypasses',
+                                                            data: {
+                                                              'finding_id':
+                                                                  scan.id,
+                                                              'duration_hours':
+                                                                  selectedHours,
+                                                              'justification':
+                                                                  justificationText,
+                                                            });
+                                                      } catch (_) {}
                                                     } catch (_) {}
 
-                                                    // Corrección de llamada al método oficial del NotificationService
                                                     await NotificationService
                                                         .showLocalPush(
                                                       id: DateTime.now()
@@ -2194,7 +2303,8 @@ class _ScanListScreenState extends State<ScanListScreen> {
                                   : Colors.grey.shade800,
                               padding: const EdgeInsets.symmetric(vertical: 12),
                             ),
-                            icon: const Icon(Icons.block, color: Colors.white),
+                            icon: const Icon(Icons.fingerprint,
+                                color: Colors.white),
                             label: const Text('Bloquear',
                                 style: TextStyle(color: Colors.white)),
                             onPressed: !widget.isOnDuty
@@ -2239,6 +2349,27 @@ class _ScanListScreenState extends State<ScanListScreen> {
                                                       reasonController.text
                                                           .trim();
                                                   if (reasonText.length >= 3) {
+                                                    // Firma biométrica obligatoria
+                                                    final verified =
+                                                        await BiometricGuard
+                                                            .verifyIdentity(
+                                                      reason:
+                                                          'Confirma con huella o rostro para BLOQUEAR este despliegue',
+                                                    );
+                                                    if (!verified) {
+                                                      setDialogState(() {
+                                                        inlineError =
+                                                            'Firma biométrica requerida para bloquear.';
+                                                      });
+                                                      return;
+                                                    }
+
+                                                    if (!dialogContext
+                                                            .mounted ||
+                                                        !bottomSheetContext
+                                                            .mounted) {
+                                                      return;
+                                                    }
                                                     Navigator.pop(
                                                         dialogContext);
                                                     Navigator.pop(
@@ -2258,28 +2389,15 @@ class _ScanListScreenState extends State<ScanListScreen> {
                                                             token);
                                                       }
 
-                                                      final endpoints = [
-                                                        '/findings/${scan.id}',
-                                                        '/bypasses/block',
-                                                        '/api/v1/findings/${scan.id}',
-                                                      ];
-
-                                                      for (final ep
-                                                          in endpoints) {
-                                                        try {
-                                                          await _apiClient
-                                                              .post(ep, data: {
+                                                      await _apiClient.patch(
+                                                          '/findings/${scan.id}',
+                                                          data: {
                                                             'status': 'BLOCKED',
                                                             'reason':
                                                                 reasonText,
-                                                            'scan_id': scan.id,
                                                           });
-                                                          break;
-                                                        } catch (_) {}
-                                                      }
                                                     } catch (_) {}
 
-                                                    // Corrección de llamada al método oficial del NotificationService
                                                     await NotificationService
                                                         .showLocalPush(
                                                       id: DateTime.now()
@@ -2720,7 +2838,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _fetchUsersAndProfiles() async {
     final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('jwt_token');
+    final token =
+        prefs.getString('jwt_token') ?? prefs.getString('session_id');
 
     String activeEmail = prefs.getString('user_email') ?? '';
     String primaryEmail = prefs.getString('primary_user_email') ?? activeEmail;
@@ -2739,7 +2858,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _apiClient.setAuthToken(token);
     }
 
-    List fetchedList = [];
+    final List fetchedList = [];
 
     if (primaryEmail.isNotEmpty) {
       fetchedList.add({
@@ -2751,42 +2870,66 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     try {
       dynamic resData;
-      final endpoints = [
-        '/organization/members',
-        '/workspaces/members',
-        '/profiles',
-      ];
+      try {
+        var res = await _apiClient.get('/workspaces');
+        if (res.statusCode == 200 && res.data != null) {
+          resData = res.data;
+        }
+      } catch (_) {}
 
-      for (String ep in endpoints) {
-        try {
-          var res = await _apiClient.get(ep);
-          if (res.statusCode == 200 && res.data != null) {
-            resData = res.data;
-            break;
+      if (resData is Map) {
+        final members = resData['members'];
+        if (members is List) {
+          for (var item in members) {
+            if (item is Map) {
+              final email =
+                  (item['email'] ?? item['user_email'] ?? '').toString().trim();
+              final rawName = (item['name'] ?? '').toString().trim();
+              final name = rawName.isNotEmpty
+                  ? rawName
+                  : (email.isNotEmpty ? email.split('@').first : 'Miembro');
+              final role = (item['role_label'] ?? item['role'] ?? 'Miembro')
+                  .toString();
+
+              if (email.isNotEmpty) {
+                final existingIdx = fetchedList.indexWhere((p) =>
+                    p['email'].toString().toLowerCase() ==
+                    email.toLowerCase());
+                if (existingIdx != -1) {
+                  fetchedList[existingIdx] = {
+                    'name': name,
+                    'email': email,
+                    'role': role,
+                  };
+                } else {
+                  fetchedList.add({
+                    'name': name,
+                    'email': email,
+                    'role': role,
+                  });
+                }
+              }
+            }
           }
-        } catch (_) {}
-      }
+        }
 
-      if (resData != null) {
-        List items = resData is List
-            ? resData
-            : (resData['members'] ?? resData['users'] ?? []);
-        for (var item in items) {
-          if (item is Map) {
-            final email =
-                (item['email'] ?? item['user_email'] ?? '').toString();
-            final name = (item['name'] ??
-                    (email.isNotEmpty ? email.split('@').first : 'Miembro'))
-                .toString();
-            final role = (item['role'] ?? 'Solo lectura').toString();
-
-            if (email.isNotEmpty &&
-                !fetchedList.any((p) => p['email'] == email)) {
-              fetchedList.add({
-                'name': name,
-                'email': email,
-                'role': role,
-              });
+        final invitations = resData['invitations'];
+        if (invitations is List) {
+          for (var inv in invitations) {
+            if (inv is Map) {
+              final email = (inv['email'] ?? '').toString().trim();
+              final role = (inv['role_label'] ?? inv['role'] ?? 'Miembro')
+                  .toString();
+              if (email.isNotEmpty &&
+                  !fetchedList.any((p) =>
+                      p['email'].toString().toLowerCase() ==
+                      email.toLowerCase())) {
+                fetchedList.add({
+                  'name': email.split('@').first,
+                  'email': email,
+                  'role': '$role (Pendiente)',
+                });
+              }
             }
           }
         }
@@ -2806,10 +2949,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<void> _switchProfile(Map<String, String> profile) async {
+  Future<void> _switchProfile(Map<String, dynamic> profile) async {
     final prefs = await SharedPreferences.getInstance();
-    final targetEmail = profile['email']!;
-    final targetName = profile['name']!;
+    final targetEmail = profile['email'].toString();
+    final targetName = profile['name'].toString();
 
     await prefs.setString('user_email', targetEmail);
     await prefs.setString('user_name', targetName);
@@ -2860,24 +3003,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Navigator.pop(dialogContext);
 
               bool success = false;
-              final endpoints = [
-                '/user/delete-request',
-                '/users/delete-account',
-                '/auth/delete-account',
-              ];
-
-              for (String ep in endpoints) {
-                try {
-                  final response = await _apiClient.post(ep, data: {
-                    'email': _activeUserEmail,
-                  });
-                  if (response.statusCode == 200 ||
-                      response.statusCode == 201) {
-                    success = true;
-                    break;
-                  }
-                } catch (_) {}
-              }
+              try {
+                final response = await _apiClient.post('/auth/logout', data: {
+                  'email': _activeUserEmail,
+                });
+                if (response.statusCode == 200 || response.statusCode == 201) {
+                  success = true;
+                }
+              } catch (_) {}
 
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -2922,7 +3055,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final currentProfileObj = _availableProfiles.firstWhere(
-      (p) => p['email'] == _activeUserEmail,
+      (p) =>
+          p['email'].toString().toLowerCase() ==
+          _activeUserEmail.toLowerCase(),
       orElse: () => {'role': 'Propietario'},
     );
     final bool isReadOnly = (currentProfileObj['role'] ?? '')
@@ -3019,7 +3154,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         child: Column(
                           children: _availableProfiles.map((profile) {
                             final isCurrent =
-                                profile['email'] == _activeUserEmail;
+                                profile['email'].toString().toLowerCase() ==
+                                    _activeUserEmail.toLowerCase();
                             return ListTile(
                               leading: CircleAvatar(
                                 radius: 16,
@@ -3035,7 +3171,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ),
                               ),
                               title: Text(
-                                profile['name']!,
+                                profile['name'].toString(),
                                 style: TextStyle(
                                   color: isCurrent
                                       ? Colors.white

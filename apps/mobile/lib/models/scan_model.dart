@@ -48,7 +48,8 @@
           'Repositorio / CWE sin título',
       status:
           (json['status'] ?? json['state'] ?? 'OPEN').toString().toUpperCase(),
-      summary: json['pillow_summary']?.toString() ??
+      summary: json['ai_summary']?.toString() ??
+          json['pillow_summary']?.toString() ??
           json['summary']?.toString() ??
           json['description']?.toString() ??
           json['message']?.toString() ??

@@ -1,4 +1,5 @@
 ﻿import 'dart:convert';
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -58,11 +59,18 @@ class _ScanListScreenState extends State<ScanListScreen> {
 
     try {
       final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('jwt_token');
+      final token =
+          prefs.getString('jwt_token') ?? prefs.getString('session_id');
 
-      if (token != null && token.isNotEmpty) {
-        _apiClient.setAuthToken(token);
+      if (token == null || token.isEmpty || token.startsWith('token_')) {
+        if (mounted) {
+          setState(() => _isLoading = false);
+          widget.onLogout();
+        }
+        return;
       }
+
+      _apiClient.setAuthToken(token);
 
       dynamic responseData;
       int statusCode = 0;
@@ -71,7 +79,17 @@ class _ScanListScreenState extends State<ScanListScreen> {
         var res = await _apiClient.get('/findings');
         statusCode = res.statusCode ?? 0;
         responseData = res.data;
-      } catch (_) {
+      } on DioException catch (e) {
+        if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
+          await prefs.remove('jwt_token');
+          await prefs.remove('session_id');
+          await prefs.setBool('is_logged_in', false);
+          if (mounted) {
+            setState(() => _isLoading = false);
+            widget.onLogout();
+          }
+          return;
+        }
         try {
           var res = await _apiClient.get('/scans');
           statusCode = res.statusCode ?? 0;
@@ -92,6 +110,16 @@ class _ScanListScreenState extends State<ScanListScreen> {
               responseData['data'] ??
               responseData['repos'] ??
               [];
+        }
+
+        // Si /findings devolvió vacío, intentar cargar los repositorios del espacio
+        if (rawData.isEmpty) {
+          try {
+            var repoRes = await _apiClient.get('/repositories');
+            if (repoRes.statusCode == 200 && repoRes.data is List) {
+              rawData = repoRes.data as List;
+            }
+          } catch (_) {}
         }
 
         if (rawData.isNotEmpty) {

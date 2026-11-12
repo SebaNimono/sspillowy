@@ -34,7 +34,7 @@ class IncidentRepository {
   /// Obtiene la lista de Bypasses y Excepciones registradas (Gobernanza)
   Future<List<dynamic>> getBypasses() async {
     try {
-      final response = await _apiClient.dio.get('/bypasses');
+      final response = await _apiClient.dio.get('/security-gates/bypasses');
 
       final data = response.data;
       if (data is Map<String, dynamic>) {
@@ -45,7 +45,6 @@ class IncidentRepository {
       return data is List ? data : [];
     } on DioException catch (e) {
       debugPrint("Error en getBypasses (Backend): ${e.message}");
-      // Fallback para desarrollo: evita que la pantalla falle por 401 si la sesión no ha enviado token
       return [];
     }
   }
@@ -57,9 +56,10 @@ class IncidentRepository {
     required String justification,
   }) async {
     try {
-      final response = await _apiClient.dio.post(
-        '/findings/$incidentId/exception',
+      final response = await _apiClient.dio.patch(
+        '/findings/$incidentId',
         data: {
+          'status': 'EXEMPTED',
           'duration_hours': durationHours,
           'justification': justification,
         },
@@ -77,9 +77,12 @@ class IncidentRepository {
     required String reason,
   }) async {
     try {
-      final response = await _apiClient.dio.post(
-        '/findings/$incidentId/block',
-        data: {'reason': reason},
+      final response = await _apiClient.dio.patch(
+        '/findings/$incidentId',
+        data: {
+          'status': 'BLOCKED',
+          'reason': reason,
+        },
       );
       return response.statusCode == 200 || response.statusCode == 201;
     } on DioException catch (e) {

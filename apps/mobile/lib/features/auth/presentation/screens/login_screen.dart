@@ -1,6 +1,9 @@
-﻿import 'package:flutter/material.dart';
+﻿import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../../repositories/auth_repository.dart';
+import '../../../../services/api_client.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -12,6 +15,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final AuthRepository _authRepository = AuthRepository(ApiClient());
   final bool _rememberMe = true;
   bool _acceptedTerms = false;
   bool _isLoading = false;
@@ -20,6 +24,13 @@ class _LoginScreenState extends State<LoginScreen> {
   void initState() {
     super.initState();
     _loadSavedEmail();
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadSavedEmail() async {
@@ -40,28 +51,57 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _handleLogin() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
+    if (email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ingresa tu correo y contraseña.')),
+      );
+      return;
+    }
+
     if (!_acceptedTerms) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Debes confirmar los términos y condiciones para continuar.')),
+        const SnackBar(
+            content: Text(
+                'Debes confirmar los términos y condiciones para continuar.')),
       );
       return;
     }
 
     setState(() => _isLoading = true);
-    
-    final prefs = await SharedPreferences.getInstance();
-    if (_rememberMe) {
-      await prefs.setString('saved_email', _emailController.text.trim());
-    } else {
-      await prefs.remove('saved_email');
-    }
 
-    await prefs.setBool('is_logged_in', true);
+    try {
+      await _authRepository.login(email, password);
 
-    setState(() => _isLoading = false);
-    
-    if (mounted) {
+      final prefs = await SharedPreferences.getInstance();
+      if (_rememberMe) {
+        await prefs.setString('saved_email', email);
+      } else {
+        await prefs.remove('saved_email');
+      }
+
+      if (!mounted) return;
       Navigator.of(context).pushReplacementNamed('/home');
+    } on DioException catch (e) {
+      if (!mounted) return;
+      final detail = e.response?.data is Map
+          ? (e.response?.data['detail']?.toString() ?? 'Credenciales inválidas')
+          : 'Error de conexión con el servidor (${e.response?.statusCode ?? "red"})';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(detail), backgroundColor: Colors.redAccent),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -72,14 +112,16 @@ class _LoginScreenState extends State<LoginScreen> {
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 420),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Icon(Icons.shield_outlined, size: 64, color: Color(0xFF38BDF8)),
+                  const Icon(Icons.shield_outlined,
+                      size: 64, color: Color(0xFF38BDF8)),
                   const SizedBox(height: 16),
                   const Text(
                     'SSPILLOWY',
@@ -98,7 +140,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     style: TextStyle(fontSize: 14, color: Color(0xFF94A3B8)),
                   ),
                   const SizedBox(height: 32),
-
                   TextField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
@@ -112,11 +153,11 @@ class _LoginScreenState extends State<LoginScreen> {
                         borderRadius: BorderRadius.circular(10),
                         borderSide: BorderSide.none,
                       ),
-                      prefixIcon: const Icon(Icons.email_outlined, color: Color(0xFF38BDF8)),
+                      prefixIcon: const Icon(Icons.email_outlined,
+                          color: Color(0xFF38BDF8)),
                     ),
                   ),
                   const SizedBox(height: 16),
-
                   TextField(
                     controller: _passwordController,
                     obscureText: true,
@@ -130,47 +171,61 @@ class _LoginScreenState extends State<LoginScreen> {
                         borderRadius: BorderRadius.circular(10),
                         borderSide: BorderSide.none,
                       ),
-                      prefixIcon: const Icon(Icons.lock_outlined, color: Color(0xFF38BDF8)),
+                      prefixIcon: const Icon(Icons.lock_outlined,
+                          color: Color(0xFF38BDF8)),
                     ),
                   ),
                   const SizedBox(height: 12),
-
                   Align(
                     alignment: Alignment.centerRight,
                     child: TextButton(
-                      onPressed: () => _openWebUrl('https://sspillowy.com/forgot-password'),
+                      onPressed: () =>
+                          _openWebUrl('https://sspillowy.com/forgot-password'),
                       child: const Text(
                         '¿Olvidaste tu contraseña?',
-                        style: TextStyle(color: Color(0xFF38BDF8), fontSize: 13),
+                        style:
+                            TextStyle(color: Color(0xFF38BDF8), fontSize: 13),
                       ),
                     ),
                   ),
-
                   Row(
                     children: [
                       Checkbox(
                         value: _acceptedTerms,
                         activeColor: const Color(0xFF0284C7),
-                        onChanged: (val) => setState(() => _acceptedTerms = val ?? false),
+                        onChanged: (val) =>
+                            setState(() => _acceptedTerms = val ?? false),
                       ),
                       Expanded(
                         child: Wrap(
                           crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
-                            const Text('Confirmo los ', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+                            const Text('Confirmo los ',
+                                style: TextStyle(
+                                    color: Color(0xFF94A3B8), fontSize: 12)),
                             GestureDetector(
-                              onTap: () => _openWebUrl('https://sspillowy.com/terms'),
+                              onTap: () =>
+                                  _openWebUrl('https://sspillowy.com/terms'),
                               child: const Text(
                                 'términos y condiciones',
-                                style: TextStyle(color: Color(0xFF38BDF8), fontSize: 12, decoration: TextDecoration.underline),
+                                style: TextStyle(
+                                    color: Color(0xFF38BDF8),
+                                    fontSize: 12,
+                                    decoration: TextDecoration.underline),
                               ),
                             ),
-                            const Text(' y la ', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+                            const Text(' y la ',
+                                style: TextStyle(
+                                    color: Color(0xFF94A3B8), fontSize: 12)),
                             GestureDetector(
-                              onTap: () => _openWebUrl('https://sspillowy.com/privacy'),
+                              onTap: () =>
+                                  _openWebUrl('https://sspillowy.com/privacy'),
                               child: const Text(
                                 'política de privacidad',
-                                style: TextStyle(color: Color(0xFF38BDF8), fontSize: 12, decoration: TextDecoration.underline),
+                                style: TextStyle(
+                                    color: Color(0xFF38BDF8),
+                                    fontSize: 12,
+                                    decoration: TextDecoration.underline),
                               ),
                             ),
                           ],
@@ -179,29 +234,40 @@ class _LoginScreenState extends State<LoginScreen> {
                     ],
                   ),
                   const SizedBox(height: 20),
-
                   ElevatedButton(
                     onPressed: _isLoading ? null : _handleLogin,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF0284C7),
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
                     ),
                     child: _isLoading
-                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                        : const Text('Iniciar sesión', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                                color: Colors.white, strokeWidth: 2))
+                        : const Text('Iniciar sesión',
+                            style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white)),
                   ),
                   const SizedBox(height: 24),
-
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Text('¿No tienes cuenta? ', style: TextStyle(color: Color(0xFF94A3B8))),
+                      const Text('¿No tienes cuenta? ',
+                          style: TextStyle(color: Color(0xFF94A3B8))),
                       GestureDetector(
-                        onTap: () => _openWebUrl('https://sspillowy.com/register'),
+                        onTap: () =>
+                            _openWebUrl('https://sspillowy.com/register'),
                         child: const Text(
                           'Regístrate',
-                          style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                              color: Color(0xFF38BDF8),
+                              fontWeight: FontWeight.bold),
                         ),
                       ),
                     ],
