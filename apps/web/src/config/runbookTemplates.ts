@@ -46,7 +46,11 @@ export const ACTION_META: Record<RunbookAction['type'], { label: string; descrip
     description: 'Marca los hallazgos del evento como "En revisión".',
     onlyFor: ['SECRET_DETECTED', 'NEW_FINDING', 'SLA_BREACHED'],
   },
-  rescan: { label: 'Relanzar análisis', description: 'Encola un nuevo análisis del repositorio con los mismos motores.' },
+  rescan: {
+    label: 'Relanzar análisis',
+    description: 'Encola un nuevo análisis del repositorio con los mismos motores.',
+    onlyFor: ['SCAN_FAILED'],
+  },
 };
 
 export const WEBHOOK_KIND_LABEL = { slack: 'Slack', teams: 'Microsoft Teams', generic: 'Webhook propio (JSON)' } as const;
