@@ -111,7 +111,7 @@ class _PillowChatScreenState extends State<PillowChatScreen> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final userEmail = prefs.getString('user_email') ?? '';
-      final token = prefs.getString('jwt_token');
+      final token = await ApiClient.readStoredToken();
 
       if (token != null && token.isNotEmpty) {
         _apiClient.setAuthToken(token);

@@ -1,4 +1,4 @@
-import 'package:dio/dio.dart';
+import '../../../../services/api_client.dart';
 import 'package:flutter/material.dart';
 import '../../../../repositories/incident_repository.dart';
 import '../../../../screens/bypass_detail_screen.dart';
@@ -29,7 +29,7 @@ class _SecurityGateBypassesScreenState
   @override
   void initState() {
     super.initState();
-    _bypassService = BypassService(Dio());
+    _bypassService = BypassService(ApiClient().dio);
     _fetchBypasses();
   }
 
@@ -304,3 +304,5 @@ class _SecurityGateBypassesScreenState
     );
   }
 }
+
+

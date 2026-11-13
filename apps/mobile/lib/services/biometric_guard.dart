@@ -14,7 +14,7 @@ class BiometricGuard {
       final bool isSupported = await _auth.isDeviceSupported();
 
       if (!canCheck && !isSupported) {
-        return true;
+        return false;
       }
 
       return await _auth.authenticate(
@@ -25,15 +25,11 @@ class BiometricGuard {
           useErrorDialogs: true,
         ),
       );
-    } on PlatformException catch (e) {
-      if (e.code == 'NotAvailable' ||
-          e.code == 'NotEnrolled' ||
-          e.code == 'PasscodeNotSet') {
-        return true;
-      }
+    } on PlatformException {
       return false;
     } catch (_) {
       return false;
     }
   }
 }
+

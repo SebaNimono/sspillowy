@@ -50,7 +50,7 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<false/>
 		<key>NSAllowsLocalNetworking</key>
-		<true/>
+		<false/>
 		<key>NSExceptionDomains</key>
 		<dict>
 			<key>api.sspillowy.com</key>
@@ -77,5 +77,8 @@
 			</dict>
 		</dict>
 	</dict>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Se requiere Face ID para proteger el acceso a tu sesión y a los controles de seguridad de SSPILLOWY Pulse.</string>
 </dict>
 </plist>
+

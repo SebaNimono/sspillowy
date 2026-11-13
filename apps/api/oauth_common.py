@@ -231,6 +231,24 @@ def delete_session(session_id: str) -> None:
         print(f"[sspillowy] delete_session DB error: {exc}")
 
 
+def revoke_user_sessions(db, *, user_id: str | None = None, email: str | None = None) -> int:
+    """Revoca todas las sesiones activas (RAM y DB) de un usuario tras cambio/reset de contraseña."""
+    from models import AuthSession
+
+    clean_email = (email or "").strip().lower()
+    removed = 0
+    for sid, sess in list(SESSIONS.items()):
+        s_uid = sess.get("user_id")
+        s_email = (sess.get("email") or "").strip().lower()
+        if (user_id and s_uid == user_id) or (clean_email and s_email == clean_email):
+            SESSIONS.pop(sid, None)
+            removed += 1
+    if user_id:
+        deleted = db.query(AuthSession).filter(AuthSession.user_id == user_id).delete(synchronize_session=False)
+        removed = max(removed, int(deleted or 0))
+    return removed
+
+
 def map_google_token_error(response: httpx.Response) -> tuple[str, str]:
     try:
         body = response.json()

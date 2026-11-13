@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 from database import SessionLocal
 from email_service import mailer_configured, send_password_reset_email
 from models import User
-from oauth_common import FRONTEND_URL
+from oauth_common import FRONTEND_URL, revoke_user_sessions
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
@@ -83,7 +83,7 @@ async def forgot_password(body: ForgotPasswordBody):
 
         await send_password_reset_email(to=user.email, name=user.name, reset_url=_reset_url(token))
         if not mailer_configured():
-            print(f"[sspillowy] Reset sin mailer. Enlace para {email}: {_reset_url(token)}")
+            print(f"[sspillowy] Reset sin mailer para {email} (enlace omitido en logs por seguridad).")
 
         return GENERIC_OK
     finally:
@@ -122,6 +122,7 @@ def reset_password(body: ResetPasswordBody):
         user.password_reset_token = None
         user.password_reset_expires_at = None
         user.last_login_at = datetime.now(timezone.utc)
+        revoke_user_sessions(db, user_id=user.id, email=user.email)
         db.commit()
 
         return {"ok": True, "message": "Contraseña actualizada. Ya puedes iniciar sesión."}

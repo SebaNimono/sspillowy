@@ -10,7 +10,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from database import db_ping
-from models import AuditEvent, GateBypassRequest, Repository
+import os
+from models import AuditEvent, GateBypassRequest, Repository, Scan
 from workspaces import WorkspaceCtx, require_ws, require_ws_write
 
 router = APIRouter(prefix="/api/v1/security-gates/bypasses", tags=["Security Gates"])
@@ -32,8 +33,39 @@ class BypassCreate(BaseModel):
     expires_hours: int = Field(default=24, ge=1, le=168)
 
 
+PENDING_BYPASS_TTL_HOURS = int(os.getenv("PENDING_BYPASS_TTL_HOURS", "4"))
+
+
+def _pending_deadline(row: GateBypassRequest) -> datetime | None:
+    created = _as_utc(row.created_at)
+    if not created:
+        return _as_utc(row.expires_at)
+    max_pending = created + timedelta(hours=PENDING_BYPASS_TTL_HOURS)
+    exp = _as_utc(row.expires_at)
+    return min(max_pending, exp) if exp else max_pending
+
+
+def _repo_context(db, row: GateBypassRequest) -> tuple[str | None, datetime | None, bool]:
+    if not row.repository_id:
+        return None, None, False
+    latest_scan = (
+        db.query(Scan)
+        .filter(Scan.repository_id == row.repository_id)
+        .order_by(Scan.created_at.desc())
+        .first()
+    )
+    if not latest_scan:
+        return None, None, False
+    scan_at = _as_utc(latest_scan.created_at)
+    created = _as_utc(row.created_at)
+    changed = bool(scan_at and created and scan_at > created)
+    return latest_scan.commit_sha, scan_at, changed
+
+
 class BypassDecision(BaseModel):
     note: Optional[str] = Field(default=None, max_length=1000)
+    expected_commit_sha: Optional[str] = Field(default=None, max_length=64)
+    acknowledge_context_change: bool = False
 
 
 class BypassResponse(BaseModel):
@@ -46,11 +78,16 @@ class BypassResponse(BaseModel):
     decided_by: Optional[str] = None
     decision_note: Optional[str] = None
     expires_at: Optional[datetime] = None
+    pending_expires_at: Optional[datetime] = None
+    latest_commit_sha: Optional[str] = None
+    latest_scan_at: Optional[datetime] = None
+    context_changed: bool = False
     created_at: datetime
     decided_at: Optional[datetime] = None
 
 
-def _out(row: GateBypassRequest, repo_name: str | None = None) -> BypassResponse:
+def _out(row: GateBypassRequest, repo_name: str | None = None, db=None) -> BypassResponse:
+    commit_sha, scan_at, changed = _repo_context(db, row) if db is not None else (None, None, False)
     return BypassResponse(
         id=row.id,
         repository_id=row.repository_id,
@@ -61,6 +98,10 @@ def _out(row: GateBypassRequest, repo_name: str | None = None) -> BypassResponse
         decided_by=row.decided_by,
         decision_note=row.decision_note,
         expires_at=_as_utc(row.expires_at),
+        pending_expires_at=_pending_deadline(row) if row.status == "PENDING" else None,
+        latest_commit_sha=commit_sha,
+        latest_scan_at=scan_at,
+        context_changed=changed,
         created_at=_as_utc(row.created_at) or _now(),
         decided_at=_as_utc(row.decided_at),
     )
@@ -88,15 +129,23 @@ def expire_stale_bypasses(db) -> int:
     now = _now()
     rows = (
         db.query(GateBypassRequest)
-        .filter(GateBypassRequest.status == "APPROVED", GateBypassRequest.expires_at.isnot(None))
+        .filter(GateBypassRequest.status.in_(["APPROVED", "PENDING"]))
         .all()
     )
     expired_count = 0
     for r in rows:
-        exp = _as_utc(r.expires_at)
-        if exp is not None and exp < now:
-            r.status = "EXPIRED"
-            expired_count += 1
+        if r.status == "APPROVED":
+            exp = _as_utc(r.expires_at)
+            if exp is not None and exp < now:
+                r.status = "EXPIRED"
+                expired_count += 1
+        elif r.status == "PENDING":
+            deadline = _pending_deadline(r)
+            if deadline is not None and deadline < now:
+                r.status = "EXPIRED"
+                r.decided_at = now
+                r.decision_note = (r.decision_note or "Solicitud pendiente expirada por tiempo límite.")
+                expired_count += 1
     return expired_count
 
 
@@ -154,7 +203,7 @@ def list_bypasses(
             if r.repository_id and r.repository_id not in names:
                 repo = db.get(Repository, r.repository_id)
                 names[r.repository_id] = repo.name if repo else None
-        return [_out(r, names.get(r.repository_id)) for r in rows]
+        return [_out(r, names.get(r.repository_id), db) for r in rows]
     finally:
         db.close()
 
@@ -202,7 +251,7 @@ def create_bypass(body: BypassCreate, ws: WorkspaceCtx = Depends(require_ws_writ
         )
         db.commit()
         db.refresh(row)
-        return _out(row, repo_name)
+        return _out(row, repo_name, db)
     finally:
         db.close()
 
@@ -215,21 +264,44 @@ def approve_bypass(bypass_id: str, body: BypassDecision | None = None, ws: Works
         raise HTTPException(status_code=403, detail="Solo el propietario o un administrador del espacio puede aprobar excepciones.")
     db = ws.session()
     try:
+        expire_stale_bypasses(db)
         row = db.get(GateBypassRequest, bypass_id)
         if not row or row.workspace_id != ws.id:
             raise HTTPException(status_code=404, detail="Solicitud no encontrada")
+        now = _now()
+        if row.status == "PENDING":
+            deadline = _pending_deadline(row)
+            if deadline is not None and deadline < now:
+                row.status = "EXPIRED"
+                row.decided_at = now
+                db.commit()
+                raise HTTPException(status_code=410, detail="La solicitud de excepción expiró antes de ser aprobada.")
         if row.status != "PENDING":
             raise HTTPException(status_code=409, detail=f"Estado actual: {row.status}")
-        now = _now()
+
+        commit_sha, _scan_at, context_changed = _repo_context(db, row)
+        expected_sha = ((body.expected_commit_sha if body else None) or "").strip()
+        ack_change = bool(body.acknowledge_context_change) if body else False
+
+        if expected_sha and commit_sha and not commit_sha.startswith(expected_sha):
+            raise HTTPException(
+                status_code=409,
+                detail=f"El commit del repositorio cambió ({commit_sha[:8]} != {expected_sha[:8]}). Revisa el nuevo escaneo antes de aprobar.",
+            )
+        if context_changed and not ack_change:
+            sha_label = commit_sha[:8] if commit_sha else "nuevo escaneo"
+            raise HTTPException(
+                status_code=409,
+                detail=f"El contexto del repositorio cambió desde la solicitud ({sha_label}). Confirma explícitamente el cambio antes de aprobar.",
+            )
+
         created = _as_utc(row.created_at)
         exp = _as_utc(row.expires_at)
         if created and exp and exp > created:
             duration = exp - created
             new_exp = now + duration
-        elif not exp or exp < now:
-            new_exp = now + timedelta(hours=24)
         else:
-            new_exp = exp
+            new_exp = now + timedelta(hours=24)
         row.status = "APPROVED"
         row.decided_by = email
         row.decided_at = now
@@ -247,7 +319,7 @@ def approve_bypass(bypass_id: str, body: BypassDecision | None = None, ws: Works
         )
         db.commit()
         db.refresh(row)
-        return _out(row, repo.name if repo else None)
+        return _out(row, repo.name if repo else None, db)
     finally:
         db.close()
 
@@ -275,7 +347,7 @@ def reject_bypass(bypass_id: str, body: BypassDecision | None = None, ws: Worksp
         _append_audit(db, email, "GATE_BYPASS_REJECTED", target, f"Bypass {row.id[:8]}… rechazado{note_suffix}")
         db.commit()
         db.refresh(row)
-        return _out(row, repo.name if repo else None)
+        return _out(row, repo.name if repo else None, db)
     finally:
         db.close()
 
@@ -318,6 +390,6 @@ def revoke_bypass(bypass_id: str, body: BypassDecision | None = None, ws: Worksp
         )
         db.commit()
         db.refresh(row)
-        return _out(row, repo.name if repo else None)
+        return _out(row, repo.name if repo else None, db)
     finally:
         db.close()

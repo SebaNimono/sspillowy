@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -60,7 +60,7 @@ class _ScanListScreenState extends State<ScanListScreen> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final token =
-          prefs.getString('jwt_token') ?? prefs.getString('session_id');
+          await ApiClient.readStoredToken();
 
       if (token == null || token.isEmpty || token.startsWith('token_')) {
         if (mounted) {
@@ -81,8 +81,7 @@ class _ScanListScreenState extends State<ScanListScreen> {
         responseData = res.data;
       } on DioException catch (e) {
         if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
-          await prefs.remove('jwt_token');
-          await prefs.remove('session_id');
+          await ApiClient().clearAuthToken();
           await prefs.setBool('is_logged_in', false);
           if (mounted) {
             setState(() => _isLoading = false);
@@ -433,12 +432,7 @@ class _ScanListScreenState extends State<ScanListScreen> {
                                                         bottomSheetContext);
 
                                                     try {
-                                                      final prefs =
-                                                          await SharedPreferences
-                                                              .getInstance();
-                                                      final token =
-                                                          prefs.getString(
-                                                              'jwt_token');
+                                                      final token = await ApiClient.readStoredToken();
 
                                                       if (token != null &&
                                                           token.isNotEmpty) {
@@ -567,12 +561,7 @@ class _ScanListScreenState extends State<ScanListScreen> {
                                                         bottomSheetContext);
 
                                                     try {
-                                                      final prefs =
-                                                          await SharedPreferences
-                                                              .getInstance();
-                                                      final token =
-                                                          prefs.getString(
-                                                              'jwt_token');
+                                                      final token = await ApiClient.readStoredToken();
 
                                                       if (token != null &&
                                                           token.isNotEmpty) {
@@ -807,17 +796,27 @@ class _ScanListScreenState extends State<ScanListScreen> {
                             margin: const EdgeInsets.only(bottom: 12),
                             child: ListTile(
                               leading: CircleAvatar(
-                                backgroundColor: scan.status == 'EXEMPTED'
-                                    ? Colors.amber.shade800
-                                    : scan.status == 'BLOCKED'
-                                        ? Colors.red.shade800
-                                        : Colors.green.shade700,
+                                backgroundColor: () {
+                                  final st = scan.status.toUpperCase();
+                                  final sev = (scan.severity ?? '').toUpperCase();
+                                  if (st == 'EXEMPTED') return Colors.amber.shade800;
+                                  if (st == 'BLOCKED') return Colors.red.shade900;
+                                  if (sev == 'CRITICAL') return Colors.red.shade700;
+                                  if (sev == 'HIGH') return Colors.deepOrange.shade600;
+                                  if (sev == 'MEDIUM') return Colors.amber.shade700;
+                                  if (sev == 'LOW') return Colors.blue.shade700;
+                                  return Colors.green.shade700;
+                                }(),
                                 child: Icon(
                                   scan.status == 'EXEMPTED'
                                       ? Icons.shield_outlined
                                       : scan.status == 'BLOCKED'
                                           ? Icons.block
-                                          : Icons.security,
+                                          : (scan.severity ?? '').toUpperCase() == 'CRITICAL'
+                                              ? Icons.gpp_bad
+                                              : (scan.severity ?? '').toUpperCase() == 'HIGH'
+                                                  ? Icons.warning_amber_rounded
+                                                  : Icons.security,
                                   color: Colors.white,
                                 ),
                               ),
@@ -854,3 +853,6 @@ class _ScanListScreenState extends State<ScanListScreen> {
     );
   }
 }
+
+
+

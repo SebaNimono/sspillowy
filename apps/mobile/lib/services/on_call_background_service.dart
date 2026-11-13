@@ -96,8 +96,7 @@ class OnCallBackgroundService {
       if (!isOnDuty) return;
 
       final sessionId = resolveStoredSession(
-        jwtToken: prefs.getString('jwt_token'),
-        sessionId: prefs.getString('session_id'),
+        jwtToken: await ApiClient.readStoredToken(), sessionId: await ApiClient.readStoredToken(),
       );
       if (sessionId == null || sessionId.isEmpty) return;
 

@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from database import SessionLocal, db_ping
-from models import AuditEvent, Finding, Repository
+from models import AuditEvent, Finding, Repository, Scan
 from pillow_agent import PILLOW_DAILY_CREDITS, _consume_credit, _get_quota, call_gemini
 from semgrep_scan import ACTIVE_STATUSES, _refresh_repo_counters, relative_file_path
 from workspaces import WorkspaceCtx, require_ws, require_ws_write
@@ -174,18 +174,27 @@ def _audit(db, action: str, target: str, detail: str, actor: str, finding_id: st
     )
 
 
-def finding_fingerprint(f: Finding) -> str:
+def _evidence_digest(f: Finding) -> str:
+    import hashlib
+    raw = f"{f.line_number or 0}|{(f.cwe or '').strip()}|{(f.description or '').strip()}"
+    return hashlib.sha256(raw.encode("utf-8", errors="ignore")).hexdigest()[:24]
+
+
+def finding_fingerprint(f: Finding, branch: Optional[str] = None) -> str:
     path = (relative_file_path(f.file_path) or "").replace("\\", "/").lstrip("./")
-    return f"{(f.engine or '').lower()}|{f.title or ''}|{path}"
+    loc = str(f.line_number or 0)
+    cwe = (f.cwe or "").strip().upper()
+    br = (branch or "").strip()
+    return f"{br}|{(f.engine or '').lower()}|{f.title or ''}|{path}|{loc}|{cwe}"
 
 
 def carry_forward_triage(db, *, repo_id: str, scan_id: str) -> int:
-    """Copia triaje IA y decisiones (falso positivo, riesgo aceptado) de escaneos anteriores al nuevo.
-
-    Sin esto cada re-escaneo crea filas nuevas y se pierde el trabajo de triaje ya hecho.
-    Además marca como SUPERSEDED las filas previas de Falso Positivo / Riesgo Aceptado que fueron
-    reemplazadas en el nuevo escaneo para no duplicarlas en la matriz.
+    """Copia triaje IA y decisiones (falso positivo, riesgo aceptado) solo dentro de la misma rama,
+    ubicación exacta y evidencia sin cambios. Si la evidencia cambió, exige revisión (IN_REVIEW).
     """
+    current_scan = db.get(Scan, scan_id)
+    current_branch = ((current_scan.branch if current_scan else None) or "main").strip()
+
     new_rows = (
         db.query(Finding)
         .filter(Finding.repository_id == repo_id, Finding.scan_id == scan_id)
@@ -193,11 +202,24 @@ def carry_forward_triage(db, *, repo_id: str, scan_id: str) -> int:
     )
     if not new_rows:
         return 0
+
+    same_branch_scan_ids = [
+        sid for (sid,) in db.query(Scan.id)
+        .filter(
+            Scan.repository_id == repo_id,
+            Scan.id != scan_id,
+            Scan.branch == current_branch,
+        )
+        .all()
+    ]
+    if not same_branch_scan_ids:
+        return 0
+
     prior_rows = (
         db.query(Finding)
         .filter(
             Finding.repository_id == repo_id,
-            Finding.scan_id != scan_id,
+            Finding.scan_id.in_(same_branch_scan_ids),
             Finding.status != "SUPERSEDED",
             (Finding.ai_triaged.is_(True)) | (Finding.status.in_(["FALSE_POSITIVE", "ACCEPTED_RISK"])),
         )
@@ -208,18 +230,19 @@ def carry_forward_triage(db, *, repo_id: str, scan_id: str) -> int:
     latest: dict[str, Finding] = {}
     by_fp: dict[str, list[Finding]] = {}
     for p in prior_rows:
-        fp = finding_fingerprint(p)
+        fp = finding_fingerprint(p, current_branch)
         latest.setdefault(fp, p)
         by_fp.setdefault(fp, []).append(p)
 
     carried = 0
     superseded_fps: set[str] = set()
     for f in new_rows:
-        fp = finding_fingerprint(f)
+        fp = finding_fingerprint(f, current_branch)
         prev = latest.get(fp)
         if not prev:
             continue
-        if prev.ai_triaged:
+        same_evidence = _evidence_digest(prev) == _evidence_digest(f)
+        if prev.ai_triaged and same_evidence:
             f.ai_triaged = True
             f.ai_verdict = prev.ai_verdict
             f.ai_confidence = prev.ai_confidence
@@ -228,8 +251,12 @@ def carry_forward_triage(db, *, repo_id: str, scan_id: str) -> int:
             f.ai_triaged_at = prev.ai_triaged_at
             f.ai_feedback = prev.ai_feedback
         if prev.status in ("FALSE_POSITIVE", "ACCEPTED_RISK") and f.status in ACTIVE_STATUSES:
-            f.status = prev.status
-            superseded_fps.add(fp)
+            if same_evidence:
+                f.status = prev.status
+                superseded_fps.add(fp)
+            else:
+                # La evidencia o línea cambió: no heredar aceptación automática, exigir nueva revisión
+                f.status = "IN_REVIEW"
         elif prev.ai_feedback == "ACCEPTED" and prev.ai_verdict in ("LIKELY_REAL", "NEEDS_REVIEW"):
             f.status = "IN_REVIEW"
         carried += 1
@@ -502,3 +529,4 @@ def fix_intel_decision(finding_id: str, body: DecisionBody, ws: WorkspaceCtx = D
         return _item(f, {repo.id: repo.name} if repo else {})
     finally:
         db.close()
+

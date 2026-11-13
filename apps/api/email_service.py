@@ -304,7 +304,7 @@ async def send_password_reset_email(*, to: str, name: str, reset_url: str) -> bo
     text = _password_reset_text(name, reset_url)
     ok = send_email_sync(to=to, subject=subject, text=text, html_body=html_body)
     if not ok and not mailer_configured():
-        print(f"[sspillowy] Email no configurado. Enlace de reset para {to}: {reset_url}")
+        print(f"[sspillowy] Email no configurado. Solicitud de reset generada para {to} (enlace omitido en logs por seguridad).")
     return ok
 
 

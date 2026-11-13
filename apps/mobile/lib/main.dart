@@ -142,28 +142,19 @@ class AuthRepository {
         final token = readSessionToken(response.data);
         if (token != null && token.isNotEmpty) {
           await apiClient.persistAuthToken(token);
-          await prefs.setString('jwt_token', token);
           await prefs.setString('user_email', email);
           await prefs.setString('primary_user_email', email);
           await prefs.setString('user_name', email.split('@').first);
           await prefs.setBool('is_logged_in', true);
+          await prefs.remove('persistent_scans_list_v4');
+          await prefs.remove('cached_security_bypasses');
+          await prefs.remove('persistent_chat_history');
+          await prefs.remove('persistent_audit_logs');
+          await prefs.remove('persistent_in_app_notifs');
           return true;
         }
       }
     } catch (_) {}
-
-    final savedEmail = prefs.getString('user_email');
-    final savedToken = prefs.getString('jwt_token');
-    if (savedEmail != null &&
-        savedEmail == email &&
-        savedToken != null &&
-        savedToken.isNotEmpty) {
-      await prefs.setBool('is_logged_in', true);
-      await prefs.setString('primary_user_email', email);
-      await prefs.setString('user_name', email.split('@').first);
-      apiClient.setAuthToken(savedToken);
-      return true;
-    }
 
     return false;
   }
@@ -203,17 +194,29 @@ class _SSPillowyAppState extends State<SSPillowyApp> {
   bool _isLoading = true;
   bool _isOnDuty = true;
 
+  StreamSubscription<void>? _sessionSub;
+
   @override
   void initState() {
     super.initState();
     _checkLoginStatus();
+    _sessionSub = ApiClient.sessionExpiredStream.listen((_) {
+      if (mounted && _isLoggedIn) {
+        _handleLogout();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _sessionSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _checkLoginStatus() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final token =
-          prefs.getString('jwt_token') ?? prefs.getString('session_id');
+      final token = await ApiClient.readStoredToken();
       final isLoggedInPref = prefs.getBool('is_logged_in') ?? false;
       final savedOnDuty = prefs.getBool('is_on_duty') ?? true;
 
@@ -245,13 +248,17 @@ class _SSPillowyAppState extends State<SSPillowyApp> {
   Future<void> _handleLogout() async {
     try {
       await OnCallBackgroundService.stopIfRunning();
+      await ApiClient().clearAuthToken();
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('jwt_token');
-      await prefs.remove('session_id');
       await prefs.remove('user_email');
       await prefs.remove('primary_user_email');
       await prefs.remove('primary_user_name');
       await prefs.remove('user_name');
+      await prefs.remove('persistent_scans_list_v4');
+      await prefs.remove('cached_security_bypasses');
+          await prefs.remove('persistent_chat_history');
+          await prefs.remove('persistent_audit_logs');
+          await prefs.remove('persistent_in_app_notifs');
       await prefs.setBool('is_logged_in', false);
     } catch (_) {}
     if (!mounted) return;
@@ -879,7 +886,7 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
   void initState() {
     super.initState();
     _incidentRepository = IncidentRepository(_apiClient);
-    _bypassService = BypassService(Dio());
+    _bypassService = BypassService(_apiClient.dio);
     _loadPersistentAuditLogs();
     OnCallBackgroundService.ensureStarted();
     _loadNotificationsFromApiAndPrefs(triggerSystemPush: false);
@@ -904,7 +911,7 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
     super.dispose();
   }
 
-  void _handleNotificationPayload(String payload) {
+  Future<void> _handleNotificationPayload(String payload) async {
     if (!mounted) return;
     if (payload.contains('bypass')) {
       final idMatch = RegExp(r'id=([^&]+)').firstMatch(payload);
@@ -921,8 +928,103 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
         );
       }
     } else if (payload.contains('finding')) {
+      final idMatch = RegExp(r'id=([^&]+)').firstMatch(payload);
+      final findingId = idMatch?.group(1);
       setState(() => _currentIndex = 0);
+      if (findingId != null && findingId.isNotEmpty) {
+        await _openFindingDetailFromServer(findingId);
+      }
     }
+  }
+
+  Future<void> _openFindingDetailFromServer(String findingId) async {
+    Map<String, dynamic>? findingData;
+    try {
+      final res = await _apiClient.get('/findings/$findingId');
+      if (res.statusCode == 200 && res.data is Map) {
+        final raw = Map<String, dynamic>.from(res.data as Map);
+        findingData = raw['data'] is Map
+            ? Map<String, dynamic>.from(raw['data'] as Map)
+            : raw;
+      }
+    } catch (_) {}
+
+    if (findingData == null) {
+      try {
+        final listRes = await _apiClient.get('/findings');
+        if (listRes.statusCode == 200 && listRes.data != null) {
+          final rawList = listRes.data is List
+              ? listRes.data as List
+              : (listRes.data is Map
+                  ? ((listRes.data['data'] ?? listRes.data['findings'] ?? []) as List)
+                  : []);
+          for (final item in rawList) {
+            if (item is Map && (item['id'] ?? '').toString() == findingId) {
+              findingData = Map<String, dynamic>.from(item);
+              break;
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: const Color(0xFF161B22),
+        title: Text(
+          findingData != null
+              ? (findingData['title'] ?? 'Hallazgo #$findingId').toString()
+              : 'Hallazgo #$findingId',
+          style: const TextStyle(color: Colors.white, fontSize: 16),
+        ),
+        content: findingData == null
+            ? const Text(
+                'No se pudo recuperar el detalle actualizado del hallazgo desde el servidor.',
+                style: TextStyle(color: Colors.white70, fontSize: 13),
+              )
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Severidad: ${(findingData['severity'] ?? 'N/A').toString().toUpperCase()}',
+                    style: const TextStyle(
+                        color: Colors.orangeAccent,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Estado actual: ${(findingData['status'] ?? 'OPEN').toString().toUpperCase()}',
+                    style: const TextStyle(color: Colors.white70, fontSize: 13),
+                  ),
+                  if ((findingData['repo'] ?? findingData['repository']) != null) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      'Repositorio: ${findingData['repo'] ?? findingData['repository']}',
+                      style: const TextStyle(color: Colors.white70, fontSize: 13),
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+                  Text(
+                    (findingData['summary'] ??
+                            findingData['description'] ??
+                            'Sin descripción adicional.')
+                        .toString(),
+                    style: const TextStyle(color: Colors.white60, fontSize: 12.5),
+                  ),
+                ],
+              ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: const Text('Cerrar'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _loadPersistentAuditLogs() async {
@@ -960,8 +1062,7 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
     }
 
     try {
-      final token =
-          prefs.getString('jwt_token') ?? prefs.getString('session_id');
+      final token = await ApiClient.readStoredToken();
       if (token != null && token.isNotEmpty) {
         _apiClient.setAuthToken(token);
       }
@@ -1125,8 +1226,7 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
     await _savePersistentNotifications();
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('jwt_token');
+      final token = await ApiClient.readStoredToken();
       if (token != null && token.isNotEmpty) {
         _apiClient.setAuthToken(token);
       }
@@ -1148,8 +1248,7 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
     await _savePersistentNotifications();
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('jwt_token');
+      final token = await ApiClient.readStoredToken();
       if (token != null && token.isNotEmpty) {
         _apiClient.setAuthToken(token);
       }
@@ -1372,8 +1471,7 @@ class _PillowChatScreenState extends State<PillowChatScreen> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final userEmail = prefs.getString('user_email') ?? '';
-      final token =
-          prefs.getString('jwt_token') ?? prefs.getString('session_id');
+      final token = await ApiClient.readStoredToken();
 
       if (token != null && token.isNotEmpty) {
         _apiClient.setAuthToken(token);
@@ -1636,8 +1734,8 @@ class _ScanListScreenState extends State<ScanListScreen> {
     final jsonStr = prefs.getString('persistent_scans_list_v4');
 
     try {
-      final token =
-          prefs.getString('jwt_token') ?? prefs.getString('session_id');
+      final prefs = await SharedPreferences.getInstance();
+      final token = await ApiClient.readStoredToken();
 
       if (token != null && token.isNotEmpty) {
         _apiClient.setAuthToken(token);
@@ -1652,8 +1750,7 @@ class _ScanListScreenState extends State<ScanListScreen> {
         responseData = res.data;
       } on DioException catch (e) {
         if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
-          await prefs.remove('jwt_token');
-          await prefs.remove('session_id');
+          await _apiClient.clearAuthToken();
           await prefs.setBool('is_logged_in', false);
           if (mounted) {
             setState(() => _isLoading = false);
@@ -2154,12 +2251,10 @@ class _ScanListScreenState extends State<ScanListScreen> {
                                                         bottomSheetContext);
 
                                                     try {
-                                                      final prefs =
                                                           await SharedPreferences
                                                               .getInstance();
                                                       final token =
-                                                          prefs.getString(
-                                                              'jwt_token');
+                                                          await ApiClient.readStoredToken();
 
                                                       if (token != null &&
                                                           token.isNotEmpty) {
@@ -2345,12 +2440,10 @@ class _ScanListScreenState extends State<ScanListScreen> {
                                                         bottomSheetContext);
 
                                                     try {
-                                                      final prefs =
                                                           await SharedPreferences
                                                               .getInstance();
                                                       final token =
-                                                          prefs.getString(
-                                                              'jwt_token');
+                                                          await ApiClient.readStoredToken();
 
                                                       if (token != null &&
                                                           token.isNotEmpty) {
@@ -2807,7 +2900,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _fetchUsersAndProfiles() async {
     final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('jwt_token') ?? prefs.getString('session_id');
+    final token = await ApiClient.readStoredToken();
 
     String activeEmail = prefs.getString('user_email') ?? '';
     String primaryEmail = prefs.getString('primary_user_email') ?? activeEmail;
@@ -2953,48 +3046,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         backgroundColor: const Color(0xFF161B22),
-        title: const Text('Solicitar eliminación de cuenta',
+        title: const Text('Eliminación de cuenta',
             style: TextStyle(color: Colors.white)),
         content: Text(
-          '¿Estás seguro de que deseas solicitar la eliminación definitiva de la cuenta $_activeUserEmail? Esta acción cancelará tu acceso y sincronizaciones.',
+          'La eliminación definitiva de la cuenta ($_activeUserEmail) no está habilitada directamente desde la app móvil.\n\nPara tramitar la baja real de tu cuenta y datos asociados, gestiónalo desde el portal web de SSPILLOWY o solicita la baja al administrador de tu organización.',
           style: const TextStyle(color: Colors.white70, fontSize: 13),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancelar'),
+            child: const Text('Cerrar'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () async {
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0EA5E9)),
+            onPressed: () {
               Navigator.pop(dialogContext);
-
-              bool success = false;
-              try {
-                final response = await _apiClient.post('/auth/logout', data: {
-                  'email': _activeUserEmail,
-                });
-                if (response.statusCode == 200 || response.statusCode == 201) {
-                  success = true;
-                }
-              } catch (_) {}
-
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      success
-                          ? 'Solicitud de eliminación procesada correctamente.'
-                          : 'Solicitud enviada al servidor backend.',
-                    ),
-                    backgroundColor: Colors.redAccent,
-                  ),
-                );
-
-                widget.onLogout();
-              }
+              _openWebUrl('https://sspillowy.com');
             },
-            child: const Text('Confirmar Solicitud',
+            child: const Text('Abrir portal web',
                 style: TextStyle(color: Colors.white)),
           ),
         ],
@@ -3242,5 +3312,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 }
+
+
+
+
+
+
+
+
+
+
 
 

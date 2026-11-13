@@ -796,8 +796,31 @@ def update_finding_status(
         if not finding or not ws.has_repo(finding.repository_id):
             raise HTTPException(status_code=404, detail="Hallazgo no encontrado")
         previous = finding.status
-        finding.status = payload.status.value
+        target_status = payload.status.value
         note = (payload.note or "").strip()
+        sev = (finding.severity or "").upper()
+
+        # Separar permiso de investigar (OPEN/IN_REVIEW) de aceptar riesgo / descartar (ACCEPTED_RISK/FALSE_POSITIVE)
+        if target_status in ("ACCEPTED_RISK", "FALSE_POSITIVE") and not ws.can_manage:
+            raise HTTPException(
+                status_code=403,
+                detail="Solo un propietario o administrador puede aceptar riesgos o marcar falsos positivos. Solicita una excepción de gate.",
+            )
+
+        # Exigir evidencia o justificación documentada para aceptar riesgo, descartar o cerrar hallazgos bloqueantes
+        if target_status in ("ACCEPTED_RISK", "FALSE_POSITIVE") and len(note) < 12:
+            raise HTTPException(
+                status_code=422,
+                detail="Debes documentar una justificación o evidencia detallada (mínimo 12 caracteres) para aceptar riesgo o marcar falso positivo.",
+            )
+
+        if target_status == "FIXED" and sev in ("CRITICAL", "HIGH") and len(note) < 12:
+            raise HTTPException(
+                status_code=422,
+                detail="Los hallazgos bloqueantes (CRITICAL/HIGH) requieren evidencia o referencia de verificación (mínimo 12 caracteres) para marcarse como FIXED.",
+            )
+
+        finding.status = target_status
         repo = db.get(Repository, finding.repository_id)
         _append_audit(
             db,

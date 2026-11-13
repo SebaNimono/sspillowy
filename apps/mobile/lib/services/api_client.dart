@@ -1,10 +1,16 @@
-﻿import "package:dio/dio.dart";
+import "dart:async";
+import "package:dio/dio.dart";
+import "package:flutter_secure_storage/flutter_secure_storage.dart";
 import "package:shared_preferences/shared_preferences.dart";
 
 import "auth_headers.dart";
 
 class ApiClient {
   static const String baseUrl = "https://api.sspillowy.com/api/v1";
+  static final StreamController<void> _sessionExpiredController = StreamController<void>.broadcast();
+  static Stream<void> get sessionExpiredStream => _sessionExpiredController.stream;
+  static const FlutterSecureStorage _secureStorage = FlutterSecureStorage();
+
   late final Dio dio;
   String? _memoryToken;
 
@@ -24,31 +30,25 @@ class ApiClient {
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
-          final prefs = await SharedPreferences.getInstance();
-          final sessionId = _memoryToken ??
-              resolveStoredSession(
-                jwtToken: prefs.getString("jwt_token"),
-                sessionId: prefs.getString("session_id"),
-              );
+          final sessionId = _memoryToken ?? await readStoredToken();
 
           if (sessionId != null && sessionId.isNotEmpty) {
             applySessionHeaders(options.headers, sessionId);
           } else {
-            // Fallback de desarrollo para evitar 401 en pruebas locales sin login
-            options.headers['Authorization'] = 'Bearer dev_session_token';
+            options.headers.remove('Authorization');
+            options.headers.remove('X-Session-Id');
           }
           handler.next(options);
         },
         onError: (DioException error, handler) async {
-          if (error.response?.statusCode == 401 ||
-              error.response?.statusCode == 403) {
-            final path = error.requestOptions.path;
-            if (path.contains('/auth/')) {
-              final prefs = await SharedPreferences.getInstance();
-              await prefs.remove("session_id");
-              await prefs.remove("jwt_token");
-              await prefs.remove("is_logged_in");
+          final status = error.response?.statusCode;
+          if (status == 401) {
+            await clearAuthToken();
+            if (!_sessionExpiredController.isClosed) {
+              _sessionExpiredController.add(null);
             }
+          } else if (status == 403 && error.requestOptions.path.contains('/auth/')) {
+            await clearAuthToken();
           }
           return handler.next(error);
         },
@@ -56,20 +56,81 @@ class ApiClient {
     );
   }
 
+  static Future<String?> readStoredToken() async {
+    try {
+      final secureJwt = await _secureStorage.read(key: "jwt_token");
+      final secureSession = await _secureStorage.read(key: "session_id");
+      final resolvedSecure = resolveStoredSession(
+        jwtToken: secureJwt,
+        sessionId: secureSession,
+      );
+      if (resolvedSecure != null && resolvedSecure.isNotEmpty) {
+        return resolvedSecure;
+      }
+
+      // Migración única desde SharedPreferences en texto plano hacia SecureStorage
+      final prefs = await SharedPreferences.getInstance();
+      final legacyToken = resolveStoredSession(
+        jwtToken: prefs.getString("jwt_token"),
+        sessionId: prefs.getString("session_id"),
+      );
+      if (legacyToken != null && legacyToken.isNotEmpty) {
+        await _secureStorage.write(key: "jwt_token", value: legacyToken);
+        await _secureStorage.write(key: "session_id", value: legacyToken);
+        await prefs.remove("jwt_token");
+        await prefs.remove("session_id");
+        return legacyToken;
+      }
+    } catch (_) {}
+    return null;
+  }
+
   void setAuthToken(String token) {
     final sessionId = token.trim();
     _memoryToken = sessionId.isEmpty ? null : sessionId;
     if (_memoryToken != null) {
       applySessionHeaders(dio.options.headers, _memoryToken!);
+    } else {
+      dio.options.headers.remove('Authorization');
+      dio.options.headers.remove('X-Session-Id');
     }
   }
 
   Future<void> persistAuthToken(String token) async {
     final sessionId = token.trim();
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString("jwt_token", sessionId);
-    await prefs.setString("session_id", sessionId);
+    await prefs.remove("jwt_token");
+    await prefs.remove("session_id");
+    await prefs.remove("auth_token");
+
+    if (sessionId.isEmpty) {
+      await clearAuthToken();
+      return;
+    }
+
+    await _secureStorage.write(key: "jwt_token", value: sessionId);
+    await _secureStorage.write(key: "session_id", value: sessionId);
     setAuthToken(sessionId);
+  }
+
+  Future<void> clearAuthToken() async {
+    _memoryToken = null;
+    dio.options.headers.remove('Authorization');
+    dio.options.headers.remove('X-Session-Id');
+    try {
+      await _secureStorage.delete(key: "jwt_token");
+      await _secureStorage.delete(key: "session_id");
+    } catch (_) {}
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove("jwt_token");
+      await prefs.remove("session_id");
+      await prefs.remove("auth_token");
+      await prefs.remove("cached_security_bypasses");
+      await prefs.remove("persistent_chat_history");
+      await prefs.remove("persistent_scans_list_v4");
+      await prefs.setBool("is_logged_in", false);
+    } catch (_) {}
   }
 
   Future<Response> get(
@@ -140,3 +201,5 @@ class ApiClient {
     );
   }
 }
+
+
