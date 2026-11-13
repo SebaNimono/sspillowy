@@ -893,10 +893,40 @@
   padding: 1.15rem 1.3rem !important;
 }
 
+.ss-dash .dw-head {
+  flex-wrap: wrap;
+  row-gap: 0.45rem;
+}
+
 .ss-dash .dw-head .card-title {
   font-size: 0.95rem;
   font-weight: 600;
   color: #111827;
+}
+
+.ss-dash .dw-head-right {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.ss-dash .dash-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.22rem 0.62rem !important;
+  border-radius: 8px !important;
+  font-size: 0.7rem !important;
+  font-weight: 700 !important;
+  line-height: 1.25 !important;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+}
+
+.ss-dash .dash-health-center .dash-health-score {
+  font-family: var(--font-mono);
+  font-size: 1.8rem !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
 }
 
 .ss-chart-pill {

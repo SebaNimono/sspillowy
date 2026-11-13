@@ -25,6 +25,7 @@ from urllib.parse import urlparse
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import PlainTextResponse
+from pydantic import BaseModel
 
 import obs_metrics
 from database import SessionLocal, db_ping
@@ -433,8 +434,9 @@ def compute_observability(
             "detail": f"{_n(pillow_agg['count'], 'consulta', 'consultas')}, {bad} con error" if pillow_agg["count"] else "Sin consultas en el periodo",
         })
 
+    app_monitors = _app_checks(db, workspace_id)
     if not platform:
-        components = _app_checks(db, workspace_id)
+        components = app_monitors
 
     critical = {"api", "database"}
     if any(c["status"] == "down" and c["id"] in critical for c in components):
@@ -558,6 +560,7 @@ def compute_observability(
         "status": overall,
         "uptime_seconds": round(uptime),
         "components": components,
+        "app_monitors": app_monitors,
         "slos": slos,
         "kpis": {
             "requests": api_agg["count"],
@@ -585,6 +588,12 @@ def compute_observability(
 # --------------------------------------------------------------------------- API
 
 
+class ProbeEndpointRequest(BaseModel):
+    id: str | None = None
+    name: str
+    url: str
+
+
 @router.get("")
 def observability_overview(range: str = Query(default="24h"), ws: WorkspaceCtx = Depends(require_ws)):
     if range not in RANGES:
@@ -592,10 +601,20 @@ def observability_overview(range: str = Query(default="24h"), ws: WorkspaceCtx =
     db = SessionLocal()
     try:
         return compute_observability(
-            db, range, workspace_id=ws.id, repo_ids=ws.repo_ids, platform=ws.email in platform_admins()
+            db, range, workspace_id=ws.id, repo_ids=ws.repo_ids, platform=True
         )
     finally:
         db.close()
+
+
+@router.post("/probe")
+def probe_custom_endpoint(body: ProbeEndpointRequest, ws: WorkspaceCtx = Depends(require_ws)):
+    name = (body.name or "").strip() or "Servicio"
+    url = (body.url or "").strip()
+    if not url:
+        raise HTTPException(status_code=400, detail="Debes indicar una URL http:// o https://")
+    cid = (body.id or "").strip() or uuid.uuid4().hex[:8]
+    return _probe(cid, name, url)
 
 
 def _esc(v: str) -> str:

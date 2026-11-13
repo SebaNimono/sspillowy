@@ -390,6 +390,143 @@
   gap: 0.35rem;
 }
 
+.ob-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin: 0 0 0.65rem;
+}
+
+.ob-section-head .ob-section-title {
+  margin: 0;
+}
+
+.ob-add-monitor-card {
+  margin: 0 0 1rem;
+  padding: 1rem 1.15rem;
+  border: 1px solid #bfdbfe;
+  background: #f8fafc;
+  border-radius: 12px;
+}
+
+.ob-add-monitor-tabs {
+  display: inline-flex;
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+  background: #e2e8f0;
+  padding: 0.2rem;
+  border-radius: 8px;
+}
+
+.ob-add-monitor-tab {
+  border: none;
+  background: transparent;
+  padding: 0.32rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+}
+
+.ob-add-monitor-tab.is-active {
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.ob-add-monitor-form {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr auto auto;
+  gap: 0.6rem;
+  align-items: end;
+}
+
+.ob-add-monitor-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.ob-add-monitor-field label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.ob-add-monitor-field input,
+.ob-add-monitor-field select {
+  padding: 0.48rem 0.68rem;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  font-size: 0.84rem;
+  color: #0f172a;
+}
+
+.ob-component-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.ob-component-remove {
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 0.15rem 0.3rem;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  line-height: 1;
+}
+
+.ob-component-remove:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.ob-cloud-modes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-bottom: 0.75rem;
+}
+
+.ob-cloud-mode {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0.65rem 0.8rem;
+}
+
+.ob-cloud-mode strong {
+  display: block;
+  font-size: 0.8rem;
+  color: #0f172a;
+  margin-bottom: 0.2rem;
+}
+
+.ob-cloud-mode small {
+  display: block;
+  font-size: 0.75rem;
+  color: #475569;
+  line-height: 1.4;
+}
+
+@media (max-width: 1100px) {
+  .ob-add-monitor-form {
+    grid-template-columns: 1fr;
+  }
+  .ob-cloud-modes {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 1100px) {
   .ob-kpis {
     grid-template-columns: repeat(3, minmax(0, 1fr));

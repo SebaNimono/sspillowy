@@ -2977,17 +2977,20 @@ a.cookie-inline {
 .dash-chip {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.3rem;
-  font-family: var(--font-mono);
-  font-size: 0.65rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
   color: #0969da;
   background: #ddf4ff;
   border: 1px solid #54aeff66;
-  border-radius: 999px;
-  padding: 0.2rem 0.55rem;
+  border-radius: 8px;
+  padding: 0.22rem 0.6rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1.25;
 }
 
 .dash-chip.is-live {
@@ -3060,17 +3063,20 @@ a.cookie-inline {
   pointer-events: none;
 }
 
+.dash-health-center .dash-health-score,
 .dash-health-score {
-  font-size: 1.65rem;
-  font-weight: 800;
-  color: #1f2328;
-  line-height: 1;
+  font-size: 1.75rem !important;
+  font-weight: 800 !important;
+  color: #111827 !important;
+  line-height: 1.05 !important;
+  font-family: var(--font-sans) !important;
 }
 
-.dash-health-center span {
+.dash-health-center > span:not(.dash-health-score) {
   font-size: 0.72rem;
   color: #656d76;
   font-family: var(--font-mono);
+  margin-top: 2px;
 }
 
 .dash-severity {

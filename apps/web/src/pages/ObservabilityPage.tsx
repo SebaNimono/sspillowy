@@ -18,14 +18,28 @@ import {
   Download,
   ExternalLink,
   Gauge,
+  Globe,
   MinusCircle,
+  Plus,
   RefreshCw,
   Server,
+  Trash2,
   XCircle,
 } from 'lucide-react';
 import { Header } from '../components/Header';
 import { SidebarState } from '../components/Sidebar';
-import { ObsComponentStatus, ObsRange, ObsSlo, ObservabilityData, fetchObservability } from '../api/client';
+import {
+  ObsComponentStatus,
+  ObsMonitorItem,
+  ObsRange,
+  ObsSlo,
+  ObservabilityData,
+  Repository,
+  fetchObservability,
+  fetchRepositories,
+  probeObservabilityEndpoint,
+  updateRepository,
+} from '../api/client';
 import { buildGrafanaDashboard } from '../config/grafanaDashboard';
 import { usePillowPageContext } from '../config/pillowContext';
 import { formatDateTime } from '../utils/formatDateTime';
@@ -95,6 +109,25 @@ function download(name: string, content: string) {
   URL.revokeObjectURL(url);
 }
 
+const CUSTOM_MONITORS_KEY = 'sspillowy_custom_obs_monitors_v1';
+
+interface SavedCustomMonitor {
+  id: string;
+  name: string;
+  url: string;
+}
+
+function loadSavedCustomMonitors(): SavedCustomMonitor[] {
+  try {
+    const raw = localStorage.getItem(CUSTOM_MONITORS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 export const ObservabilityPage: React.FC<PageProps> = ({ onNavigate, ...headerProps }) => {
   const { t } = useI18n();
   const [range, setRange] = useState<ObsRange>(() => {
@@ -102,22 +135,107 @@ export const ObservabilityPage: React.FC<PageProps> = ({ onNavigate, ...headerPr
     return RANGES.some((r) => r.id === saved) ? (saved as ObsRange) : '24h';
   });
   const [data, setData] = useState<ObservabilityData | null>(null);
+  const [repos, setRepos] = useState<Repository[]>([]);
+  const [savedMonitors, setSavedMonitors] = useState<SavedCustomMonitor[]>(() => loadSavedCustomMonitors());
+  const [customResults, setCustomResults] = useState<ObsMonitorItem[]>([]);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [addMode, setAddMode] = useState<'repo' | 'custom'>('repo');
+  const [selectedRepoId, setSelectedRepoId] = useState('');
+  const [newMonitorName, setNewMonitorName] = useState('');
+  const [newMonitorUrl, setNewMonitorUrl] = useState('');
+  const [savingMonitor, setSavingMonitor] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [routeSort, setRouteSort] = useState<'count' | 'p95' | 'errors'>('count');
   const [copied, setCopied] = useState(false);
 
+  const probeCustomList = useCallback(async (items: SavedCustomMonitor[]) => {
+    if (!items.length) {
+      setCustomResults([]);
+      return;
+    }
+    const results = await Promise.all(
+      items.map(async (item) => {
+        try {
+          return await probeObservabilityEndpoint({ id: item.id, name: item.name, url: item.url });
+        } catch (err) {
+          return {
+            id: `app-${item.id}`,
+            name: item.name,
+            url: item.url,
+            status: 'down' as ObsComponentStatus,
+            detail: err instanceof Error ? err.message : 'No se pudo verificar el endpoint',
+          };
+        }
+      }),
+    );
+    setCustomResults(results);
+  }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setData(await fetchObservability(range));
+      const [obs, repoList] = await Promise.all([
+        fetchObservability(range),
+        fetchRepositories().catch(() => [] as Repository[]),
+      ]);
+      setData(obs);
+      setRepos(repoList);
+      if (!selectedRepoId && repoList.length > 0) {
+        setSelectedRepoId(repoList[0].id);
+      }
+      await probeCustomList(loadSavedCustomMonitors());
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo cargar el estado de la plataforma');
     } finally {
       setLoading(false);
     }
-  }, [range]);
+  }, [range, probeCustomList, selectedRepoId]);
+
+  const handleAddMonitor = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanUrl = newMonitorUrl.trim();
+    if (!cleanUrl) return;
+    setSavingMonitor(true);
+    try {
+      if (addMode === 'repo' && selectedRepoId) {
+        await updateRepository(selectedRepoId, { dast_url: cleanUrl });
+        await load();
+      } else {
+        const cleanName = newMonitorName.trim() || new URL(cleanUrl).hostname;
+        const id = `custom-${Date.now().toString(36)}`;
+        const next = [...savedMonitors, { id, name: cleanName, url: cleanUrl }];
+        setSavedMonitors(next);
+        localStorage.setItem(CUSTOM_MONITORS_KEY, JSON.stringify(next));
+        await probeCustomList(next);
+      }
+      setNewMonitorName('');
+      setNewMonitorUrl('');
+      setShowAddForm(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo agregar el servicio a monitorear');
+    } finally {
+      setSavingMonitor(false);
+    }
+  };
+
+  const handleRemoveMonitor = async (itemId: string) => {
+    const rawId = itemId.replace(/^app-/, '');
+    if (rawId.startsWith('custom-')) {
+      const next = savedMonitors.filter((m) => m.id !== rawId);
+      setSavedMonitors(next);
+      localStorage.setItem(CUSTOM_MONITORS_KEY, JSON.stringify(next));
+      setCustomResults((prev) => prev.filter((r) => r.id !== itemId));
+      return;
+    }
+    try {
+      await updateRepository(rawId, { dast_url: '' });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo quitar la URL del repositorio');
+    }
+  };
 
   useEffect(() => {
     load();
@@ -234,29 +352,137 @@ export const ObservabilityPage: React.FC<PageProps> = ({ onNavigate, ...headerPr
 
       {data && (
         <>
-          {data.platform_view ? (
-            <div className={`ob-banner ${OVERALL[data.status].tone}`}>
-              <Activity size={18} />
-              <strong>{OVERALL[data.status].text}</strong>
-              <span>En línea desde hace {fmtUptime(data.uptime_seconds)}</span>
-            </div>
-          ) : (
+          <div className={`ob-banner ${OVERALL[data.status].tone}`}>
+            <Activity size={18} />
+            <strong>{OVERALL[data.status].text}</strong>
+            <span>En línea desde hace {fmtUptime(data.uptime_seconds)}</span>
+          </div>
+
+          <div className="ob-section-head">
             <h2 className="ob-section-title">
-              <Activity size={16} /> Disponibilidad de tus aplicaciones
+              <Globe size={16} /> Tus repositorios, servicios y endpoints monitoreados
             </h2>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ fontSize: '0.78rem', padding: '0.35rem 0.75rem' }}
+              onClick={() => setShowAddForm((v) => !v)}
+            >
+              <Plus size={14} /> {showAddForm ? 'Cerrar formulario' : 'Agregar servicio / URL a monitorear'}
+            </button>
+          </div>
+
+          {showAddForm && (
+            <form className="ob-add-monitor-card" onSubmit={handleAddMonitor}>
+              <div className="ob-add-monitor-tabs" role="tablist">
+                <button
+                  type="button"
+                  className={`ob-add-monitor-tab ${addMode === 'repo' ? 'is-active' : ''}`}
+                  onClick={() => setAddMode('repo')}
+                >
+                  Vincular a un repositorio tuyo
+                </button>
+                <button
+                  type="button"
+                  className={`ob-add-monitor-tab ${addMode === 'custom' ? 'is-active' : ''}`}
+                  onClick={() => setAddMode('custom')}
+                >
+                  Servicio o URL personalizada
+                </button>
+              </div>
+
+              <div className="ob-add-monitor-form">
+                {addMode === 'repo' ? (
+                  <div className="ob-add-monitor-field">
+                    <label>Repositorio</label>
+                    <select
+                      value={selectedRepoId}
+                      onChange={(e) => setSelectedRepoId(e.target.value)}
+                      required
+                    >
+                      {repos.length === 0 && <option value="">Sin repositorios conectados</option>}
+                      {repos.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.name} {r.dast_url ? `(actual: ${r.dast_url})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div className="ob-add-monitor-field">
+                    <label>Nombre del servicio / microservicio</label>
+                    <input
+                      type="text"
+                      placeholder="Ej. API Producción, Auth Service, Web..."
+                      value={newMonitorName}
+                      onChange={(e) => setNewMonitorName(e.target.value)}
+                      required
+                    />
+                  </div>
+                )}
+
+                <div className="ob-add-monitor-field">
+                  <label>URL pública a monitorear (HTTP / HTTPS)</label>
+                  <input
+                    type="url"
+                    placeholder="https://mi-app.com/health"
+                    value={newMonitorUrl}
+                    onChange={(e) => setNewMonitorUrl(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <button type="submit" className="btn btn-primary" disabled={savingMonitor}>
+                  {savingMonitor ? 'Verificando...' : 'Guardar y monitorear'}
+                </button>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowAddForm(false)}>
+                  Cancelar
+                </button>
+              </div>
+            </form>
           )}
 
-          {!data.platform_view && data.components.length === 0 && (
-            <div className="card ob-empty">
-              <p>
-                Aún no monitoreas ninguna aplicación. Al agregar un repositorio, indica la URL donde está publicada tu
-                aplicación y aquí verás si responde y cuánto tarda.
+          {[...(data.app_monitors ?? []), ...customResults].length === 0 ? (
+            <div className="card ob-empty" style={{ marginBottom: '1.25rem', padding: '1.15rem 1.4rem' }}>
+              <p style={{ margin: '0 0 0.6rem' }}>
+                Puedes monitorear la disponibilidad y latencia en vivo de cualquiera de tus repositorios desplegados o agregar
+                tus propios servicios/endpoints con el botón <strong>+ Agregar servicio / URL a monitorear</strong>.
               </p>
-              <button type="button" className="btn btn-primary" onClick={() => onNavigate?.('repositories')}>
-                Ir a repositorios
+              <button type="button" className="btn btn-primary" onClick={() => setShowAddForm(true)}>
+                <Plus size={14} /> Agregar primer servicio o repositorio
               </button>
             </div>
+          ) : (
+            <section className="ob-components">
+              {[...(data.app_monitors ?? []), ...customResults].map((c) => {
+                const m = COMPONENT_META[c.status];
+                return (
+                  <div key={c.id} className={`ob-component is-${c.status}`}>
+                    <m.Icon size={16} color={m.color} />
+                    <div>
+                      <strong>{c.name}</strong>
+                      <small>{c.detail}</small>
+                    </div>
+                    <div className="ob-component-actions">
+                      <span style={{ color: m.color, fontSize: '0.72rem', fontWeight: 700 }}>{m.label}</span>
+                      <button
+                        type="button"
+                        className="ob-component-remove"
+                        title="Quitar monitoreo"
+                        onClick={() => handleRemoveMonitor(c.id)}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </section>
           )}
+
+          <h2 className="ob-section-title">
+            <Activity size={16} /> Componentes de la plataforma y motores DevSecOps
+          </h2>
 
           <section className="ob-components">
             {data.components.map((c) => {
@@ -492,29 +718,47 @@ export const ObservabilityPage: React.FC<PageProps> = ({ onNavigate, ...headerPr
 
           {data.platform_view && (
           <div className="ob-grid">
-            <div className="card ob-connect">
+            <div className="card ob-connect" style={{ gridColumn: '1 / -1' }}>
               <h3>
-                <Server size={15} /> Prometheus y Grafana
+                <Server size={15} /> Monitoreo Avanzado: Prometheus y Grafana (En la nube o local)
               </h3>
               <p>
-                La plataforma publica sus métricas en formato Prometheus. Con ellas puedes guardar el historial completo, crear alertas y
-                armar tus propios paneles en Grafana.
+                Para monitoreo rápido tienes el panel superior donde puedes agregar tus repositorios y URLs. Si necesitas
+                <strong> métricas avanzadas de infraestructura, retención histórica larga o alertas complejas</strong>, SSPILLOWY
+                expone un endpoint nativo de <strong>Prometheus</strong> que puedes conectar a <strong>Grafana</strong> de dos formas:
               </p>
+              <div className="ob-cloud-modes">
+                <div className="ob-cloud-mode">
+                  <strong>1. 100% en la Nube (Sin descargar nada · Recomendado)</strong>
+                  <small>
+                    Usando <strong>Grafana Cloud</strong> (igual que con tu Supabase): incluye <em>Hosted Prometheus</em> gratis en la nube.
+                    No necesitas instalar ni descargar Prometheus en tu PC.
+                  </small>
+                </div>
+                <div className="ob-cloud-mode">
+                  <strong>2. Descargado / Self-Hosted (Docker o binario)</strong>
+                  <small>
+                    También puedes descargar el binario oficial desde <code>prometheus.io</code> o correr{' '}
+                    <code>docker run prom/prometheus</code> en tu propio servidor pegando el bloque de abajo en{' '}
+                    <code>prometheus.yml</code>.
+                  </small>
+                </div>
+              </div>
               <div className="ob-connect-status">
                 <span className="ob-dot" style={{ background: data.integrations.prometheus ? '#1a7f37' : '#8c959f' }} />
-                {data.integrations.prometheus ? 'Métricas publicadas en ' : 'Métricas desactivadas. Pide al administrador que las habilite para '}
+                {data.integrations.prometheus ? 'Métricas publicadas en ' : 'Endpoint de métricas disponible en '}
                 <code>{data.integrations.metrics_url}</code>
               </div>
               <pre className="ob-code">{scrapeConfig}</pre>
               <div className="ob-connect-actions">
                 <button type="button" className="btn btn-secondary" onClick={copyConfig}>
-                  <Copy size={15} /> {copied ? 'Copiado' : 'Copiar configuración'}
+                  <Copy size={15} /> {copied ? 'Copiado' : 'Copiar configuración prometheus.yml'}
                 </button>
                 <button type="button" className="btn btn-secondary" onClick={() => download('sspillowy-grafana.json', buildGrafanaDashboard())}>
-                  <Download size={15} /> Panel para Grafana
+                  <Download size={15} /> Descargar Dashboard JSON para Grafana
                 </button>
               </div>
-              <small className="ob-muted">El panel se importa en Grafana desde Dashboards → New → Import y se conecta a tu fuente de Prometheus.</small>
+              <small className="ob-muted">El panel JSON se importa en Grafana desde Dashboards → New → Import y se conecta a tu fuente de datos Prometheus.</small>
             </div>
           </div>
           )}

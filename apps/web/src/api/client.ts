@@ -1090,20 +1090,23 @@ export interface ObsSlo {
   status: 'ok' | 'at_risk' | 'breached' | 'no_data';
 }
 
+export interface ObsMonitorItem {
+  id: string;
+  name: string;
+  status: ObsComponentStatus;
+  detail: string;
+  since?: string;
+  last?: string | null;
+  url?: string;
+}
+
 export interface ObservabilityData {
   range: ObsRange;
   generated_at: string;
   status: 'operational' | 'degraded' | 'down';
   uptime_seconds: number;
-  components: {
-    id: string;
-    name: string;
-    status: ObsComponentStatus;
-    detail: string;
-    since?: string;
-    last?: string | null;
-    url?: string;
-  }[];
+  components: ObsMonitorItem[];
+  app_monitors?: ObsMonitorItem[];
   slos: ObsSlo[];
   kpis: {
     requests: number;
@@ -1145,6 +1148,18 @@ export interface ObservabilityData {
 
 export async function fetchObservability(range: ObsRange): Promise<ObservabilityData> {
   return request(`/observability?range=${range}`);
+}
+
+export async function probeObservabilityEndpoint(input: {
+  id?: string;
+  name: string;
+  url: string;
+}): Promise<ObsMonitorItem> {
+  return request('/observability/probe', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
 }
 
 export type ChatKind = 'slack' | 'teams';
