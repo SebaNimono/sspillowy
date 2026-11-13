@@ -7,7 +7,9 @@ class BypassDetailScreen extends StatefulWidget {
   final BypassService bypassService;
   final Map<String, dynamic>? initialData;
 
+  final bool isOnDuty;
   const BypassDetailScreen({
+    this.isOnDuty = true,
     super.key,
     required this.bypassId,
     required this.bypassService,
@@ -73,6 +75,10 @@ class _BypassDetailScreenState extends State<BypassDetailScreen> {
   }
 
   Future<void> _confirmAndExecuteAction(bool isApprove) async {
+    if (!widget.isOnDuty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Activa el modo Guardia para aprobar o rechazar excepciones.'), backgroundColor: Colors.orange));
+      return;
+    }
     // Revalidar vigencia y contexto en tiempo real antes de aprobar/rechazar
     await _fetchBypassDetail();
     if (!mounted) return;
@@ -446,3 +452,4 @@ class _BypassDetailScreenState extends State<BypassDetailScreen> {
     );
   }
 }
+

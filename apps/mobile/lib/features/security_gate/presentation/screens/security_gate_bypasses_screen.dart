@@ -7,7 +7,9 @@ import '../../../../services/bypass_service.dart';
 class SecurityGateBypassesScreen extends StatefulWidget {
   final IncidentRepository? repository;
 
+  final bool isOnDuty;
   const SecurityGateBypassesScreen({
+    this.isOnDuty = true,
     super.key,
     this.repository,
   });
@@ -89,6 +91,7 @@ class _SecurityGateBypassesScreenState
       context,
       MaterialPageRoute(
         builder: (context) => BypassDetailScreen(
+            isOnDuty: widget.isOnDuty,
           bypassId: item['id']?.toString() ?? 'N/A',
           bypassService: _bypassService,
           initialData: item,
@@ -304,5 +307,6 @@ class _SecurityGateBypassesScreenState
     );
   }
 }
+
 
 

@@ -151,6 +151,10 @@ class AuthRepository {
       await prefs.remove('persistent_audit_logs');
       await prefs.remove('persistent_chat_history');
       await prefs.remove('pushed_alert_ids');
+      await prefs.remove('persistent_in_app_notifs');
+      await prefs.remove('notif_baseline_seeded');
+      await prefs.remove('selected_workspace_id');
+      await prefs.remove('primary_user_name');
       await prefs.remove('notif_baseline_seeded');
           return true;
         }
@@ -247,6 +251,10 @@ class _SSPillowyAppState extends State<SSPillowyApp> {
       await prefs.remove('persistent_audit_logs');
       await prefs.remove('persistent_chat_history');
       await prefs.remove('pushed_alert_ids');
+      await prefs.remove('persistent_in_app_notifs');
+      await prefs.remove('notif_baseline_seeded');
+      await prefs.remove('selected_workspace_id');
+      await prefs.remove('primary_user_name');
       await prefs.remove('notif_baseline_seeded');
       await prefs.setBool('is_logged_in', false);
     } catch (_) {}
@@ -909,7 +917,7 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
       if (bypassId != null && bypassId.isNotEmpty) {
         rootNavigatorKey.currentState?.push(
           MaterialPageRoute(
-            builder: (_) => BypassDetailScreen(
+            builder: (_) => BypassDetailScreen(isOnDuty: widget.isOnDuty,
               bypassId: bypassId,
               bypassService: _bypassService,
             ),
@@ -1283,7 +1291,7 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
         currentScans: _currentActiveScans,
         isOnDuty: widget.isOnDuty,
       ),
-      SecurityGateBypassesScreen(
+      SecurityGateBypassesScreen(isOnDuty: widget.isOnDuty,
         repository: _incidentRepository,
       ),
       AuditHistoryScreen(
@@ -2719,20 +2727,36 @@ class _ScanListScreenState extends State<ScanListScreen> {
                             color: const Color(0xFF161B22),
                             margin: const EdgeInsets.only(bottom: 12),
                             child: ListTile(
-                              leading: CircleAvatar(
-                                backgroundColor: scan.status == 'EXEMPTED'
-                                    ? Colors.amber.shade800
-                                    : scan.status == 'BLOCKED'
-                                        ? Colors.red.shade800
-                                        : Colors.green.shade700,
-                                child: Icon(
-                                  scan.status == 'EXEMPTED'
-                                      ? Icons.shield_outlined
-                                      : scan.status == 'BLOCKED'
-                                          ? Icons.block
-                                          : Icons.security,
-                                  color: Colors.white,
-                                ),
+                              leading: Builder(
+                                builder: (_) {
+                                  final st = scan.status.toUpperCase();
+                                  final sev = (scan.severity ?? '').toUpperCase();
+                                  Color bgColor;
+                                  IconData iconData;
+                                  if (st == 'BLOCKED' || st == 'BLOQUEADO') {
+                                    bgColor = Colors.blueGrey.shade700;
+                                    iconData = Icons.block;
+                                  } else if (st == 'EXEMPTED' || st == 'ACCEPTED_RISK') {
+                                    bgColor = Colors.amber.shade800;
+                                    iconData = Icons.shield_outlined;
+                                  } else if (sev == 'CRITICAL') {
+                                    bgColor = Colors.red.shade700;
+                                    iconData = Icons.gpp_bad;
+                                  } else if (sev == 'HIGH') {
+                                    bgColor = Colors.deepOrange.shade600;
+                                    iconData = Icons.warning_amber_rounded;
+                                  } else if (sev == 'MEDIUM') {
+                                    bgColor = Colors.amber.shade700;
+                                    iconData = Icons.security;
+                                  } else {
+                                    bgColor = Colors.green.shade700;
+                                    iconData = Icons.verified_user_outlined;
+                                  }
+                                  return CircleAvatar(
+                                    backgroundColor: bgColor,
+                                    child: Icon(iconData, color: Colors.white),
+                                  );
+                                },
                               ),
                               title: Text(
                                   scan.title ?? 'Repositorio #${scan.id}',
@@ -2999,56 +3023,77 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _switchProfile(Map<String, dynamic> profile) async {
-    final prefs = await SharedPreferences.getInstance();
-    final targetEmail = profile['email'].toString().trim();
-    final primaryEmail = (prefs.getString('primary_user_email') ?? '').trim();
-
-    if (primaryEmail.isNotEmpty && targetEmail.toLowerCase() != primaryEmail.toLowerCase()) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Para operar como $targetEmail debes iniciar sesión con sus credenciales.'),
-          backgroundColor: Colors.orange,
-          action: SnackBarAction(
-            label: 'Cambiar cuenta',
-            textColor: Colors.white,
-            onPressed: () => widget.onLogout(),
-          ),
-        ),
-      );
-      return;
-    }
-  }
-
-  Future<void> _handleDeleteAccountRequest() async {
+    final targetEmail = (profile['email'] ?? '').toString().trim();
+    if (targetEmail.toLowerCase() == _activeUserEmail.toLowerCase()) return;
+    if (!mounted) return;
     showDialog(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF161B22),
-        title: const Text('Eliminación de cuenta',
-            style: TextStyle(color: Colors.white)),
+        title: const Text('Cambiar de cuenta', style: TextStyle(color: Colors.white)),
         content: Text(
-          'La eliminación definitiva de la cuenta ($_activeUserEmail) no está habilitada directamente desde la app móvil.\n\nPara tramitar la baja real de tu cuenta y datos asociados, gestiónalo desde el portal web de SSPILLOWY o solicita la baja al administrador de tu organización.',
-          style: const TextStyle(color: Colors.white70, fontSize: 13),
+          'Por seguridad, para operar como $targetEmail debes cerrar la sesión actual e iniciar sesión con sus credenciales.',
+          style: const TextStyle(color: Colors.white70),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cerrar'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0EA5E9)),
             onPressed: () {
-              Navigator.pop(dialogContext);
-              _openWebUrl('https://sspillowy.com');
+              Navigator.pop(ctx);
+              widget.onLogout();
             },
-            child: const Text('Abrir portal web',
-                style: TextStyle(color: Colors.white)),
+            child: const Text('Cerrar sesión y cambiar'),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _handleDeleteAccountRequest() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF161B22),
+        title: const Text('Eliminar cuenta permanentemente', style: TextStyle(color: Colors.redAccent)),
+        content: const Text(
+          'Esta acción eliminará tu cuenta y revocará tus sesiones activas en el servidor. No se puede deshacer.',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Eliminar cuenta', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      final token = await ApiClient.readStoredToken();
+      if (token != null && token.isNotEmpty) {
+        _apiClient.setAuthToken(token);
+      }
+      final res = await _apiClient.delete('/auth/me');
+      if (res.statusCode == 200 || res.statusCode == 204) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Cuenta eliminada correctamente.'), backgroundColor: Colors.green),
+        );
+        widget.onLogout();
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('El servidor rechazó la eliminación (${res.statusCode}).'), backgroundColor: Colors.redAccent),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo eliminar la cuenta en el servidor: $e'), backgroundColor: Colors.redAccent),
+      );
+    }
   }
 
   Future<void> _openWebUrl(String url) async {
@@ -3291,6 +3336,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 }
+
+
+
 
 
 
