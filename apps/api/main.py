@@ -114,6 +114,8 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
 )
+from rate_limit import rate_limit_middleware
+app.middleware("http")(rate_limit_middleware)
 
 
 @app.on_event("startup")
@@ -1261,3 +1263,4 @@ def run_seed(force: bool = False, ws: WorkspaceCtx = Depends(require_ws)):
         return {"ok": True, "message": "Seed aplicado.", **stats}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Seed falló: {exc}") from exc
+

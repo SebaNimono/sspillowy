@@ -310,3 +310,4 @@ def logout(x_session_id: str | None = Header(default=None, alias="X-Session-Id")
     if x_session_id and x_session_id.strip():
         delete_session(x_session_id.strip())
     return {"ok": True}
+
