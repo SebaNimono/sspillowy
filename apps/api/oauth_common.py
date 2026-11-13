@@ -335,3 +335,85 @@ def logout(
     return {"ok": True}
 
 
+
+
+@router.delete("/me")
+def delete_current_account(
+    x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+):
+    """Elimina la cuenta autenticada y revoca todas sus sesiones activas."""
+    bearer = _extract_bearer(authorization)
+    if not bearer and not (x_session_id and x_session_id.strip()):
+        raise HTTPException(status_code=401, detail="Sesión o token requerido")
+
+    target_sid = (x_session_id or "").strip()
+    session = load_session(target_sid) if target_sid else None
+
+    # Permitir resolver sesión por Bearer token si no llegó X-Session-Id
+    if not session and bearer:
+        for sid, sdata in list(SESSIONS.items()):
+            if hmac.compare_digest(str(sdata.get("token") or ""), bearer):
+                target_sid = sid
+                session = sdata
+                break
+
+    if not session:
+        from database import SessionLocal
+        from models import AuthSession, User
+        db = SessionLocal()
+        try:
+            auth_row = None
+            if target_sid:
+                auth_row = db.query(AuthSession).filter(AuthSession.id == target_sid).first()
+            elif bearer:
+                auth_row = db.query(AuthSession).filter(AuthSession.token == bearer).first()
+            if not auth_row:
+                raise HTTPException(status_code=401, detail="Sesión inválida o expirada")
+            if bearer and auth_row.token and not hmac.compare_digest(bearer, str(auth_row.token)):
+                raise HTTPException(status_code=403, detail="No autorizado para eliminar esta cuenta")
+            uid = auth_row.user_id
+            db.query(AuthSession).filter(AuthSession.user_id == uid).delete(synchronize_session=False)
+            user = db.query(User).filter(User.id == uid).first()
+            if user:
+                db.delete(user)
+            db.commit()
+            return {"ok": True, "deleted": True}
+        finally:
+            db.close()
+
+    session_token = str(session.get("token") or "")
+    if session_token and (not bearer or not hmac.compare_digest(bearer, session_token)):
+        raise HTTPException(status_code=403, detail="No autorizado para eliminar esta cuenta")
+
+    uid = session.get("user_id")
+    email = (session.get("email") or "").strip().lower()
+
+    for sid, sdata in list(SESSIONS.items()):
+        s_uid = sdata.get("user_id")
+        s_email = (sdata.get("email") or "").strip().lower()
+        if (uid and s_uid == uid) or (email and s_email == email) or sid == target_sid:
+            SESSIONS.pop(sid, None)
+
+    try:
+        from database import SessionLocal
+        from models import AuthSession, User
+        db = SessionLocal()
+        try:
+            if uid:
+                db.query(AuthSession).filter(AuthSession.user_id == uid).delete(synchronize_session=False)
+                user = db.query(User).filter(User.id == uid).first()
+                if user:
+                    db.delete(user)
+            elif email:
+                user = db.query(User).filter(User.email == email).first()
+                if user:
+                    db.query(AuthSession).filter(AuthSession.user_id == user.id).delete(synchronize_session=False)
+                    db.delete(user)
+            db.commit()
+        finally:
+            db.close()
+    except Exception:
+        pass
+
+    return {"ok": True, "deleted": True}

@@ -270,8 +270,37 @@ class SecurityAuditRegressionTests(unittest.TestCase):
 
         asyncio.run(run_scenario())
 
+
+    def test_punto_8_delete_account_endpoint(self):
+        import oauth_common
+        from fastapi import HTTPException
+        oauth_common.SESSIONS["sess-del-1"] = {
+            "user_id": "u-del-99",
+            "email": "delete.me@sspillowy.io",
+            "token": "owner_secret_token_xyz", "expires_at": "2099-01-01T00:00:00+00:00",
+        }
+        with self.assertRaises(HTTPException) as ctx_forbidden:
+            oauth_common.delete_current_account(
+                x_session_id="sess-del-1",
+                authorization="Bearer wrong_attacker_token",
+            )
+        self.assertEqual(ctx_forbidden.exception.status_code, 403)
+        self.assertIn("sess-del-1", oauth_common.SESSIONS)
+
+        res = oauth_common.delete_current_account(
+            x_session_id="sess-del-1",
+            authorization="Bearer owner_secret_token_xyz",
+        )
+        self.assertTrue(res.get("ok"))
+        self.assertTrue(res.get("deleted"))
+        self.assertNotIn("sess-del-1", oauth_common.SESSIONS)
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+
+
 
 
 
