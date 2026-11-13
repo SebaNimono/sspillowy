@@ -341,7 +341,11 @@ async function send<T>(path: string, init?: RequestInit): Promise<T> {
     let detail = `Error de API (${res.status})`;
     try {
       const data = await res.json();
-      if (typeof data?.detail === 'string') detail = data.detail;
+      if (typeof data?.detail === 'string') {
+        detail = data.detail;
+      } else if (Array.isArray(data?.detail) && data.detail.length > 0) {
+        detail = data.detail.map((d: any) => `${d.loc?.slice(1)?.join('.') || 'campo'}: ${d.msg}`).join(', ');
+      }
     } catch {
       // ignore
     }

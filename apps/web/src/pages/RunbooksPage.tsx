@@ -162,7 +162,9 @@ export const RunbooksPage: React.FC<PageProps> = ({ onNavigate, ...headerProps }
       }
       setEditor(null);
     } catch (err) {
-      notify('error', 'No se pudo guardar', err instanceof Error ? err.message : String(err));
+      console.error('Runbook save error:', err);
+      let msg = err instanceof Error ? err.message : String(err);
+      notify('error', 'No se pudo guardar', msg);
     } finally {
       setSaving(false);
     }
