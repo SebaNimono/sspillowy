@@ -266,19 +266,16 @@ class _SecurityGateBypassesScreenState
                                     color: statusColor,
                                   ),
                                   title: Text(
-                                    (item['reason'] != null && item['reason'].toString().trim().isNotEmpty)
-                                        ? item['reason'].toString()
-                                        : (item['rule'] ??
-                                            item['title'] ??
-                                            item['name'] ??
-                                            'Excepción de Security Gate')
-                                        .toString(),
+                                    item['rule'] ??
+                                        item['title'] ??
+                                        item['name'] ??
+                                        'Bypass Request',
                                     style: const TextStyle(
                                         color: Colors.white,
                                         fontWeight: FontWeight.w500),
                                   ),
                                   subtitle: Text(
-                                    'Repo: ${item['repository_name'] ?? item['repository'] ?? item['repo'] ?? 'N/A'} | Req: ${item['requested_by'] ?? item['requestedBy'] ?? item['author'] ?? 'Sistema'}',
+                                    'Repo: ${item['repository'] ?? item['repo'] ?? 'N/A'} | Req: ${item['requestedBy'] ?? item['author'] ?? 'Sistema'}',
                                     style: const TextStyle(
                                         color: Colors.grey, fontSize: 12),
                                   ),

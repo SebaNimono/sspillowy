@@ -10,8 +10,8 @@ class BypassService {
   static const String baseUrl = 'https://api.sspillowy.com';
   static const String _cacheKey = 'cached_security_bypasses';
 
-  BypassService([Dio? dioClient])
-      : dio = (dioClient ?? Dio())
+  BypassService(Dio dioClient)
+      : dio = dioClient
           ..options.baseUrl = baseUrl
           ..options.headers = {
             'Content-Type': 'application/json',
