@@ -1512,7 +1512,7 @@ class _PillowChatScreenState extends State<PillowChatScreen> {
         'history': historyPayload,
       };
 
-      final res = await _apiClient.post('/pillow/chat', data: bodyData);
+      final res = await _apiClient.post('/pillow/chat', data: bodyData, options: Options(receiveTimeout: const Duration(seconds: 50)));
       if (res.data != null) {
         final raw = res.data;
         if (raw is Map) {
@@ -1542,7 +1542,7 @@ class _PillowChatScreenState extends State<PillowChatScreen> {
           : '';
       errorDetail = status != null
           ? 'Error del servidor Pillow IA ($status)${msg.isNotEmpty ? ": $msg" : ""}.'
-          : 'Sin conexión con el servicio de Pillow IA. Verifica tu red.';
+          : (e.type == DioExceptionType.receiveTimeout || e.type == DioExceptionType.connectionTimeout ? 'Pillow IA tardó demasiado en responder. Intenta nuevamente.' : 'Sin conexión con el servicio de Pillow IA. Verifica tu red.');
     } catch (e) {
       errorDetail = 'No se pudo obtener respuesta de Pillow IA: $e';
     }
@@ -3336,6 +3336,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 }
+
 
 
 
