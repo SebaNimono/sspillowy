@@ -199,8 +199,80 @@ class SecurityAuditRegressionTests(unittest.TestCase):
         self.assertEqual(res.status, "APPROVED")
 
 
+
+    def test_punto_6_oauth_session_idor_protection(self):
+        from unittest.mock import patch
+        from fastapi import HTTPException
+        import oauth_common
+
+        fake_session = {"token": "valid_owner_token_123", "user": {"email": "owner@sspillowy.com"}}
+
+        with patch.object(oauth_common, "load_session", return_value=fake_session), \
+             patch.object(oauth_common, "delete_session") as mock_delete:
+            # 1) Sin token Bearer -> 403 Forbidden
+            with self.assertRaises(HTTPException) as ctx_no_auth:
+                oauth_common.get_auth_session("sess-abc", authorization=None)
+            self.assertEqual(ctx_no_auth.exception.status_code, 403)
+
+            # 2) Con token de otro usuario -> 403 Forbidden
+            with self.assertRaises(HTTPException) as ctx_wrong:
+                oauth_common.get_auth_session("sess-abc", authorization="Bearer attacker_token_999")
+            self.assertEqual(ctx_wrong.exception.status_code, 403)
+
+            # 3) Logout ajeno con token inválido -> 403 Forbidden y NO borra la sesión
+            with self.assertRaises(HTTPException) as ctx_logout:
+                oauth_common.logout(x_session_id="sess-abc", authorization="Bearer attacker_token_999")
+            self.assertEqual(ctx_logout.exception.status_code, 403)
+            mock_delete.assert_not_called()
+
+            # 4) Dueño legítimo -> 200 OK
+            res = oauth_common.get_auth_session("sess-abc", authorization="Bearer valid_owner_token_123")
+            self.assertEqual(res["user"]["email"], "owner@sspillowy.com")
+
+            out = oauth_common.logout(x_session_id="sess-abc", authorization="Bearer valid_owner_token_123")
+            self.assertEqual(out, {"ok": True})
+            mock_delete.assert_called_once_with("sess-abc")
+
+    def test_punto_7_rate_limiter_sliding_window_429(self):
+        from starlette.requests import Request
+        from starlette.responses import JSONResponse
+        import rate_limit
+
+        rate_limit._BUCKETS.clear()
+
+        def make_request(ip: str, path: str = "/api/v1/auth/login") -> Request:
+            scope = {
+                "type": "http",
+                "method": "POST",
+                "path": path,
+                "headers": [(b"x-forwarded-for", ip.encode())],
+                "client": (ip, 12345),
+            }
+            return Request(scope)
+
+        async def ok_next(_req):
+            return JSONResponse({"ok": True}, status_code=200)
+
+        async def run_scenario():
+            # Primeras 10 peticiones desde la misma IP pasan (límite = 10/60s para /login)
+            for _ in range(10):
+                resp = await rate_limit.rate_limit_middleware(make_request("203.0.113.10"), ok_next)
+                self.assertEqual(resp.status_code, 200)
+
+            # Petición 11 desde la misma IP -> 429 Too Many Requests con Retry-After
+            blocked = await rate_limit.rate_limit_middleware(make_request("203.0.113.10"), ok_next)
+            self.assertEqual(blocked.status_code, 429)
+            self.assertIn("retry-after", blocked.headers)
+
+            # Otra IP independiente sigue operando normalmente
+            other_ip = await rate_limit.rate_limit_middleware(make_request("203.0.113.99"), ok_next)
+            self.assertEqual(other_ip.status_code, 200)
+
+        asyncio.run(run_scenario())
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
 
 
 
