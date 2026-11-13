@@ -858,15 +858,27 @@ export async function fetchRunbooks(): Promise<RunbookList> {
 }
 
 export async function createRunbook(body: RunbookInput): Promise<Runbook> {
-  return request('/runbooks', { method: 'POST', body: JSON.stringify(body) });
+  return request('/runbooks', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
 }
 
 export async function updateRunbook(id: string, body: RunbookInput): Promise<Runbook> {
-  return request(`/runbooks/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(body) });
+  return request(`/runbooks/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
 }
 
 export async function setRunbookEnabled(id: string, enabled: boolean): Promise<Runbook> {
-  return request(`/runbooks/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ enabled }) });
+  return request(`/runbooks/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled }),
+  });
 }
 
 export async function deleteRunbook(id: string): Promise<void> {
