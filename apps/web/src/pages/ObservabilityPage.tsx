@@ -453,31 +453,75 @@ export const ObservabilityPage: React.FC<PageProps> = ({ onNavigate, ...headerPr
               </button>
             </div>
           ) : (
-            <section className="ob-components">
+            <div className="ob-monitors-grid">
               {[...(data.app_monitors ?? []), ...customResults].map((c) => {
                 const m = COMPONENT_META[c.status];
+                const httpMatch = c.detail.match(/HTTP\s*(\d+)/i);
+                const msMatch = c.detail.match(/(\d+)\s*ms/i);
+                const codeText = httpMatch ? `HTTP ${httpMatch[1]}` : (c.status === 'up' ? 'HTTP 200' : 'Error');
+                const latencyText = msMatch ? `${msMatch[1]} ms` : (c.status === 'up' ? 'En línea' : '—');
+
                 return (
-                  <div key={c.id} className={`ob-component is-${c.status}`}>
-                    <m.Icon size={16} color={m.color} />
-                    <div>
-                      <strong>{c.name}</strong>
-                      <small>{c.detail}</small>
+                  <div key={c.id} className={`ob-monitor-card is-${c.status}`}>
+                    <div className="ob-monitor-card-header">
+                      <div className="ob-monitor-card-title">
+                        <Globe size={18} className="ob-monitor-icon" />
+                        <div>
+                          <strong>{c.name}</strong>
+                          {c.url ? (
+                            <a
+                              href={c.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="ob-monitor-url"
+                            >
+                              {c.url} <ExternalLink size={11} />
+                            </a>
+                          ) : (
+                            <span className="ob-monitor-url">{c.detail.split('·')[0].trim()}</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="ob-monitor-card-actions">
+                        <span className={`ob-status-pill is-${c.status}`}>
+                          <m.Icon size={13} color={m.color} /> {m.label}
+                        </span>
+                        <button
+                          type="button"
+                          className="ob-monitor-remove-btn"
+                          title="Quitar monitoreo"
+                          onClick={() => handleRemoveMonitor(c.id)}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </div>
-                    <div className="ob-component-actions">
-                      <span style={{ color: m.color, fontSize: '0.72rem', fontWeight: 700 }}>{m.label}</span>
-                      <button
-                        type="button"
-                        className="ob-component-remove"
-                        title="Quitar monitoreo"
-                        onClick={() => handleRemoveMonitor(c.id)}
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
+
+                    {c.status !== 'up' ? (
+                      <div className="ob-monitor-error-banner">
+                        <AlertTriangle size={13} />
+                        <span>{c.detail}</span>
+                      </div>
+                    ) : (
+                      <div className="ob-monitor-card-body">
+                        <div className="ob-monitor-metric">
+                          <span className="ob-metric-label">Respuesta</span>
+                          <span className="ob-metric-value">{codeText}</span>
+                        </div>
+                        <div className="ob-monitor-metric">
+                          <span className="ob-metric-label">Latencia</span>
+                          <span className="ob-metric-value">⚡ {latencyText}</span>
+                        </div>
+                        <div className="ob-monitor-metric">
+                          <span className="ob-metric-label">Chequeo</span>
+                          <span className="ob-metric-value">En vivo</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
-            </section>
+            </div>
           )}
 
           <h2 className="ob-section-title">
