@@ -13,13 +13,19 @@ jobs:
       - name: Evaluar gate SSPILLOWY
         env:
           SSPILLOWY_API_URL: ${{ vars.SSPILLOWY_API_URL || 'https://api.sspillowy.com' }}
+          SSPILLOWY_KEY: ${{ secrets.SSPILLOWY_KEY }}
           REPO_URL: https://github.com/${{ github.repository }}
         run: |
           set -euo pipefail
+          if [ -z "$SSPILLOWY_KEY" ]; then
+            echo "::error::Falta configurar el secreto SSPILLOWY_KEY en GitHub Actions (Settings -> Secrets and variables -> Actions)."
+            exit 1
+          fi
           API="${SSPILLOWY_API_URL%/}"
           ENC_URL=$(python3 -c "import urllib.parse, os; print(urllib.parse.quote(os.environ['REPO_URL'], safe=''))")
           echo "Consultando Security Gate para $REPO_URL"
           RESP=$(curl -fsS --retry 3 --retry-delay 2 \
+            -H "X-SSPILLOWY-Key: ${SSPILLOWY_KEY}" \
             "${API}/api/v1/security-gates/check?repository_url=${ENC_URL}")
           echo "$RESP" | python3 -m json.tool
           ALLOWED=$(echo "$RESP" | python3 -c "import sys,json; print(str(json.load(sys.stdin).get('allowed')).lower())")
