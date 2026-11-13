@@ -1047,6 +1047,11 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
     bool triggerSystemPush = false,
   }) async {
     final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+    final dismissedIds = (prefs.getStringList('dismissed_notif_ids') ?? []).toSet();
+    final localReadIds = (prefs.getStringList('read_notif_ids') ?? []).toSet();
+    final persistedPushed = (prefs.getStringList('pushed_alert_ids') ?? []).toSet();
+    _pushedAlertIds.addAll(persistedPushed);
     final savedNotifsJson = prefs.getString('persistent_in_app_notifs');
     List localNotifs = [];
 
@@ -1104,27 +1109,32 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
                 ? '/bypass_detail?id=$findingId'
                 : '/finding_detail?id=$findingId';
 
-            if (id.isNotEmpty) {
-              if (!localNotifs.any((n) => n['id'] == id)) {
+            if (id.isNotEmpty && !dismissedIds.contains(id)) {
+              final effectiveRead = read || localReadIds.contains(id);
+              final existingIdx = localNotifs.indexWhere((n) => n['id'] == id);
+              if (existingIdx == -1) {
                 localNotifs.insert(0, {
                   'id': id,
                   'title': title,
                   'body': body,
                   'type': type,
                   'payload': payload,
-                  'read': read,
+                  'read': effectiveRead,
                   'time': dateStr.isNotEmpty
                       ? dateStr.substring(
                           0, dateStr.length > 16 ? 16 : dateStr.length)
                       : '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}',
                 });
+              } else if (effectiveRead) {
+                localNotifs[existingIdx]['read'] = true;
               }
 
               if (triggerSystemPush &&
                   widget.isOnDuty &&
-                  !read &&
+                  !effectiveRead &&
                   !_pushedAlertIds.contains(id)) {
                 _pushedAlertIds.add(id);
+                await prefs.setStringList('pushed_alert_ids', _pushedAlertIds.toList());
                 await NotificationService.showLocalPush(
                   id: id.hashCode.abs() % 100000,
                   title: title,
@@ -1145,7 +1155,8 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
             final bId = (b['id'] ?? '').toString();
             final bStatus = (b['status'] ?? '').toString().toUpperCase();
             final notifKey = 'bypass_$bId';
-            if (bId.isNotEmpty && bStatus == 'PENDING') {
+            if (bId.isNotEmpty && bStatus == 'PENDING' && !dismissedIds.contains(notifKey)) {
+              final bypassRead = localReadIds.contains(notifKey);
               const title = 'Solicitud de Excepción (Bypass)';
               final body =
                   '${b['rule'] ?? b['title'] ?? 'Security Gate'} en ${b['repository'] ?? b['repo'] ?? 'repositorio'}';
@@ -1158,7 +1169,7 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
                   'body': body,
                   'type': 'BYPASS',
                   'payload': payload,
-                  'read': false,
+                  'read': bypassRead,
                   'time':
                       '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}',
                 });
@@ -1166,8 +1177,10 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
 
               if (triggerSystemPush &&
                   widget.isOnDuty &&
+                  !bypassRead &&
                   !_pushedAlertIds.contains(notifKey)) {
                 _pushedAlertIds.add(notifKey);
+                await prefs.setStringList('pushed_alert_ids', _pushedAlertIds.toList());
                 await NotificationService.showLocalPush(
                   id: notifKey.hashCode.abs() % 100000,
                   title: title,
@@ -1215,12 +1228,16 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
   }
 
   Future<void> _markNotificationAsRead(int index) async {
-    final notifId = _inAppNotifications[index]['id'];
+    final notifId = _inAppNotifications[index]['id'].toString();
     final payload = (_inAppNotifications[index]['payload'] ?? '').toString();
     setState(() {
       _inAppNotifications[index]['read'] = true;
     });
     await _savePersistentNotifications();
+
+    final prefs = await SharedPreferences.getInstance();
+    final readIds = (prefs.getStringList('read_notif_ids') ?? []).toSet()..add(notifId);
+    await prefs.setStringList('read_notif_ids', readIds.toList());
 
     try {
       final token = await ApiClient.readStoredToken();
@@ -1237,11 +1254,15 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
   }
 
   Future<void> _markAllNotificationsAsRead() async {
+    final prefs = await SharedPreferences.getInstance();
+    final readIds = (prefs.getStringList('read_notif_ids') ?? []).toSet();
     setState(() {
       for (var n in _inAppNotifications) {
         n['read'] = true;
+        readIds.add(n['id'].toString());
       }
     });
+    await prefs.setStringList('read_notif_ids', readIds.toList());
     await _savePersistentNotifications();
 
     try {
@@ -1254,6 +1275,12 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
   }
 
   Future<void> _clearNotifications() async {
+    final prefs = await SharedPreferences.getInstance();
+    final dismissedIds = (prefs.getStringList('dismissed_notif_ids') ?? []).toSet();
+    for (var n in _inAppNotifications) {
+      dismissedIds.add(n['id'].toString());
+    }
+    await prefs.setStringList('dismissed_notif_ids', dismissedIds.toList());
     setState(() {
       _inAppNotifications.clear();
     });
@@ -3336,6 +3363,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 }
+
 
 
 
