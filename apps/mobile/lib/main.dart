@@ -1513,6 +1513,21 @@ class _PillowChatScreenState extends State<PillowChatScreen> {
               })
           .toList();
 
+      List<dynamic> bypassesPayload = [];
+      try {
+        final bypassService = BypassService();
+        final rawBypasses = await bypassService.getBypasses();
+        bypassesPayload = rawBypasses.map((b) => {
+          'id': b['id'],
+          'repository': b['repository_name'] ?? b['repository'] ?? b['repo'] ?? 'N/A',
+          'reason': b['reason'] ?? b['justification'] ?? 'Sin justificación',
+          'status': b['status'] ?? 'PENDING',
+          'requested_by': b['requested_by'] ?? b['requestedBy'] ?? 'Sistema',
+          'expires_at': b['expires_at']?.toString() ?? '',
+          'created_at': b['created_at']?.toString() ?? '',
+        }).toList();
+      } catch (_) {}
+
       final historyPayload = _messages
           .map((m) => {
                 'role': m['role'] == 'assistant' ? 'assistant' : 'user',
@@ -1529,12 +1544,17 @@ class _PillowChatScreenState extends State<PillowChatScreen> {
         'dashboard_context': {
           'app_type': 'mobile',
           'on_duty': widget.isOnDuty,
+          'total_bypasses': bypassesPayload.length,
+          'active_exceptions_count': bypassesPayload.where((b) => (b['status'] ?? '').toString().toUpperCase() == 'APPROVED').length,
         },
         'page_context': {
           'app_type': 'mobile',
           'total_findings': widget.currentScans.length,
           'on_duty': widget.isOnDuty,
           'findings': findingsPayload,
+          'security_gate_bypasses': bypassesPayload,
+          'excepciones_activas': bypassesPayload.where((b) => (b['status'] ?? '').toString().toUpperCase() == 'APPROVED').toList(),
+          'excepciones_pendientes': bypassesPayload.where((b) => (b['status'] ?? '').toString().toUpperCase() == 'PENDING').toList(),
         },
         'history': historyPayload,
       };
