@@ -891,6 +891,7 @@ export async function testRunbook(
 ): Promise<{ matched: boolean; reason: string; execution: RunbookExecution | null }> {
   return request(`/runbooks/${encodeURIComponent(id)}/test`, {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ repository_id: repositoryId || null }),
   });
 }
