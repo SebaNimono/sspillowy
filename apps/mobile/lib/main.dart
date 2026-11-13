@@ -148,9 +148,10 @@ class AuthRepository {
           await prefs.setBool('is_logged_in', true);
           await prefs.remove('persistent_scans_list_v4');
           await prefs.remove('cached_security_bypasses');
-          await prefs.remove('persistent_chat_history');
-          await prefs.remove('persistent_audit_logs');
-          await prefs.remove('persistent_in_app_notifs');
+      await prefs.remove('persistent_audit_logs');
+      await prefs.remove('persistent_chat_history');
+      await prefs.remove('pushed_alert_ids');
+      await prefs.remove('notif_baseline_seeded');
           return true;
         }
       }
@@ -194,23 +195,10 @@ class _SSPillowyAppState extends State<SSPillowyApp> {
   bool _isLoading = true;
   bool _isOnDuty = true;
 
-  StreamSubscription<void>? _sessionSub;
-
   @override
   void initState() {
     super.initState();
     _checkLoginStatus();
-    _sessionSub = ApiClient.sessionExpiredStream.listen((_) {
-      if (mounted && _isLoggedIn) {
-        _handleLogout();
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _sessionSub?.cancel();
-    super.dispose();
   }
 
   Future<void> _checkLoginStatus() async {
@@ -256,9 +244,10 @@ class _SSPillowyAppState extends State<SSPillowyApp> {
       await prefs.remove('user_name');
       await prefs.remove('persistent_scans_list_v4');
       await prefs.remove('cached_security_bypasses');
-          await prefs.remove('persistent_chat_history');
-          await prefs.remove('persistent_audit_logs');
-          await prefs.remove('persistent_in_app_notifs');
+      await prefs.remove('persistent_audit_logs');
+      await prefs.remove('persistent_chat_history');
+      await prefs.remove('pushed_alert_ids');
+      await prefs.remove('notif_baseline_seeded');
       await prefs.setBool('is_logged_in', false);
     } catch (_) {}
     if (!mounted) return;
@@ -886,7 +875,7 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
   void initState() {
     super.initState();
     _incidentRepository = IncidentRepository(_apiClient);
-    _bypassService = BypassService(_apiClient.dio);
+    _bypassService = BypassService(Dio());
     _loadPersistentAuditLogs();
     OnCallBackgroundService.ensureStarted();
     _loadNotificationsFromApiAndPrefs(triggerSystemPush: false);
@@ -3011,33 +3000,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _switchProfile(Map<String, dynamic> profile) async {
     final prefs = await SharedPreferences.getInstance();
-    final targetEmail = profile['email'].toString();
-    final targetName = profile['name'].toString();
+    final targetEmail = profile['email'].toString().trim();
+    final primaryEmail = (prefs.getString('primary_user_email') ?? '').trim();
 
-    await prefs.setString('user_email', targetEmail);
-    await prefs.setString('user_name', targetName);
-
-    final bool isReadOnly =
-        (profile['role'] ?? '').toString().toLowerCase().contains('lectura');
-    if (isReadOnly) {
-      widget.onToggleOnDuty(false);
-    }
-
-    if (mounted) {
-      setState(() {
-        _activeUserEmail = targetEmail;
-        _activeUserName = targetName;
-      });
-
-      _fetchUsersAndProfiles();
-
+    if (primaryEmail.isNotEmpty && targetEmail.toLowerCase() != primaryEmail.toLowerCase()) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Perfil cambiado a: $targetName (${profile['role']})'),
-          backgroundColor: const Color(0xFF0284C7),
-          duration: const Duration(seconds: 2),
+          content: Text('Para operar como $targetEmail debes iniciar sesión con sus credenciales.'),
+          backgroundColor: Colors.orange,
+          action: SnackBarAction(
+            label: 'Cambiar cuenta',
+            textColor: Colors.white,
+            onPressed: () => widget.onLogout(),
+          ),
         ),
       );
+      return;
     }
   }
 

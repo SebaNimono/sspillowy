@@ -134,10 +134,7 @@ class OnCallBackgroundService {
             if (item is Map) {
               final id = (item['id'] ?? item['_id'] ?? '').toString();
               final read = item['read'] == true || item['is_read'] == true;
-              if (id.isNotEmpty && !read && !pushedIds.contains(id)) {
-                pushedIds.add(id);
-                changed = true;
-                if (shouldPushNow && pushedInCycle < 3) {
+              if (id.isNotEmpty && !read && !pushedIds.contains(id)) { if (!hasSeeded) { pushedIds.add(id); changed = true; } else if (shouldPushNow && pushedInCycle < 3) { pushedIds.add(id); changed = true;
                   pushedInCycle++;
                   final title = (item['title'] ?? item['subject'] ?? 'Alerta de Seguridad').toString();
                   final body = (item['body'] ?? item['message'] ?? item['description'] ?? 'Nuevo evento en SSPILLOWY').toString();
@@ -174,10 +171,7 @@ class OnCallBackgroundService {
               final bId = (b['id'] ?? '').toString();
               final bStatus = (b['status'] ?? '').toString().toUpperCase();
               final notifKey = 'bypass_$bId';
-              if (bId.isNotEmpty && bStatus == 'PENDING' && !pushedIds.contains(notifKey)) {
-                pushedIds.add(notifKey);
-                changed = true;
-                if (shouldPushNow && pushedInCycle < 3) {
+              if (bId.isNotEmpty && bStatus == 'PENDING' && !pushedIds.contains(notifKey)) { if (!hasSeeded) { pushedIds.add(notifKey); changed = true; } else if (shouldPushNow && pushedInCycle < 3) { pushedIds.add(notifKey); changed = true;
                   pushedInCycle++;
                   const title = 'Solicitud de Excepción (Bypass)';
                   final body = '${b['rule'] ?? b['title'] ?? 'Security Gate'} en ${b['repository'] ?? b['repo'] ?? 'repositorio'}';
@@ -235,3 +229,4 @@ void onStart(ServiceInstance service) async {
     await OnCallBackgroundService.checkNowAndPush(allowFirstBatchPush: true);
   });
 }
+

@@ -1035,23 +1035,20 @@ def check_security_gate(
     db = SessionLocal()
     try:
         if ws is None and key_ws is None:
-            # Sin sesión ni clave: solo el espacio de la plataforma, para no romper su pipeline existente.
-            from workspaces import legacy_workspace_id
-
-            if not repository_url and not repository_id:
-                raise HTTPException(status_code=401, detail="Falta la clave del pipeline (cabecera X-SSPILLOWY-Key).")
-            key_ws = legacy_workspace_id(db)
-            try:
-                rid = _resolve_repository_id(db, repository_id, repository_url, workspace_id=key_ws)
-            except HTTPException:
-                raise HTTPException(
-                    status_code=401,
-                    detail="Falta la clave del pipeline (cabecera X-SSPILLOWY-Key). Créala en Integraciones → CI/CD.",
-                )
-            return _gate_check_response(db, repository_id=rid, workspace_id=key_ws)
+            raise HTTPException(
+                status_code=401,
+                detail="Se requiere sesión autenticada o cabecera X-SSPILLOWY-Key válida.",
+            )
         scope = ws.id if ws is not None else key_ws
         rid = _resolve_repository_id(db, repository_id, repository_url, workspace_id=scope)
-        return _gate_check_response(db, repository_id=rid, ws=ws, workspace_id=key_ws)
+        out = _gate_check_response(db, repository_id=rid, ws=ws, workspace_id=key_ws)
+        if ws is None:
+            # Llamada desde pipeline CI: omitir identidad de aprobadores/solicitantes y justificaciones internas
+            if hasattr(out, "bypass_reason") and out.bypass_reason:
+                out.bypass_reason = "Bypass activo aprobado"
+            if hasattr(out, "bypasses") and isinstance(out.bypasses, list):
+                out.bypasses = []
+        return out
     finally:
         db.close()
 
@@ -1263,4 +1260,5 @@ def run_seed(force: bool = False, ws: WorkspaceCtx = Depends(require_ws)):
         return {"ok": True, "message": "Seed aplicado.", **stats}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Seed falló: {exc}") from exc
+
 

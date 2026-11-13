@@ -9,16 +9,16 @@ class BiometricService {
       final bool canAuthenticateWithBiometrics = await _auth.canCheckBiometrics;
       final bool isDeviceSupported = await _auth.isDeviceSupported();
 
-      if (!canAuthenticateWithBiometrics || !isDeviceSupported) {
-        // En entorno de desarrollo/emulador web permite continuar si no hay hardware biométrico activo
-        return true;
+      if (!canAuthenticateWithBiometrics && !isDeviceSupported) {
+        return false;
       }
 
       return await _auth.authenticate(
         localizedReason: reason,
         options: const AuthenticationOptions(
           stickyAuth: true,
-          biometricOnly: true,
+          biometricOnly: false,
+          useErrorDialogs: true,
         ),
       );
     } catch (e) {

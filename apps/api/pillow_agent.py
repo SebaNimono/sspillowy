@@ -411,6 +411,25 @@ def pillow_quota(user_key: str = ""):
         db.close()
 
 
+_AI_SECRET_PATTERNS = [
+    re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----"),
+    re.compile(r"(?i)\b(ghp|gho|ghu|ghs|ghr|github_pat|glpat|xoxb|xoxp|sk|AIza)[-_A-Za-z0-9]{16,}\b"),
+    re.compile(r"(?i)\b(bearer|token|secret|password|passwd|api[_-]?key)\s*[:=]\s*['\"]?[A-Za-z0-9._\-/+]{12,}['\"]?"),
+]
+
+
+def _sanitize_for_ai(value: Any) -> Any:
+    if isinstance(value, str):
+        out = value
+        for pat in _AI_SECRET_PATTERNS:
+            out = pat.sub("[REDACTED_SECRET]", out)
+        return out
+    if isinstance(value, list):
+        return [_sanitize_for_ai(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _sanitize_for_ai(v) for k, v in value.items()}
+    return value
+
 @router.post("/chat", response_model=PillowChatResponse)
 async def pillow_chat(body: PillowChatBody):
     key = body.user_key.strip().lower()
@@ -442,10 +461,7 @@ async def pillow_chat(body: PillowChatBody):
             context["data"] = body.page_context
         elif body.dashboard_context:
             context["data"] = body.dashboard_context
-        parsed = await call_gemini(
-            body.message.strip(),
-            context,
-            history=[h.model_dump() for h in body.history or []],
+        parsed = await call_gemini(_sanitize_for_ai(body.message.strip()), _sanitize_for_ai(context), history=_sanitize_for_ai([h.model_dump() for h in body.history or []]),
             context_label="Pantalla actual del usuario y sus datos",
         )
         credits_remaining = _consume_credit(db, key)
@@ -537,3 +553,5 @@ def pillow_admin_reset(body: PillowResetBody):
         )
     finally:
         db.close()
+
+

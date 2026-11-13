@@ -111,16 +111,6 @@ class _ScanListScreenState extends State<ScanListScreen> {
               [];
         }
 
-        // Si /findings devolvió vacío, intentar cargar los repositorios del espacio
-        if (rawData.isEmpty) {
-          try {
-            var repoRes = await _apiClient.get('/repositories');
-            if (repoRes.statusCode == 200 && repoRes.data is List) {
-              rawData = repoRes.data as List;
-            }
-          } catch (_) {}
-        }
-
         if (rawData.isNotEmpty) {
           _localScans = rawData
               .map(
@@ -431,42 +421,42 @@ class _ScanListScreenState extends State<ScanListScreen> {
                                                     Navigator.pop(
                                                         bottomSheetContext);
 
+                                                    final messenger = ScaffoldMessenger.of(context);
+                                                    bool synced = false;
+                                                    String syncError = 'No se pudo sincronizar la excepción con el servidor.';
                                                     try {
                                                       final token = await ApiClient.readStoredToken();
-
-                                                      if (token != null &&
-                                                          token.isNotEmpty) {
-                                                        _apiClient.setAuthToken(
-                                                            token);
+                                                      if (token != null && token.isNotEmpty) {
+                                                        _apiClient.setAuthToken(token);
                                                       }
-
-                                                      await _apiClient.post(
-                                                          '/findings/${scan.id}',
-                                                          data: {
-                                                            'status':
-                                                                'EXEMPTED',
-                                                            'duration_hours':
-                                                                selectedHours,
-                                                            'justification':
-                                                                justificationText,
-                                                          });
-                                                    } catch (_) {}
-
+                                                      final res = await _apiClient.post(
+                                                        '/findings/${scan.id}/status',
+                                                        data: {
+                                                          'status': 'ACCEPTED_RISK',
+                                                          'justification': justificationText,
+                                                        },
+                                                      );
+                                                      synced = res.statusCode == 200;
+                                                    } catch (e) {
+                                                      syncError = 'Error al registrar excepción en servidor: $e';
+                                                    }
+                                                    if (!mounted) return;
+                                                    if (!synced) {
+                                                      messenger.showSnackBar(
+                                                        SnackBar(content: Text(syncError), backgroundColor: Colors.redAccent),
+                                                      );
+                                                      return;
+                                                    }
                                                     setState(() {
-                                                      final idx = _localScans
-                                                          .indexWhere((s) =>
-                                                              s.id == scan.id);
+                                                      final idx = _localScans.indexWhere((s) => s.id == scan.id);
                                                       if (idx != -1) {
-                                                        _localScans[idx] =
-                                                            ScanModel(
+                                                        _localScans[idx] = ScanModel(
                                                           id: scan.id,
                                                           title: scan.title,
-                                                          status: 'EXEMPTED',
-                                                          severity:
-                                                              scan.severity,
+                                                          status: 'ACCEPTED_RISK',
+                                                          severity: scan.severity,
                                                           summary: scan.summary,
-                                                          createdAt:
-                                                              scan.createdAt,
+                                                          createdAt: scan.createdAt,
                                                         );
                                                         _saveScansToPrefs();
                                                       }
@@ -560,39 +550,42 @@ class _ScanListScreenState extends State<ScanListScreen> {
                                                     Navigator.pop(
                                                         bottomSheetContext);
 
+                                                    final messenger = ScaffoldMessenger.of(context);
+                                                    bool synced = false;
+                                                    String syncError = 'No se pudo sincronizar el bloqueo con el servidor.';
                                                     try {
                                                       final token = await ApiClient.readStoredToken();
-
-                                                      if (token != null &&
-                                                          token.isNotEmpty) {
-                                                        _apiClient.setAuthToken(
-                                                            token);
+                                                      if (token != null && token.isNotEmpty) {
+                                                        _apiClient.setAuthToken(token);
                                                       }
-
-                                                      await _apiClient.post(
-                                                          '/findings/${scan.id}',
-                                                          data: {
-                                                            'status': 'BLOCKED',
-                                                            'reason':
-                                                                reasonText,
-                                                          });
-                                                    } catch (_) {}
-
+                                                      final res = await _apiClient.post(
+                                                        '/findings/${scan.id}/status',
+                                                        data: {
+                                                          'status': 'IN_REVIEW',
+                                                          'justification': reasonText,
+                                                        },
+                                                      );
+                                                      synced = res.statusCode == 200;
+                                                    } catch (e) {
+                                                      syncError = 'Error al registrar bloqueo en servidor: $e';
+                                                    }
+                                                    if (!mounted) return;
+                                                    if (!synced) {
+                                                      messenger.showSnackBar(
+                                                        SnackBar(content: Text(syncError), backgroundColor: Colors.redAccent),
+                                                      );
+                                                      return;
+                                                    }
                                                     setState(() {
-                                                      final idx = _localScans
-                                                          .indexWhere((s) =>
-                                                              s.id == scan.id);
+                                                      final idx = _localScans.indexWhere((s) => s.id == scan.id);
                                                       if (idx != -1) {
-                                                        _localScans[idx] =
-                                                            ScanModel(
+                                                        _localScans[idx] = ScanModel(
                                                           id: scan.id,
                                                           title: scan.title,
-                                                          status: 'BLOCKED',
-                                                          severity:
-                                                              scan.severity,
+                                                          status: 'IN_REVIEW',
+                                                          severity: scan.severity,
                                                           summary: scan.summary,
-                                                          createdAt:
-                                                              scan.createdAt,
+                                                          createdAt: scan.createdAt,
                                                         );
                                                         _saveScansToPrefs();
                                                       }
@@ -853,6 +846,7 @@ class _ScanListScreenState extends State<ScanListScreen> {
     );
   }
 }
+
 
 
 

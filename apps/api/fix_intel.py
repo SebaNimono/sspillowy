@@ -364,19 +364,20 @@ TRIAGE_SCHEMA: dict[str, Any] = {
 }
 
 
-def _raw_github_url(repo: Repository, path: str) -> str | None:
+def _raw_github_url(repo: Repository, path: str, ref: str | None = None) -> str | None:
     m = _GITHUB_RE.search((repo.url or "").strip())
-    if not m or not path:
+    commit_ref = (ref or "").strip()
+    if not m or not path or not commit_ref:
         return None
     clean = path.replace("\\", "/").lstrip("./")
-    return f"https://raw.githubusercontent.com/{m.group(1)}/{m.group(2)}/{repo.branch or 'main'}/{clean}"
+    return f"https://raw.githubusercontent.com/{m.group(1)}/{m.group(2)}/{commit_ref}/{clean}"
 
 
-async def _snippet(client: httpx.AsyncClient, repo: Repository | None, f: Finding) -> str | None:
-    """Fragmento de código alrededor de la línea (solo repos públicos de GitHub, nunca para secretos)."""
+async def _snippet(client: httpx.AsyncClient, repo: Repository | None, f: Finding, commit_sha: str | None = None) -> str | None:
+    """Fragmento de código del commit exacto escaneado (nunca rama móvil ni secretos)."""
     if repo is None or (f.engine or "") == "gitleaks" or not f.file_path or not f.line_number:
         return None
-    url = _raw_github_url(repo, f.file_path)
+    url = _raw_github_url(repo, f.file_path, ref=commit_sha)
     if not url:
         return None
     try:
@@ -414,12 +415,16 @@ async def fix_intel_triage(body: TriageBody, ws: WorkspaceCtx = Depends(require_
         if not findings:
             raise HTTPException(status_code=404, detail="Hallazgos no encontrados.")
         repos = {r.id: r for r in db.query(Repository).filter(Repository.id.in_({f.repository_id for f in findings}))}
+        scan_ids = {f.scan_id for f in findings if getattr(f, "scan_id", None)}
+        scans = {s.id: s for s in db.query(Scan).filter(Scan.id.in_(scan_ids))} if scan_ids else {}
 
         payload: list[dict] = []
         code_seen: set[str] = set()
         async with httpx.AsyncClient(timeout=6.0, follow_redirects=True) as client:
             for f in findings:
                 repo = repos.get(f.repository_id)
+                scan = scans.get(getattr(f, "scan_id", None))
+                scan_sha = getattr(scan, "commit_sha", None) if scan else None
                 pkg, version, fix = _package_info(f)
                 entry: dict[str, Any] = {
                     "finding_id": f.id,
@@ -433,10 +438,11 @@ async def fix_intel_triage(body: TriageBody, ws: WorkspaceCtx = Depends(require_
                     "cwe": f.cwe,
                     "owasp_category": f.owasp_category,
                     "test_or_example_path": _is_test_path(f.file_path),
+                    "verified_commit": scan_sha,
                 }
                 if pkg:
                     entry["package"] = {"name": pkg, "version": version, "fixed_in": fix}
-                snippet = await _snippet(client, repo, f)
+                snippet = await _snippet(client, repo, f, commit_sha=scan_sha)
                 entry["code_visible"] = bool(snippet)
                 if snippet:
                     entry["code_snippet"] = snippet
@@ -529,4 +535,5 @@ def fix_intel_decision(finding_id: str, body: DecisionBody, ws: WorkspaceCtx = D
         return _item(f, {repo.id: repo.name} if repo else {})
     finally:
         db.close()
+
 
