@@ -378,7 +378,10 @@ const AppShell: React.FC = () => {
       fetchAuthSession(sid)
         .then((s) => setSessionExpiresAt(s.expires_at ?? null))
         .catch((err) => {
-          if (!(err instanceof TypeError)) expireSession();
+          const msg = err instanceof Error ? err.message : String(err);
+          if (msg.includes('401') || msg.includes('404') || msg.toLowerCase().includes('expirada')) {
+            expireSession();
+          }
         });
     };
     document.addEventListener('visibilitychange', onVisible);
@@ -493,8 +496,11 @@ const AppShell: React.FC = () => {
     fetchAuthSession(storedSid)
       .then((session) => setSessionExpiresAt(session.expires_at ?? null))
       .catch((err) => {
-        // Sin conexión con la API no cerramos la sesión; solo si la API la rechaza.
-        if (!(err instanceof TypeError)) expireSession();
+        // Sin conexión con la API no cerramos la sesión; solo si la API la rechaza explícitamente como expirada.
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes('401') || msg.includes('404') || msg.toLowerCase().includes('expirada')) {
+          expireSession();
+        }
       })
       .finally(() => setBootstrapping(false));
     return () => window.removeEventListener('popstate', onPop);

@@ -306,6 +306,7 @@ def _extract_bearer(authorization: str | None) -> str:
 @router.get("/session/{session_id}")
 def get_auth_session(
     session_id: str,
+    x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
     authorization: str | None = Header(default=None, alias="Authorization"),
 ):
     session = load_session(session_id)
@@ -313,7 +314,7 @@ def get_auth_session(
         raise HTTPException(status_code=404, detail="Sesión OAuth no encontrada o expirada")
     bearer = _extract_bearer(authorization)
     session_token = str(session.get("token") or "")
-    if not bearer or not session_token or not hmac.compare_digest(bearer, session_token):
+    if session_token and (not bearer or not hmac.compare_digest(bearer, session_token)):
         raise HTTPException(status_code=403, detail="No autorizado para consultar esta sesión")
     return session
 
@@ -329,7 +330,7 @@ def logout(
         if session:
             bearer = _extract_bearer(authorization)
             session_token = str(session.get("token") or "")
-            if not bearer or not session_token or not hmac.compare_digest(bearer, session_token):
+            if session_token and (not bearer or not hmac.compare_digest(bearer, session_token)):
                 raise HTTPException(status_code=403, detail="No autorizado para cerrar esta sesión")
         delete_session(sid)
     return {"ok": True}

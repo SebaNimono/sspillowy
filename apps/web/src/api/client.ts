@@ -313,7 +313,12 @@ export function switchWorkspace(workspaceId: string | null): void {
 function authHeaders(extra?: HeadersInit): Headers {
   const headers = new Headers(extra || {});
   const sid = getStoredSessionId();
-  if (sid) headers.set('X-Session-Id', sid);
+  if (sid) {
+    headers.set('X-Session-Id', sid);
+    if (!headers.has('Authorization')) {
+      headers.set('Authorization', `Bearer ${sid}`);
+    }
+  }
   const ws = getActiveWorkspaceId();
   if (ws) headers.set('X-Workspace-Id', ws);
   return headers;
