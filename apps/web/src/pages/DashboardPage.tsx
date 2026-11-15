@@ -32,6 +32,7 @@ import {
 } from '../components/QueryWidgetBuilderModal';
 import PageSkeleton from '../components/PageSkeleton';
 import { useI18n } from '../i18n/I18nProvider';
+import { formatCsv, downloadCsv } from '../utils/csv';
 import {
   DashboardStats,
   HeatmapData,
@@ -898,21 +899,11 @@ export const DashboardPage: React.FC<PageProps> = ({
 
   const exportDashboardCsv = () => {
     const headers = ['Estado', 'Servicio / Repositorio', 'URL / Endpoint', 'Health / Cumplimiento', 'Detalle / Hallazgos'];
-    const lines = [
-      headers.join(','),
-      ...serviceRows.map((r) =>
-        [r.statusLabel, r.service, r.url, r.uptime, r.response]
-          .map((cell) => `"${String(cell).replace(/"/g, '""')}"`)
-          .join(','),
-      ),
+    const rows = [
+      headers,
+      ...serviceRows.map((r) => [r.statusLabel, r.service, r.url, r.uptime, r.response]),
     ];
-    const blob = new Blob([`\uFEFF${lines.join('\n')}`], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `sspillowy-dashboard-${range}d.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadCsv(`sspillowy-dashboard-${range}d.csv`, formatCsv(rows));
   };
 
   const gateLabels: Record<GateKey, string> = {

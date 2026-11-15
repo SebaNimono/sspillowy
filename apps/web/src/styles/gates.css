@@ -78,6 +78,20 @@
   color: #8250df;
 }
 
+.gt-status.is-unverified .gt-status-icon {
+  color: #9a6700;
+}
+
+.gt-stale-warning {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0.25rem 0 0.5rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #9a6700;
+}
+
 .gt-reasons {
   margin: 0;
   padding-left: 1.1rem;
@@ -245,6 +259,12 @@
   color: #8250df;
   border-color: #c297ff;
   background: #fbefff;
+}
+
+.gt-pill.is-unverified {
+  color: #9a6700;
+  border-color: #d4a72c;
+  background: #fff8c5;
 }
 
 .gt-columns {

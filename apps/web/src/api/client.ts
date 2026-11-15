@@ -310,6 +310,21 @@ export function switchWorkspace(workspaceId: string | null): void {
   window.location.reload();
 }
 
+// Sincronización multi-pestaña: si otra pestaña cambia el espacio activo en localStorage,
+// invalidar las cachés y recargar la vista para evitar peticiones cruzadas a espacios distintos.
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (event) => {
+    if (event.key === WORKSPACE_KEY && event.oldValue !== event.newValue) {
+      try {
+        window.dispatchEvent(new Event('sspillowy:workspace-cache-clear'));
+      } catch {
+        // ignore
+      }
+      window.location.reload();
+    }
+  });
+}
+
 function authHeaders(extra?: HeadersInit): Headers {
   const headers = new Headers(extra || {});
   const sid = getStoredSessionId();
@@ -338,6 +353,9 @@ function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 async function send<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = authHeaders(init?.headers);
+  if (init?.body && typeof init.body === 'string' && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
   const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
   if (res.status === 401) {
     window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
@@ -1489,11 +1507,19 @@ export async function fetchCompliance(): Promise<ComplianceOverview> {
 }
 
 export async function setComplianceFramework(id: string, enabled: boolean): Promise<ComplianceOverview> {
-  return request(`/compliance/frameworks/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ enabled }) });
+  return request(`/compliance/frameworks/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled }),
+  });
 }
 
 export async function updateComplianceControl(id: string, body: ComplianceControlPatch): Promise<ComplianceOverview> {
-  return request(`/compliance/controls/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(body) });
+  return request(`/compliance/controls/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
 }
 
 export async function fetchComplianceEvidence(id: string): Promise<Record<string, unknown>> {

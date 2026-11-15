@@ -24,6 +24,7 @@ import {
 import { Header } from '../components/Header';
 import { SidebarState } from '../components/Sidebar';
 import PageSkeleton from '../components/PageSkeleton';
+import { formatCsv } from '../utils/csv';
 import {
   AuditTrail,
   AuditTrailFilters,
@@ -126,11 +127,7 @@ function download(name: string, content: string, type: string) {
 }
 
 function csv(rows: (string | number | null | undefined)[][]) {
-  const cell = (v: string | number | null | undefined) => {
-    const s = v === null || v === undefined ? '' : String(v);
-    return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  };
-  return '\uFEFF' + rows.map((r) => r.map(cell).join(',')).join('\n');
+  return formatCsv(rows);
 }
 
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'hallazgo';

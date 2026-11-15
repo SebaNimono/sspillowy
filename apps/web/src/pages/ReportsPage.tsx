@@ -33,6 +33,7 @@ import {
   updateComplianceControl,
 } from '../api/client';
 import { formatDateTime } from '../utils/formatDateTime';
+import { formatCsv, downloadCsv } from '../utils/csv';
 import { usePillowPageContext } from '../config/pillowContext';
 import { useI18n } from '../i18n/I18nProvider';
 import PageSkeleton from '../components/PageSkeleton';
@@ -83,8 +84,6 @@ function download(name: string, content: string, type: string) {
 
 const formatDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
-
-const csvCell = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
 
 export const ReportsPage: React.FC<PageProps> = ({
   sidebarState,
@@ -190,8 +189,7 @@ export const ReportsPage: React.FC<PageProps> = ({
         Array.from(new Set(owners)).join(' '),
       ] as string[]);
     }
-    const csv = '\uFEFF' + rows.map((r) => r.map(csvCell).join(',')).join('\n');
-    download(`sspillowy-${fw.id}-${data?.period ?? ''}.csv`, csv, 'text/csv;charset=utf-8');
+    downloadCsv(`sspillowy-${fw.id}-${data?.period ?? ''}.csv`, formatCsv(rows));
   };
 
   const pillowContext = useMemo(() => {

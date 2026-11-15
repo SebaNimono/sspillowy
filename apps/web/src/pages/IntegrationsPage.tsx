@@ -12,6 +12,8 @@ import {
   connectChatIntegration,
   disconnectChatIntegration,
   fetchIntegrations,
+  getActiveWorkspaceId,
+  getStoredUser,
   testChatIntegration,
 } from '../api/client';
 import PageSkeleton from '../components/PageSkeleton';
@@ -260,11 +262,24 @@ function buildEntries(
   return entries;
 }
 
-let cached: IntegrationsOverview | null = null;
+const cacheMap = new Map<string, IntegrationsOverview>();
+
+function getIntegrationsCacheKey(userEmail?: string): string {
+  const u = userEmail || getStoredUser()?.email || 'anon';
+  const ws = getActiveWorkspaceId() || 'default';
+  return `${u.toLowerCase()}:${ws}`;
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('sspillowy:workspace-cache-clear', () => {
+    cacheMap.clear();
+  });
+}
 
 export const IntegrationsPage: React.FC<IntegrationsPageProps> = ({ onNavigate, ...headerProps }) => {
   const { t } = useI18n();
-  const [data, setDataState] = useState<IntegrationsOverview | null>(cached);
+  const cacheKey = getIntegrationsCacheKey(headerProps.user?.email);
+  const [data, setDataState] = useState<IntegrationsOverview | null>(() => cacheMap.get(cacheKey) ?? null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<Category | 'all'>('all');
@@ -272,7 +287,7 @@ export const IntegrationsPage: React.FC<IntegrationsPageProps> = ({ onNavigate, 
   const [addProvider, setAddProvider] = useState<RepoProvider | null>(null);
 
   const setData = (d: IntegrationsOverview) => {
-    cached = d;
+    cacheMap.set(getIntegrationsCacheKey(headerProps.user?.email), d);
     setDataState(d);
   };
 
@@ -282,8 +297,17 @@ export const IntegrationsPage: React.FC<IntegrationsPageProps> = ({ onNavigate, 
       .catch((e) => setError(e instanceof Error ? e.message : 'No se pudieron cargar las integraciones.'));
 
   useEffect(() => {
-    void reload();
+    const handleClear = () => {
+      cacheMap.clear();
+      setDataState(null);
+    };
+    window.addEventListener('sspillowy:workspace-cache-clear', handleClear);
+    return () => window.removeEventListener('sspillowy:workspace-cache-clear', handleClear);
   }, []);
+
+  useEffect(() => {
+    void reload();
+  }, [headerProps.user?.email]);
 
   const go = (tab: string) => {
     setOpenId(null);

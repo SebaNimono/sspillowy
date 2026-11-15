@@ -11,11 +11,13 @@ import {
   createGateBypass,
   evaluateSecurityGate,
   fetchSecurityGateOverview,
+  getActiveWorkspaceId,
+  getStoredUser,
   rejectGateBypass,
   revokeGateBypass,
   updateSecurityGate,
 } from '../api/client';
-import { ArrowRight, Ban, CircleCheck, Clock, PauseCircle, RefreshCw, ShieldAlert, Timer, XCircle } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Ban, CircleCheck, Clock, PauseCircle, RefreshCw, ShieldAlert, Timer, XCircle } from 'lucide-react';
 import { useI18n } from '../i18n/I18nProvider';
 import PageSkeleton from '../components/PageSkeleton';
 import '../styles/gates.css';
@@ -30,7 +32,7 @@ interface PageProps {
   onGoToSite?: () => void;
 }
 
-type Decision = 'PASSED' | 'BLOCKED' | 'BYPASSED' | 'DISABLED';
+type Decision = 'PASSED' | 'BLOCKED' | 'BYPASSED' | 'DISABLED' | 'UNVERIFIED';
 
 const DECISION: Record<Decision, { title: string; label: string; icon: React.ReactNode }> = {
   PASSED: {
@@ -53,6 +55,11 @@ const DECISION: Record<Decision, { title: string; label: string; icon: React.Rea
     label: 'Apagado',
     icon: <PauseCircle size={26} />,
   },
+  UNVERIFIED: {
+    title: 'Evaluación no verificada o pendiente de escaneo',
+    label: 'No verificado',
+    icon: <AlertTriangle size={26} />,
+  },
 };
 
 const BYPASS_STATUS: Record<string, string> = {
@@ -69,7 +76,7 @@ const DURATIONS = [
   { hours: 168, label: '7 días (168 h)' },
 ];
 
-const asDecision = (d: string): Decision => (d in DECISION ? (d as Decision) : 'PASSED');
+const asDecision = (d: unknown): Decision => (typeof d === 'string' && d in DECISION ? (d as Decision) : 'UNVERIFIED');
 
 const samePolicy = (a: SecurityGatePolicy, b: SecurityGatePolicy) =>
   a.enabled === b.enabled &&
@@ -110,12 +117,34 @@ function formatRequestedDuration(b: GateBypassRequest): string | null {
   return `${hours} h`;
 }
 
-let cached: SecurityGateOverview | null = null;
+interface GateCacheEntry {
+  data: SecurityGateOverview;
+  timestamp: number;
+}
+
+const cachedGates = new Map<string, GateCacheEntry>();
+
+function getGateCacheKey(userEmail?: string): string {
+  const u = userEmail || getStoredUser()?.email || 'anon';
+  const ws = getActiveWorkspaceId() || 'default';
+  return `${u.toLowerCase()}:${ws}`;
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('sspillowy:workspace-cache-clear', () => {
+    cachedGates.clear();
+  });
+}
 
 export const SecurityGatesPage: React.FC<PageProps> = ({ onNavigate, ...headerProps }) => {
   const { t } = useI18n();
-  const [data, setDataState] = useState<SecurityGateOverview | null>(cached);
-  const [draft, setDraft] = useState<SecurityGatePolicy | null>(cached?.policy ?? null);
+  const cacheKey = getGateCacheKey(headerProps.user?.email);
+  const initialCache = cachedGates.get(cacheKey);
+  const [data, setDataState] = useState<SecurityGateOverview | null>(initialCache?.data ?? null);
+  const [draft, setDraft] = useState<SecurityGatePolicy | null>(initialCache?.data.policy ?? null);
+  const [lastEvaluatedAt, setLastEvaluatedAt] = useState<Date | null>(
+    initialCache ? new Date(initialCache.timestamp) : null,
+  );
   const [apiOffline, setApiOffline] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -131,7 +160,9 @@ export const SecurityGatesPage: React.FC<PageProps> = ({ onNavigate, ...headerPr
   const requestRef = useRef<HTMLDivElement>(null);
 
   const setData = (d: SecurityGateOverview, resetDraft = false) => {
-    cached = d;
+    const ts = Date.now();
+    cachedGates.set(getGateCacheKey(headerProps.user?.email), { data: d, timestamp: ts });
+    setLastEvaluatedAt(new Date(ts));
     setDataState(d);
     setDraft((cur) => (resetDraft || !cur ? d.policy : cur));
   };
@@ -143,12 +174,23 @@ export const SecurityGatesPage: React.FC<PageProps> = ({ onNavigate, ...headerPr
         setData(d, resetDraft);
       })
       .catch(() => {
-        if (!cached) setApiOffline(true);
+        setApiOffline(true);
       });
 
   useEffect(() => {
-    void load(true);
+    const handleClear = () => {
+      cachedGates.clear();
+      setDataState(null);
+      setDraft(null);
+      setLastEvaluatedAt(null);
+    };
+    window.addEventListener('sspillowy:workspace-cache-clear', handleClear);
+    return () => window.removeEventListener('sspillowy:workspace-cache-clear', handleClear);
   }, []);
+
+  useEffect(() => {
+    void load(true);
+  }, [headerProps.user?.email]);
 
   const notify = (type: ToastMessage['type'], title: string, message: string) =>
     setToast({ id: Date.now().toString(), type, title, message });
@@ -265,7 +307,7 @@ export const SecurityGatesPage: React.FC<PageProps> = ({ onNavigate, ...headerPr
   };
 
   const check = data?.check;
-  const decision = asDecision(check?.decision || 'PASSED');
+  const decision = asDecision(check?.decision);
   const info = DECISION[decision];
   const allBypasses = data?.bypasses ?? [];
   const activeBypasses = allBypasses.filter(isBypassActive);
@@ -286,7 +328,15 @@ export const SecurityGatesPage: React.FC<PageProps> = ({ onNavigate, ...headerPr
         {...headerProps}
       />
 
-      {apiOffline && <ApiOfflineBanner />}
+      {apiOffline && (
+        <ApiOfflineBanner
+          message={
+            data
+              ? `No se pudo conectar con la API. Mostrando última evaluación en caché (${lastEvaluatedAt ? lastEvaluatedAt.toLocaleString('es-CL') : 'reciente'}) — Estado desactualizado.`
+              : undefined
+          }
+        />
+      )}
 
       {!data && !apiOffline && <PageSkeleton variant="panel" rows={5} />}
 
@@ -297,6 +347,14 @@ export const SecurityGatesPage: React.FC<PageProps> = ({ onNavigate, ...headerPr
               <span className="gt-status-icon">{info.icon}</span>
               <div>
                 <h2>{info.title}</h2>
+                {apiOffline && (
+                  <div className="gt-stale-warning">
+                    <Clock size={14} />
+                    <span>
+                      Última evaluación registrada: {lastEvaluatedAt ? lastEvaluatedAt.toLocaleString('es-CL') : 'previa'} — Marcada como desactualizada por pérdida de conexión
+                    </span>
+                  </div>
+                )}
                 <ul className="gt-reasons">
                   {blockingReasons.map((r) => (
                     <li key={r}>{r}</li>
