@@ -205,3 +205,5 @@ curl -X POST https://api.sspillowy.com/api/v1/admin/seed -H "X-Session-Id: TU_SE
 ## Licencia
 
 Distribuido bajo la **Licencia MIT**. Consulta el archivo [LICENSE](./LICENSE) para más información.
+<!-- SSPILLOWY DevSecOps Platform -->
+
