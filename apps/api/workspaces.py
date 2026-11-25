@@ -148,6 +148,7 @@ def _ensure_membership(db: Session, email: str, name: str) -> list[WorkspaceMemb
 
 _CTX_TTL = 180.0
 _ctx_cache: dict[tuple[str, Optional[str]], tuple[float, WorkspaceCtx]] = {}
+_overview_cache: dict[tuple[str, str], tuple[float, dict]] = {}
 _ctx_lock = threading.Lock()
 
 
@@ -155,6 +156,7 @@ def invalidate_workspace_cache() -> None:
     """Llamar tras cambiar miembros o repositorios de un espacio."""
     with _ctx_lock:
         _ctx_cache.clear()
+        _overview_cache.clear()
 
 
 def resolve_workspace(session: dict, requested: Optional[str]) -> WorkspaceCtx:
@@ -390,7 +392,16 @@ def _iso(dt: Optional[datetime]) -> Optional[str]:
     return (dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)).isoformat()
 
 
-def _overview(db: Session, ctx: WorkspaceCtx) -> dict:
+def _overview(db: Session, ctx: WorkspaceCtx, *, use_cache: bool = True) -> dict:
+    import database as _database
+
+    cache_key = (ctx.id, ctx.email)
+    now_m = time.monotonic()
+    if use_cache and not _database.USING_SQLITE:
+        with _ctx_lock:
+            cached = _overview_cache.get(cache_key)
+        if cached and cached[0] > now_m:
+            return cached[1]
     mine = db.query(WorkspaceMember).filter(WorkspaceMember.email == ctx.email).all()
     ws_ids = [m.workspace_id for m in mine]
     names = {w.id: w.name for w in db.query(Workspace).filter(Workspace.id.in_(ws_ids)).all()} if ws_ids else {}
@@ -422,7 +433,7 @@ def _overview(db: Session, ctx: WorkspaceCtx) -> dict:
 
     emails = [m.email for m in members]
     users = {u.email.lower(): u for u in db.query(User).filter(func.lower(User.email).in_(emails)).all()} if emails else {}
-    return {
+    res_overview = {
         "current": {
             "id": ctx.id,
             "name": ctx.name,
@@ -475,6 +486,10 @@ def _overview(db: Session, ctx: WorkspaceCtx) -> dict:
         ],
         "roles": [{"id": r, "label": ROLE_LABEL[r]} for r in ROLES if r != "owner"],
     }
+    if not _database.USING_SQLITE:
+        with _ctx_lock:
+            _overview_cache[cache_key] = (now_m + 15.0, res_overview)
+    return res_overview
 
 
 @router.get("")
@@ -577,10 +592,11 @@ def invite_member(body: InviteBody, ctx: WorkspaceCtx = Depends(require_ws_admin
 
         _audit(db, ctx, "WORKSPACE_MEMBER_INVITED", email, f"Invitación pendiente · Rol: {ROLE_LABEL[body.role]}")
         db.commit()
+        invalidate_workspace_cache()
 
         invite_url = f"{hub}/invitacion?token={token}"
         threading.Thread(target=_send_invitation_email_bg, args=(email, ctx, body.role, invite_url), daemon=True).start()
-        return _overview(db, ctx)
+        return _overview(db, ctx, use_cache=False)
     finally:
         db.close()
 
@@ -716,7 +732,8 @@ def cancel_invitation(invitation_id: str, ctx: WorkspaceCtx = Depends(require_ws
         inv.status = "cancelled"
         _audit(db, ctx, "WORKSPACE_INVITATION_CANCELLED", email, f"Invitación revocada por {ctx.email}")
         db.commit()
-        return _overview(db, ctx)
+        invalidate_workspace_cache()
+        return _overview(db, ctx, use_cache=False)
     finally:
         db.close()
 

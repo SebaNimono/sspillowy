@@ -8,10 +8,13 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from typing import Optional
+import time
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+import database as _database
 from compliance import current_period, evaluate
 from database import db_ping
 from models import Finding, GateBypassRequest, Repository, RunbookExecution, Scan, SecretIncident
@@ -19,6 +22,8 @@ from velocity import SLA_DAYS, Run, build_runs, compute_velocity, first_seen_map
 from workspaces import WorkspaceCtx, require_ws
 
 router = APIRouter(prefix="/api/v1/executive", tags=["Resumen ejecutivo"])
+
+_EXEC_CACHE: dict[tuple[str, int, tuple[str, ...]], tuple[float, dict]] = {}
 
 RANGES = (30, 90, 180, 365)
 WEIGHTS = {"CRITICAL": 18, "HIGH": 8, "MEDIUM": 3, "LOW": 1, "INFO": 0}
@@ -129,6 +134,13 @@ def compute_executive(
     repo_ids: list[str] | None = None,
     now: datetime | None = None,
 ) -> dict:
+    use_cache = now is None and not _database.USING_SQLITE
+    cache_key = (workspace_id, range_days, tuple(sorted(repo_ids or ())))
+    now_m = time.monotonic()
+    if use_cache:
+        cached = _EXEC_CACHE.get(cache_key)
+        if cached and cached[0] > now_m:
+            return cached[1]
     now = now or datetime.now(timezone.utc)
     start = now - timedelta(days=range_days)
 
@@ -141,7 +153,9 @@ def compute_executive(
 
     prebuilt = build_runs(db, ids) if ids else ([], 0)
     runs = prebuilt[0]
-    velocity = compute_velocity(db, range_days=range_days, repo_ids=ids or ["__none__"], now=now, prebuilt=prebuilt)
+    velocity = compute_velocity(
+        db, range_days=range_days, repo_ids=ids or ["__none__"], now=now, prebuilt=prebuilt, repos=repos
+    )
     k, prev = velocity["kpis"], velocity["previous"]
 
     runs_by_repo: dict[str, list[Run]] = defaultdict(list)
@@ -170,7 +184,28 @@ def compute_executive(
 
     # Riesgos principales: hallazgos abiertos agrupados por repositorio y tipo de problema
     first_seen = first_seen_map(db, ids) if ids else {}
-    open_rows = db.query(Finding).filter(Finding.status.in_(OPEN), Finding.repository_id.in_(ids or ["__none__"])).all()
+    open_rows = [
+        SimpleNamespace(
+            repository_id=r_id,
+            engine=eng,
+            cwe=cwe,
+            title=title,
+            file_path=fpath,
+            severity=sev,
+            created_at=c_at,
+        )
+        for r_id, eng, cwe, title, fpath, sev, c_at in db.query(
+            Finding.repository_id,
+            Finding.engine,
+            Finding.cwe,
+            Finding.title,
+            Finding.file_path,
+            Finding.severity,
+            Finding.created_at,
+        )
+        .filter(Finding.status.in_(OPEN), Finding.repository_id.in_(ids or ["__none__"]))
+        .all()
+    ]
     groups: dict[tuple[str, str], dict] = {}
     for f in open_rows:
         cat = _category(f)
@@ -275,8 +310,12 @@ def compute_executive(
             }
         )
     accepted = {
-        (f.repository_id, fingerprint(f.engine, f.title, f.file_path))
-        for f in db.query(Finding).filter(Finding.status == "ACCEPTED_RISK", Finding.repository_id.in_(ids or ["__none__"])).all()
+        (r_id, fingerprint(eng, title, fpath))
+        for r_id, eng, title, fpath in db.query(
+            Finding.repository_id, Finding.engine, Finding.title, Finding.file_path
+        )
+        .filter(Finding.status == "ACCEPTED_RISK", Finding.repository_id.in_(ids or ["__none__"]))
+        .all()
     }
     if accepted:
         decisions.append(
@@ -411,7 +450,7 @@ def compute_executive(
         "gaps": blocking[:4],
     }
 
-    return {
+    res_dict = {
         "range_days": range_days,
         "generated_at": now.isoformat(),
         "period_start": start.date().isoformat(),
@@ -434,6 +473,9 @@ def compute_executive(
         "repositories": repo_rows,
         "compliance": compliance,
     }
+    if use_cache:
+        _EXEC_CACHE[cache_key] = (now_m + 15.0, res_dict)
+    return res_dict
 
 
 @router.get("")

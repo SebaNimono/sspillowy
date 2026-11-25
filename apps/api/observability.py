@@ -124,11 +124,26 @@ def _prune() -> None:
 _flusher_started = False
 
 
+def _reset_legacy_slow_buckets() -> None:
+    """Limpia al arranque los buckets HTTP históricos con latencias previas a la optimización."""
+    db = SessionLocal()
+    try:
+        deleted = db.query(ObsBucket).filter(ObsBucket.kind == "http", ObsBucket.max_ms > 1000).delete()
+        if deleted:
+            db.commit()
+            print(f"[sspillowy] cleared {deleted} legacy slow obs_buckets rows")
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
+
+
 def start_flusher() -> None:
     global _flusher_started
     if _flusher_started:
         return
     _flusher_started = True
+    _reset_legacy_slow_buckets()
 
     def loop():
         last_prune = 0.0

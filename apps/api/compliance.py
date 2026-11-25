@@ -5,14 +5,18 @@ preparación de cada marco (ISO 27001, SOC 2, NIST, PCI DSS, CIS, OWASP, Ley 21.
 from __future__ import annotations
 
 import re
+import time
 import uuid
 from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
+from types import SimpleNamespace
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy import func
 
+import database as _database
 from compliance_catalog import CONTROLS, DOMAINS, FRAMEWORK_BY_ID, FRAMEWORKS
 from database import db_ping
 from email_service import mailer_configured
@@ -112,23 +116,34 @@ class _Ctx:
                 if e not in self.engine_last or t > self.engine_last[e]:
                     self.engine_last[e] = t
 
-        self.open = db.query(Finding).filter(Finding.status.in_(OPEN), Finding.repository_id.in_(ids or ["__none__"])).all()
+        self.open = [
+            SimpleNamespace(engine=eng, severity=sev, owasp_category=owasp)
+            for eng, sev, owasp in db.query(Finding.engine, Finding.severity, Finding.owasp_category)
+            .filter(Finding.status.in_(OPEN), Finding.repository_id.in_(ids or ["__none__"]))
+            .all()
+        ]
         self.decided = {
-            (f.repository_id, fingerprint(f.engine, f.title, f.file_path))
-            for f in db.query(Finding)
+            (r_id, fingerprint(eng, title, path))
+            for r_id, eng, title, path in db.query(
+                Finding.repository_id, Finding.engine, Finding.title, Finding.file_path
+            )
             .filter(Finding.status.in_(["FALSE_POSITIVE", "ACCEPTED_RISK"]), Finding.repository_id.in_(ids or ["__none__"]))
             .all()
         }
         self.ai_reviewed = (
-            db.query(Finding)
+            db.query(func.count(Finding.id))
             .filter(Finding.ai_feedback.isnot(None), Finding.repository_id.in_(ids or ["__none__"]))
-            .count()
+            .scalar()
+            or 0
         )
 
-        sbom_rows = db.query(SbomComponent.repository_id).filter(SbomComponent.repository_id.in_(ids or ["__none__"])).all()
-        self.sbom_counts: dict[str, int] = defaultdict(int)
-        for (rid,) in sbom_rows:
-            self.sbom_counts[rid] += 1
+        sbom_rows = (
+            db.query(SbomComponent.repository_id, func.count(SbomComponent.id))
+            .filter(SbomComponent.repository_id.in_(ids or ["__none__"]))
+            .group_by(SbomComponent.repository_id)
+            .all()
+        )
+        self.sbom_counts: dict[str, int] = {rid: int(cnt or 0) for rid, cnt in sbom_rows}
 
         self.secrets_open = (
             db.query(SecretIncident)
@@ -164,7 +179,7 @@ class _Ctx:
             )
             .all()
         )
-        self.velocity = compute_velocity(db, range_days=90, repo_ids=ids or ["__none__"], now=now)
+        self.velocity = compute_velocity(db, range_days=90, repo_ids=ids or ["__none__"], now=now, repos=self.repos)
         self.mail_ready = mailer_configured()
         self.recipients = admin_recipients(db, ws)
 
@@ -449,7 +464,24 @@ def pin_default_frameworks(db, workspace_id: str) -> None:
         db.commit()
 
 
+_EVAL_CACHE: dict[str, tuple[float, dict]] = {}
+
+
+def invalidate_compliance_cache(workspace_id: str | None = None) -> None:
+    if workspace_id:
+        _EVAL_CACHE.pop(workspace_id, None)
+    else:
+        _EVAL_CACHE.clear()
+
+
 def evaluate(db, workspace_id: str, now: datetime | None = None) -> dict:
+    use_cache = now is None and not _database.USING_SQLITE
+    now_m = time.monotonic()
+    if use_cache:
+        cached = _EVAL_CACHE.get(workspace_id)
+        if cached and cached[0] > now_m:
+            import copy
+            return copy.deepcopy(cached[1])
     now = now or _now()
     ctx = _Ctx(db, now, workspace_id)
     states = {
@@ -531,7 +563,7 @@ def evaluate(db, workspace_id: str, now: datetime | None = None) -> dict:
         )
 
     ctl = list(controls.values())
-    return {
+    res_dict = {
         "generated_at": now.isoformat(),
         "period": current_period(now),
         "domains": DOMAINS,
@@ -546,6 +578,10 @@ def evaluate(db, workspace_id: str, now: datetime | None = None) -> dict:
             "not_applicable": sum(1 for c in ctl if c["status"] == "NOT_APPLICABLE"),
         },
     }
+    if use_cache:
+        import copy
+        _EVAL_CACHE[workspace_id] = (now_m + 15.0, copy.deepcopy(res_dict))
+    return res_dict
 
 
 def _snapshot(db, data: dict, workspace_id: str) -> dict[str, list[dict]]:
@@ -638,6 +674,7 @@ def set_framework(framework_id: str, body: FrameworkPatch, ws: WorkspaceCtx = De
         row.updated_at = _now()
         _audit(db, ws.actor, "COMPLIANCE_FRAMEWORK_ENABLED" if body.enabled else "COMPLIANCE_FRAMEWORK_DISABLED", fw["short"])
         db.commit()
+        invalidate_compliance_cache(ws.id)
         return _overview(db, ws.id)
     finally:
         db.close()
@@ -699,6 +736,7 @@ def update_control(control_id: str, body: ControlPatch, ws: WorkspaceCtx = Depen
         st.updated_by = actor
         st.updated_at = _now()
         db.commit()
+        invalidate_compliance_cache(ws.id)
         return _overview(db, ws.id)
     finally:
         db.close()

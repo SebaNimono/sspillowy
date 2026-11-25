@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import math
 import statistics
+import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -18,11 +19,20 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
 
+import database as _database
 from database import SessionLocal, db_ping
 from models import Finding, GateBypassRequest, Repository, Scan
 from workspaces import WorkspaceCtx, require_ws
 
 router = APIRouter(prefix="/api/v1/velocity", tags=["Security Velocity"])
+
+_FIRST_SEEN_CACHE: dict[tuple[str, ...], tuple[float, dict[tuple[str, str], datetime]]] = {}
+_RUNS_CACHE: dict[tuple[str, ...], tuple[float, tuple[list["Run"], int]]] = {}
+
+
+def invalidate_velocity_cache() -> None:
+    _FIRST_SEEN_CACHE.clear()
+    _RUNS_CACHE.clear()
 
 SLA_DAYS = {"CRITICAL": 7, "HIGH": 30, "MEDIUM": 90, "LOW": 180, "INFO": 365}
 SEVERITIES = ("CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO")
@@ -43,6 +53,12 @@ def fingerprint(engine: str | None, title: str | None, path: str | None) -> str:
 
 def first_seen_map(db, repo_ids: list[str] | None = None) -> dict[tuple[str, str], datetime]:
     """(repo_id, fingerprint) → primera vez que se detectó (para calcular antigüedad y SLA reales)."""
+    cache_key = tuple(sorted(repo_ids)) if repo_ids else ("__all__",)
+    now_m = time.monotonic()
+    if not _database.USING_SQLITE:
+        cached = _FIRST_SEEN_CACHE.get(cache_key)
+        if cached and cached[0] > now_m:
+            return cached[1]
     q = db.query(
         Finding.repository_id,
         Finding.engine,
@@ -58,6 +74,8 @@ def first_seen_map(db, repo_ids: list[str] | None = None) -> dict[tuple[str, str
         first = _aware(first)
         if key not in out or (first and first < out[key]):
             out[key] = first
+    if not _database.USING_SQLITE:
+        _FIRST_SEEN_CACHE[cache_key] = (now_m + 15.0, out)
     return out
 
 
@@ -85,6 +103,12 @@ class _Track:
 
 def build_runs(db, repo_ids: list[str] | None = None) -> tuple[list[Run], int]:
     """Reconstruye los periodos abiertos de cada hallazgo. Devuelve (runs, nº de hallazgos decididos)."""
+    cache_key = tuple(sorted(repo_ids)) if repo_ids else ("__all__",)
+    now_m = time.monotonic()
+    if not _database.USING_SQLITE:
+        cached = _RUNS_CACHE.get(cache_key)
+        if cached and cached[0] > now_m:
+            return cached[1]
     scan_q = db.query(Scan).filter(Scan.status == "COMPLETED")
     if repo_ids:
         scan_q = scan_q.filter(Scan.repository_id.in_(repo_ids))
@@ -158,7 +182,10 @@ def build_runs(db, repo_ids: list[str] | None = None) -> tuple[list[Run], int]:
                 if t.status == "FIXED":
                     current.closed = t.last_seen
                 runs.append(current)
-    return runs, decided
+    res = (runs, decided)
+    if not _database.USING_SQLITE:
+        _RUNS_CACHE[cache_key] = (now_m + 15.0, res)
+    return res
 
 
 def _days(a: datetime, b: datetime) -> float:
@@ -207,15 +234,17 @@ def compute_velocity(
     repo_ids: list[str] | None = None,
     now: datetime | None = None,
     prebuilt: tuple[list[Run], int] | None = None,
+    repos: list[Repository] | None = None,
 ) -> dict:
     now = now or datetime.now(timezone.utc)
     start = now - timedelta(days=range_days)
     prev_start = start - timedelta(days=range_days)
 
-    repo_q = db.query(Repository)
-    if repo_ids:
-        repo_q = repo_q.filter(Repository.id.in_(repo_ids))
-    repos = repo_q.all()
+    if repos is None:
+        repo_q = db.query(Repository)
+        if repo_ids:
+            repo_q = repo_q.filter(Repository.id.in_(repo_ids))
+        repos = repo_q.all()
     ids = [r.id for r in repos]
     if prebuilt is not None:
         runs, decided = prebuilt
