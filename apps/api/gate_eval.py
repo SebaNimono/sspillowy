@@ -74,6 +74,39 @@ def _count_open(
     return int(q.scalar() or 0)
 
 
+def _open_totals(
+    db,
+    *,
+    repository_id: str | None = None,
+    repo_ids: list[str] | None = None,
+) -> tuple[int, int, int]:
+    """Devuelve (open_critical, open_high, open_secrets) en una sola consulta SQL agrupada."""
+    q = db.query(
+        func.upper(Finding.severity),
+        func.lower(Finding.engine),
+        func.count(Finding.id),
+    ).filter(Finding.status.in_(OPEN_STATUSES))
+    if repository_id:
+        q = q.filter(Finding.repository_id == repository_id)
+    elif repo_ids is not None:
+        if not repo_ids:
+            return 0, 0, 0
+        q = q.filter(Finding.repository_id.in_(repo_ids))
+    rows = q.group_by(func.upper(Finding.severity), func.lower(Finding.engine)).all()
+    crit = 0
+    high = 0
+    secrets = 0
+    for sev, eng, n in rows:
+        cnt = int(n or 0)
+        if sev == "CRITICAL":
+            crit += cnt
+        elif sev == "HIGH":
+            high += cnt
+        if eng == "gitleaks":
+            secrets += cnt
+    return crit, high, secrets
+
+
 def open_counts_by_repo(db, repo_ids: list[str]) -> dict[str, dict[str, int]]:
     """{repo_id: {critical, high, secrets}} con una sola consulta agrupada."""
     out: dict[str, dict[str, int]] = {rid: {"critical": 0, "high": 0, "secrets": 0} for rid in repo_ids}
@@ -123,11 +156,9 @@ def evaluate_gate(
     block_secrets = bool(gate.block_on_secrets)
     ciso = bool(gate.require_ciso_approval_for_bypass)
 
-    # Conteos SQL (rápido) — no cargar todos los hallazgos a memoria
+    # Conteos SQL agrupados en 1 sola consulta — evita 3 viajes de red a Postgres
     scope = {"repository_id": repository_id, "repo_ids": repo_ids}
-    open_critical = _count_open(db, severity="CRITICAL", **scope)
-    open_high = _count_open(db, severity="HIGH", **scope)
-    open_secrets = _count_open(db, engine="gitleaks", **scope)
+    open_critical, open_high, open_secrets = _open_totals(db, **scope)
 
     result = GateEvaluation(
         decision="DISABLED",
@@ -160,17 +191,23 @@ def evaluate_gate(
         ws_key = workspace_id or gate.id
         active = None
         try:
-            from gate_bypass import find_active_bypass, list_active_bypasses
+            from gate_bypass import list_active_bypasses
 
-            active = find_active_bypass(db, repository_id, ws_key)
+            active_list = list_active_bypasses(db, ws_key)
+            for r in active_list:
+                if repository_id and r.repository_id == repository_id:
+                    active = r
+                    break
+            if active is None:
+                for r in active_list:
+                    if r.repository_id is None:
+                        active = r
+                        break
             if active is None and repository_id is None and repo_ids:
-                active_list = list_active_bypasses(db, ws_key)
                 bypassed_rids = {b.repository_id for b in active_list if b.repository_id}
                 if bypassed_rids:
                     remaining_rids = [rid for rid in repo_ids if rid not in bypassed_rids]
-                    rem_crit = _count_open(db, severity="CRITICAL", repo_ids=remaining_rids)
-                    rem_high = _count_open(db, severity="HIGH", repo_ids=remaining_rids)
-                    rem_sec = _count_open(db, engine="gitleaks", repo_ids=remaining_rids)
+                    rem_crit, rem_high, rem_sec = _open_totals(db, repo_ids=remaining_rids)
                     still_blocked = (
                         rem_crit > max_c
                         or rem_high > max_h

@@ -183,14 +183,23 @@ app.include_router(metrics_router)
 
 # Estado de lectura de notificaciones por usuario ("email:id"; efímero por instancia)
 _READ_NOTIFICATION_IDS: set[str] = set()
+_NOTIF_CACHE: dict[str, tuple[float, list[dict]]] = {}
+_LAST_STALE_SCAN_CHECK: float = 0.0
 
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _expire_stale_running_scans(db) -> int:
+def _expire_stale_running_scans(db, *, force: bool = False) -> int:
     """Marca como FAILED escaneos RUNNING demasiado viejos (jobs muertos / seed)."""
+    global _LAST_STALE_SCAN_CHECK
+    import time as _time
+
+    now_m = _time.monotonic()
+    if not force and (now_m - _LAST_STALE_SCAN_CHECK) < 60.0:
+        return 0
+    _LAST_STALE_SCAN_CHECK = now_m
     minutes = int(os.getenv("STALE_SCAN_MINUTES", "20"))
     cutoff = _now() - timedelta(minutes=max(5, minutes))
     rows = (
@@ -350,20 +359,30 @@ def _gate_out(gate: SecurityGate) -> SecurityGatePolicy:
 
 def _build_notifications(db, ws: WorkspaceCtx) -> list[dict]:
     """Notificaciones derivadas de findings abiertos + scans recientes del espacio."""
-    items: list[dict] = []
-    in_scope = ws.scope_ids
+    import time as _time
 
     def is_read(nid: str) -> bool:
         return f"{ws.email}:{nid}" in _READ_NOTIFICATION_IDS
 
-    criticals = (
+    now_m = _time.monotonic()
+    cached = _NOTIF_CACHE.get(ws.id)
+    if cached and cached[0] > now_m:
+        return [{**item, "read": is_read(item["id"])} for item in cached[1]]
+
+    items: list[dict] = []
+    in_scope = ws.scope_ids
+
+    top_findings = (
         db.query(Finding)
         .filter(Finding.repository_id.in_(in_scope))
-        .filter(Finding.status.in_(["OPEN", "IN_REVIEW"]), Finding.severity == "CRITICAL")
+        .filter(Finding.status.in_(["OPEN", "IN_REVIEW"]), Finding.severity.in_(["CRITICAL", "HIGH"]))
         .order_by(Finding.created_at.desc())
-        .limit(10)
+        .limit(25)
         .all()
     )
+    criticals = [f for f in top_findings if (f.severity or "").upper() == "CRITICAL"][:10]
+    highs = [f for f in top_findings if (f.severity or "").upper() == "HIGH"][:5]
+
     for f in criticals:
         ntype = NotificationType.SECRET_LEAK if (f.engine or "").lower() == "gitleaks" else NotificationType.CRITICAL_FINDING
         items.append(
@@ -380,14 +399,6 @@ def _build_notifications(db, ws: WorkspaceCtx) -> list[dict]:
             }
         )
 
-    highs = (
-        db.query(Finding)
-        .filter(Finding.repository_id.in_(in_scope))
-        .filter(Finding.status.in_(["OPEN", "IN_REVIEW"]), Finding.severity == "HIGH")
-        .order_by(Finding.created_at.desc())
-        .limit(5)
-        .all()
-    )
     for f in highs:
         items.append(
             {
@@ -406,9 +417,14 @@ def _build_notifications(db, ws: WorkspaceCtx) -> list[dict]:
     recent_scans = (
         db.query(Scan).filter(Scan.repository_id.in_(in_scope)).order_by(Scan.created_at.desc()).limit(5).all()
     )
+    scan_rids = list({s.repository_id for s in recent_scans if s.repository_id})
+    repo_names = (
+        {rid: rname for rid, rname in db.query(Repository.id, Repository.name).filter(Repository.id.in_(scan_rids)).all()}
+        if scan_rids
+        else {}
+    )
     for s in recent_scans:
-        repo = db.get(Repository, s.repository_id)
-        name = repo.name if repo else s.repository_id
+        name = repo_names.get(s.repository_id) or s.repository_id
         if s.status == "COMPLETED":
             title = f"Escaneo completado · {name}"
             msg = f"{s.total_findings} hallazgos ({s.critical_count} critical, {s.high_count} high)."
@@ -457,6 +473,7 @@ def _build_notifications(db, ws: WorkspaceCtx) -> list[dict]:
             continue
         seen.add(n["id"])
         unique.append(n)
+    _NOTIF_CACHE[ws.id] = (now_m + 8.0, unique)
     return unique
 
 
@@ -717,6 +734,8 @@ def list_findings(
             .order_by(Finding.created_at.desc())
             .all()
         )
+        if not rows:
+            return []
         first_seen = first_seen_map(db, [repository_id] if repository_id else ws.scope_ids)
         return [_finding_out(f, first_seen) for f in rows]
     finally:
@@ -835,6 +854,7 @@ def update_finding_status(
         if repo:
             _refresh_repo_counters(db, repo)
         db.commit()
+        _NOTIF_CACHE.pop(ws.id, None)
         db.refresh(finding)
         return _finding_out(finding, first_seen_map(db, [finding.repository_id]))
     finally:
@@ -899,6 +919,7 @@ def trigger_scan(
             + " (background).",
         )
         db.commit()
+        _NOTIF_CACHE.pop(ws.id, None)
         db.refresh(row)
         scan_id = row.id
         background_tasks.add_task(run_repo_scan_job, scan_id, engines, target_url, target_path)
@@ -1175,6 +1196,7 @@ def update_security_gate(policy: SecurityGatePolicy, ws: WorkspaceCtx = Depends(
             f"block_secrets={policy.block_on_secrets}, enabled={policy.enabled}.",
         )
         db.commit()
+        _NOTIF_CACHE.pop(ws.id, None)
         db.refresh(gate)
         return _gate_out(gate)
     finally:

@@ -214,7 +214,15 @@ def _scan_minutes(s: Scan) -> float | None:
     return max(0.0, (_aware(s.completed_at) - _aware(s.created_at)).total_seconds() / 60)
 
 
+_ENGINE_AVAIL_CACHE: tuple[float, dict[str, tuple[bool, str]]] | None = None
+_APP_CHECKS_CACHE: dict[str, tuple[float, list[dict]]] = {}
+
+
 def _engine_availability() -> dict[str, tuple[bool, str]]:
+    global _ENGINE_AVAIL_CACHE
+    now_m = time.monotonic()
+    if _ENGINE_AVAIL_CACHE and _ENGINE_AVAIL_CACHE[0] > now_m:
+        return _ENGINE_AVAIL_CACHE[1]
     out: dict[str, tuple[bool, str]] = {}
     try:
         from semgrep_scan import semgrep_available
@@ -241,6 +249,7 @@ def _engine_availability() -> dict[str, tuple[bool, str]]:
         out["owasp_zap"] = (full or zap_available(), "completo" if full else "modo liviano")
     except Exception:
         out["owasp_zap"] = (False, "")
+    _ENGINE_AVAIL_CACHE = (now_m + 120.0, out)
     return out
 
 
@@ -283,6 +292,10 @@ def _probe(repo_id: str, name: str, url: str) -> dict:
 
 def _app_checks(db, workspace_id: str) -> list[dict]:
     """Disponibilidad de las aplicaciones publicadas que el espacio registró en sus repositorios."""
+    now_m = time.monotonic()
+    cached = _APP_CHECKS_CACHE.get(workspace_id)
+    if cached and cached[0] > now_m:
+        return cached[1]
     repos = (
         db.query(Repository.id, Repository.name, Repository.dast_url)
         .filter(Repository.workspace_id == workspace_id, Repository.dast_url.isnot(None))
@@ -290,9 +303,12 @@ def _app_checks(db, workspace_id: str) -> list[dict]:
     )
     targets = [(rid, name, url.strip()) for rid, name, url in repos if (url or "").strip()][:20]
     if not targets:
+        _APP_CHECKS_CACHE[workspace_id] = (now_m + 60.0, [])
         return []
     with ThreadPoolExecutor(max_workers=min(8, len(targets))) as pool:
-        return list(pool.map(lambda t: _probe(*t), targets))
+        res = list(pool.map(lambda t: _probe(*t), targets))
+    _APP_CHECKS_CACHE[workspace_id] = (now_m + 60.0, res)
+    return res
 
 
 def _db_latency() -> float | None:

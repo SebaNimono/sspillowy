@@ -146,7 +146,7 @@ def _ensure_membership(db: Session, email: str, name: str) -> list[WorkspaceMemb
         return rows + [m]
 
 
-_CTX_TTL = 15.0
+_CTX_TTL = 180.0
 _ctx_cache: dict[tuple[str, Optional[str]], tuple[float, WorkspaceCtx]] = {}
 _ctx_lock = threading.Lock()
 

@@ -187,9 +187,6 @@ def login(body: LoginBody):
 
         _require_verified_password_login(user)
 
-        user.last_login_at = datetime.now(timezone.utc)
-        db.commit()
-
         session_id = save_session(
             email=user.email,
             name=user.name,

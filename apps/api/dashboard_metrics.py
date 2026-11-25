@@ -54,39 +54,64 @@ def _finding_day(f: Finding) -> date | None:
 def compute_dashboard_stats(db: Session, repo_ids: list[str] | None = None) -> dict:
     repo_q = db.query(Repository).filter(Repository.is_active.is_(True))
     scan_q = db.query(Scan).filter(Scan.status == "COMPLETED")
-    finding_q = db.query(Finding)
+    finding_q = db.query(Finding.severity, Finding.status, Finding.engine, Finding.created_at)
     if repo_ids:
         repo_q = repo_q.filter(Repository.id.in_(repo_ids))
         scan_q = scan_q.filter(Scan.repository_id.in_(repo_ids))
         finding_q = finding_q.filter(Finding.repository_id.in_(repo_ids))
     repos = repo_q.all()
     scans_count = scan_q.count()
-    all_findings = finding_q.all()
-    # Dashboard = hallazgos activos (OPEN/IN_REVIEW); supersedidos no cuentan
-    open_findings = [f for f in all_findings if (f.status or "") in OPEN_STATUSES]
-    visible = [f for f in all_findings if (f.status or "") != "SUPERSEDED"]
-    sev = _severity_counts(open_findings)
+    all_rows = finding_q.all()
 
+    sev = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFO": 0}
     engine_counts: dict[str, int] = defaultdict(int)
-    for f in open_findings:
-        engine_counts[(f.engine or "unknown").lower()] += 1
+    by_day_open: dict[date, int] = defaultdict(int)
+    open_count = 0
+    secrets_prevented = 0
+
+    for f_sev, f_status, f_engine, f_created in all_rows:
+        st = (f_status or "").upper()
+        eng = (f_engine or "unknown").lower()
+        if eng == "gitleaks" and st in ("FIXED", "FALSE_POSITIVE", "ACCEPTED_RISK"):
+            secrets_prevented += 1
+        if st in OPEN_STATUSES:
+            open_count += 1
+            k = (f_sev or "").upper()
+            if k in sev:
+                sev[k] += 1
+            engine_counts[eng] += 1
+            if f_created:
+                dt = f_created if f_created.tzinfo else f_created.replace(tzinfo=timezone.utc)
+                by_day_open[dt.date()] += 1
+
+    if repos:
+        scores = [r.health_score for r in repos if r.health_score is not None]
+        if scores:
+            health_score = max(0, min(100, int(sum(scores) / len(scores))))
+        elif open_count == 0:
+            health_score = 100
+        else:
+            penalty = sev["CRITICAL"] * 18 + sev["HIGH"] * 8 + sev["MEDIUM"] * 3 + sev["LOW"]
+            health_score = max(0, min(100, 100 - penalty))
+    elif open_count == 0:
+        health_score = 100
+    else:
+        penalty = sev["CRITICAL"] * 18 + sev["HIGH"] * 8 + sev["MEDIUM"] * 3 + sev["LOW"]
+        health_score = max(0, min(100, 100 - penalty))
 
     today = datetime.now(timezone.utc).date()
-    trend: list[int] = []
-    for i in range(6, -1, -1):
-        day = today - timedelta(days=i)
-        trend.append(sum(1 for f in visible if _finding_day(f) == day and (f.status or "") in OPEN_STATUSES))
+    trend: list[int] = [by_day_open.get(today - timedelta(days=i), 0) for i in range(6, -1, -1)]
 
     return {
-        "overall_health_score": _health_score(open_findings, repos),
+        "overall_health_score": health_score,
         "monitored_repos": len(repos),
         "total_scans_run": scans_count,
-        "total_open_findings": len(open_findings),
+        "total_open_findings": open_count,
         "critical_findings": sev["CRITICAL"],
         "high_findings": sev["HIGH"],
         "medium_findings": sev["MEDIUM"],
         "low_findings": sev["LOW"],
-        "secrets_leaked_prevented": _secrets_prevented(all_findings),
+        "secrets_leaked_prevented": secrets_prevented,
         "findings_by_engine": dict(engine_counts),
         "trend_7d": trend,
     }
@@ -95,15 +120,14 @@ def compute_dashboard_stats(db: Session, repo_ids: list[str] | None = None) -> d
 def compute_heatmap(db: Session, weeks: int = 12, repo_ids: list[str] | None = None) -> dict:
     days = weeks * 7 - 1
     today = datetime.now(timezone.utc).date()
-    q = db.query(Finding).filter(Finding.status.in_(list(OPEN_STATUSES)))
+    q = db.query(Finding.created_at).filter(Finding.status.in_(list(OPEN_STATUSES)))
     if repo_ids:
         q = q.filter(Finding.repository_id.in_(repo_ids))
-    findings = q.all()
     by_day: dict[date, int] = defaultdict(int)
-    for f in findings:
-        d = _finding_day(f)
-        if d:
-            by_day[d] += 1
+    for (created_at,) in q.all():
+        if created_at:
+            dt = created_at if created_at.tzinfo else created_at.replace(tzinfo=timezone.utc)
+            by_day[dt.date()] += 1
 
     cells = []
     for i in range(days, -1, -1):

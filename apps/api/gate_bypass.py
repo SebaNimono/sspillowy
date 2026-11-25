@@ -86,8 +86,21 @@ class BypassResponse(BaseModel):
     decided_at: Optional[datetime] = None
 
 
-def _out(row: GateBypassRequest, repo_name: str | None = None, db=None) -> BypassResponse:
-    commit_sha, scan_at, changed = _repo_context(db, row) if db is not None else (None, None, False)
+def _out(
+    row: GateBypassRequest,
+    repo_name: str | None = None,
+    db=None,
+    latest_scans: dict[str, tuple[str | None, datetime | None]] | None = None,
+) -> BypassResponse:
+    if latest_scans is not None:
+        if row.repository_id and row.repository_id in latest_scans:
+            commit_sha, scan_at = latest_scans[row.repository_id]
+            created = _as_utc(row.created_at)
+            changed = bool(scan_at and created and scan_at > created)
+        else:
+            commit_sha, scan_at, changed = None, None, False
+    else:
+        commit_sha, scan_at, changed = _repo_context(db, row) if db is not None else (None, None, False)
     return BypassResponse(
         id=row.id,
         repository_id=row.repository_id,
@@ -188,8 +201,8 @@ def list_bypasses(
     _require_db()
     db = ws.session()
     try:
-        expire_stale_bypasses(db)
-        db.commit()
+        if expire_stale_bypasses(db):
+            db.commit()
         q = (
             db.query(GateBypassRequest)
             .filter(GateBypassRequest.workspace_id == ws.id)
@@ -198,12 +211,21 @@ def list_bypasses(
         if status_filter:
             q = q.filter(GateBypassRequest.status == status_filter.upper())
         rows = q.limit(50).all()
-        names = {}
-        for r in rows:
-            if r.repository_id and r.repository_id not in names:
-                repo = db.get(Repository, r.repository_id)
-                names[r.repository_id] = repo.name if repo else None
-        return [_out(r, names.get(r.repository_id), db) for r in rows]
+        rids = list({r.repository_id for r in rows if r.repository_id})
+        names: dict[str, str | None] = {}
+        latest_scans: dict[str, tuple[str | None, datetime | None]] = {}
+        if rids:
+            for rid, rname in db.query(Repository.id, Repository.name).filter(Repository.id.in_(rids)).all():
+                names[rid] = rname
+            for s_rid, s_sha, s_created in (
+                db.query(Scan.repository_id, Scan.commit_sha, Scan.created_at)
+                .filter(Scan.repository_id.in_(rids))
+                .order_by(Scan.created_at.desc())
+                .all()
+            ):
+                if s_rid not in latest_scans:
+                    latest_scans[s_rid] = (s_sha, _as_utc(s_created))
+        return [_out(r, names.get(r.repository_id), db, latest_scans=latest_scans) for r in rows]
     finally:
         db.close()
 

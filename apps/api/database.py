@@ -43,12 +43,19 @@ elif "postgresql" in DATABASE_URL and "sslmode=" not in DATABASE_URL:
         DATABASE_URL = f"{DATABASE_URL}{sep}sslmode=require"
 
 try:
+    pg_connect_args = dict(connect_args)
+    if not USING_SQLITE:
+        pg_connect_args.setdefault("keepalives", 1)
+        pg_connect_args.setdefault("keepalives_idle", 30)
+        pg_connect_args.setdefault("keepalives_interval", 10)
+        pg_connect_args.setdefault("keepalives_count", 5)
     engine = create_engine(
         DATABASE_URL,
-        pool_pre_ping=True,
+        pool_pre_ping=False,
+        pool_recycle=240,
         pool_size=10,
         max_overflow=10,
-        connect_args=connect_args,
+        connect_args=pg_connect_args,
     )
 except Exception as exc:
     print(f"[sspillowy] create_engine falló para Postgres, usando SQLite local: {exc!r}", flush=True)
@@ -200,7 +207,7 @@ def init_db() -> bool:
         return False
 
 
-_PING_TTL = 5.0
+_PING_TTL = 60.0
 _last_ok_ping = 0.0
 
 
