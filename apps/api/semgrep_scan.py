@@ -755,6 +755,16 @@ def run_repo_scan_job(
         if work_parent and work_parent.exists():
             shutil.rmtree(work_parent, ignore_errors=True)
         try:
+            from main import invalidate_repo_and_notif_cache
+            from velocity import invalidate_velocity_cache
+            from compliance import invalidate_compliance_cache
+
+            invalidate_repo_and_notif_cache()
+            invalidate_velocity_cache()
+            invalidate_compliance_cache()
+        except Exception:
+            pass
+        try:
             from runbooks import run_runbooks_for_scan
 
             run_runbooks_for_scan(scan_id)

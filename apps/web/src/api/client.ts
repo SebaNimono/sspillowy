@@ -340,13 +340,50 @@ function authHeaders(extra?: HeadersInit): Headers {
 }
 
 const inflight = new Map<string, Promise<unknown>>();
+const responseCache = new Map<string, { expiresAt: number; data: unknown }>();
+const GET_CACHE_TTL_MS = 20_000;
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('sspillowy:workspace-cache-clear', () => {
+    inflight.clear();
+    responseCache.clear();
+  });
+}
+
+export function invalidateApiCache(pathPrefix?: string): void {
+  if (!pathPrefix) {
+    responseCache.clear();
+    return;
+  }
+  for (const k of responseCache.keys()) {
+    const [, , p] = k.split('|');
+    if (p && p.startsWith(pathPrefix)) {
+      responseCache.delete(k);
+    }
+  }
+}
 
 function request<T>(path: string, init?: RequestInit): Promise<T> {
-  if (init?.method && init.method !== 'GET') return send<T>(path, init);
-  const key = `${getActiveWorkspaceId() || ''}|${path}`;
+  if (init?.method && init.method !== 'GET') {
+    return send<T>(path, init).then((res) => {
+      responseCache.clear();
+      return res;
+    });
+  }
+  const key = `${getStoredSessionId() || ''}|${getActiveWorkspaceId() || ''}|${path}`;
+  const now = Date.now();
+  const cached = responseCache.get(key);
+  if (cached && cached.expiresAt > now) {
+    return Promise.resolve(cached.data as T);
+  }
   const pending = inflight.get(key);
   if (pending) return pending as Promise<T>;
-  const p = send<T>(path, init).finally(() => inflight.delete(key));
+  const p = send<T>(path, init)
+    .then((data) => {
+      responseCache.set(key, { expiresAt: Date.now() + GET_CACHE_TTL_MS, data });
+      return data;
+    })
+    .finally(() => inflight.delete(key));
   inflight.set(key, p);
   return p;
 }

@@ -231,6 +231,8 @@ def _scan_minutes(s: Scan) -> float | None:
 
 _ENGINE_AVAIL_CACHE: tuple[float, dict[str, tuple[bool, str]]] | None = None
 _APP_CHECKS_CACHE: dict[str, tuple[float, list[dict]]] = {}
+_APP_CHECKS_REFRESHING: set[str] = set()
+_OBS_CACHE: dict[tuple[str, str, bool], tuple[float, dict]] = {}
 
 
 def _engine_availability() -> dict[str, tuple[bool, str]]:
@@ -307,6 +309,8 @@ def _probe(repo_id: str, name: str, url: str) -> dict:
 
 def _app_checks(db, workspace_id: str) -> list[dict]:
     """Disponibilidad de las aplicaciones publicadas que el espacio registró en sus repositorios."""
+    import database as _database
+
     now_m = time.monotonic()
     cached = _APP_CHECKS_CACHE.get(workspace_id)
     if cached and cached[0] > now_m:
@@ -318,12 +322,33 @@ def _app_checks(db, workspace_id: str) -> list[dict]:
     )
     targets = [(rid, name, url.strip()) for rid, name, url in repos if (url or "").strip()][:20]
     if not targets:
-        _APP_CHECKS_CACHE[workspace_id] = (now_m + 60.0, [])
+        _APP_CHECKS_CACHE[workspace_id] = (now_m + 120.0, [])
         return []
-    with ThreadPoolExecutor(max_workers=min(8, len(targets))) as pool:
-        res = list(pool.map(lambda t: _probe(*t), targets))
-    _APP_CHECKS_CACHE[workspace_id] = (now_m + 60.0, res)
-    return res
+    # En pruebas unitarias (SQLite) ejecutar sincrónicamente; en Postgres refrescar en background si ya hay valor o para no bloquear >1s
+    if _database.USING_SQLITE:
+        with ThreadPoolExecutor(max_workers=min(8, len(targets))) as pool:
+            res = list(pool.map(lambda t: _probe(*t), targets))
+        _APP_CHECKS_CACHE[workspace_id] = (now_m + 120.0, res)
+        return res
+
+    def _bg_probe():
+        try:
+            with ThreadPoolExecutor(max_workers=min(8, len(targets))) as pool:
+                res = list(pool.map(lambda t: _probe(*t), targets))
+            _APP_CHECKS_CACHE[workspace_id] = (time.monotonic() + 120.0, res)
+        finally:
+            _APP_CHECKS_REFRESHING.discard(workspace_id)
+
+    if workspace_id not in _APP_CHECKS_REFRESHING:
+        _APP_CHECKS_REFRESHING.add(workspace_id)
+        threading.Thread(target=_bg_probe, daemon=True).start()
+
+    if cached:
+        return cached[1]
+    return [
+        {"id": f"app-{rid}", "name": name, "url": url, "status": "up", "detail": "Verificando disponibilidad…"}
+        for rid, name, url in targets
+    ]
 
 
 def _db_latency() -> float | None:

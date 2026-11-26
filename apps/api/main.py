@@ -184,7 +184,17 @@ app.include_router(metrics_router)
 # Estado de lectura de notificaciones por usuario ("email:id"; efímero por instancia)
 _READ_NOTIFICATION_IDS: set[str] = set()
 _NOTIF_CACHE: dict[str, tuple[float, list[dict]]] = {}
+_REPO_CACHE: dict[str, tuple[float, list[RepositoryResponse]]] = {}
 _LAST_STALE_SCAN_CHECK: float = 0.0
+
+
+def invalidate_repo_and_notif_cache(workspace_id: str | None = None) -> None:
+    if workspace_id:
+        _NOTIF_CACHE.pop(workspace_id, None)
+        _REPO_CACHE.pop(workspace_id, None)
+    else:
+        _NOTIF_CACHE.clear()
+        _REPO_CACHE.clear()
 
 
 def _now() -> datetime:
@@ -473,7 +483,7 @@ def _build_notifications(db, ws: WorkspaceCtx) -> list[dict]:
             continue
         seen.add(n["id"])
         unique.append(n)
-    _NOTIF_CACHE[ws.id] = (now_m + 8.0, unique)
+    _NOTIF_CACHE[ws.id] = (now_m + 45.0, unique)
     return unique
 
 
@@ -587,6 +597,12 @@ def list_audit_log(
 
 @app.get("/api/v1/repositories", response_model=List[RepositoryResponse], tags=["Repositories"])
 def list_repositories(ws: WorkspaceCtx = Depends(require_ws)):
+    import time as _time
+
+    now_m = _time.monotonic()
+    cached = _REPO_CACHE.get(ws.id)
+    if cached and cached[0] > now_m:
+        return cached[1]
     _require_db()
     db = SessionLocal()
     try:
@@ -596,7 +612,9 @@ def list_repositories(ws: WorkspaceCtx = Depends(require_ws)):
             .order_by(Repository.created_at.desc())
             .all()
         )
-        return [_repo_out(r) for r in rows]
+        out = [_repo_out(r) for r in rows]
+        _REPO_CACHE[ws.id] = (now_m + 30.0, out)
+        return out
     finally:
         db.close()
 
@@ -653,6 +671,7 @@ def create_repository(repo: RepositoryCreate, ws: WorkspaceCtx = Depends(require
         )
         db.commit()
         invalidate_workspace_cache()
+        invalidate_repo_and_notif_cache(ws.id)
         db.refresh(row)
         return _repo_out(row)
     finally:
@@ -697,6 +716,7 @@ def update_repository(repository_id: str, body: RepositoryUpdate, ws: WorkspaceC
         if changes:
             _append_audit(db, ws.actor, "REPO_UPDATED", repo.name, "Cambios: " + ", ".join(changes) + ".")
         db.commit()
+        invalidate_repo_and_notif_cache(ws.id)
         db.refresh(repo)
         return _repo_out(repo)
     finally:
@@ -772,6 +792,7 @@ def clear_findings(repository_id: Optional[str] = None, ws: WorkspaceCtx = Depen
             f"Matriz vaciada ({deleted} hallazgos eliminados).",
         )
         db.commit()
+        invalidate_repo_and_notif_cache(ws.id)
         return {"deleted": deleted, "repository_id": repository_id}
     finally:
         db.close()
@@ -801,6 +822,7 @@ def delete_repository(repository_id: str, ws: WorkspaceCtx = Depends(require_ws_
         )
         db.commit()
         invalidate_workspace_cache()
+        invalidate_repo_and_notif_cache(ws.id)
         return {"deleted": True, "id": repository_id, "name": name}
     finally:
         db.close()
@@ -854,7 +876,7 @@ def update_finding_status(
         if repo:
             _refresh_repo_counters(db, repo)
         db.commit()
-        _NOTIF_CACHE.pop(ws.id, None)
+        invalidate_repo_and_notif_cache(ws.id)
         db.refresh(finding)
         return _finding_out(finding, first_seen_map(db, [finding.repository_id]))
     finally:
@@ -919,7 +941,7 @@ def trigger_scan(
             + " (background).",
         )
         db.commit()
-        _NOTIF_CACHE.pop(ws.id, None)
+        invalidate_repo_and_notif_cache(ws.id)
         db.refresh(row)
         scan_id = row.id
         background_tasks.add_task(run_repo_scan_job, scan_id, engines, target_url, target_path)
