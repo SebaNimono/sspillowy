@@ -37,6 +37,7 @@ import {
   getStoredSessionId,
   getStoredUser,
   logoutSession,
+  prefetchAllConsoleData,
   storeSession,
 } from './api/client';
 import { CookieBanner } from './components/CookieBanner';
@@ -258,6 +259,7 @@ const AppShell: React.FC = () => {
   const [inviteToken, setInviteToken] = useState<string | null>(() => parseCurrentRoute().inviteToken ?? null);
   const [loginMode, setLoginMode] = useState<LoginMode>(() => parseCurrentRoute().loginMode ?? 'login');
   const [activeTab, setActiveTabState] = useState<string>(() => parseCurrentRoute().consoleTab ?? initialConsoleTab());
+  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(() => new Set([parseCurrentRoute().consoleTab ?? initialConsoleTab()]));
   const [unreadCount, setUnreadCount] = useState(0);
   const [bootstrapping, setBootstrapping] = useState(true);
   const [oauthError, setOauthError] = useState<string | null>(null);
@@ -294,6 +296,7 @@ const AppShell: React.FC = () => {
 
   const setActiveTab = (tab: string) => {
     setActiveTabState(tab);
+    setVisitedTabs((prev) => (prev.has(tab) ? prev : new Set(prev).add(tab)));
     try {
       localStorage.setItem(CONSOLE_TAB_KEY, tab);
     } catch {
@@ -319,8 +322,17 @@ const AppShell: React.FC = () => {
   };
 
   useEffect(() => {
-    if (user && view === 'console') refreshUnread();
-  }, [user, activeTab, view]);
+    if (!user || view !== 'console') return;
+    refreshUnread();
+    const id = window.setTimeout(() => prefetchAllConsoleData(), 150);
+    const pollId = window.setInterval(() => {
+      if (document.visibilityState === 'visible') refreshUnread();
+    }, 45_000);
+    return () => {
+      window.clearTimeout(id);
+      window.clearInterval(pollId);
+    };
+  }, [user, view]);
 
   const handleLoginSuccess = (email: string, name: string, sessionId?: string, expiresAt?: string) => {
     const newUser = { email, name };
@@ -414,7 +426,10 @@ const AppShell: React.FC = () => {
       } else if (route.view === 'console') {
         setResetToken(null);
         setInviteToken(null);
-        if (route.consoleTab) setActiveTabState(route.consoleTab);
+        if (route.consoleTab) {
+          setActiveTabState(route.consoleTab);
+          setVisitedTabs((prev) => (prev.has(route.consoleTab!) ? prev : new Set(prev).add(route.consoleTab!)));
+        }
       } else if (route.view === 'site' || route.view === 'not-found') {
         setResetToken(null);
         setInviteToken(null);
@@ -689,8 +704,8 @@ const AppShell: React.FC = () => {
     },
   };
 
-  const renderContent = () => {
-    switch (activeTab) {
+  const renderTabNode = (tab: string) => {
+    switch (tab) {
       case 'dashboard':
         return <RiskPosturePage {...pageProps} />;
       case 'repositories':
@@ -728,10 +743,12 @@ const AppShell: React.FC = () => {
       case 'integrations':
         return <IntegrationsPage {...pageProps} />;
       default:
-        if (ROADMAP[activeTab]) return <ComingSoonPage key={activeTab} module={ROADMAP[activeTab]} {...pageProps} />;
+        if (ROADMAP[tab]) return <ComingSoonPage key={tab} module={ROADMAP[tab]} {...pageProps} />;
         return <DashboardPage {...pageProps} />;
     }
   };
+
+  const tabsToRender = visitedTabs.has(activeTab) ? Array.from(visitedTabs) : [...Array.from(visitedTabs), activeTab];
 
   return (
     <div className="app-container">
@@ -748,7 +765,11 @@ const AppShell: React.FC = () => {
           transition: 'margin-left 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
         }}
       >
-        {renderContent()}
+        {tabsToRender.map((tab) => (
+          <div key={tab} style={{ display: tab === activeTab ? 'block' : 'none' }}>
+            {renderTabNode(tab)}
+          </div>
+        ))}
       </main>
       <PillowAgent key={user?.email ?? 'anon'} userEmail={user?.email} page={activeTab} />
       <CookieBanner />

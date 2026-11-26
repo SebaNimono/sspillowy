@@ -270,6 +270,8 @@ def carry_forward_triage(db, *, repo_id: str, scan_id: str) -> int:
 
 # --------------------------------------------------------------------------- consultas
 
+_FIX_INTEL_CACHE: dict[tuple[str, str, int], tuple[float, dict]] = {}
+
 
 @router.get("")
 def fix_intel_queue(
@@ -277,6 +279,15 @@ def fix_intel_queue(
     limit: int = Query(default=400, ge=1, le=1000),
     ws: WorkspaceCtx = Depends(require_ws),
 ):
+    import time as _time
+    import database as _database
+
+    cache_key = (ws.id, repository_id or "", limit)
+    now_m = _time.monotonic()
+    if not _database.USING_SQLITE:
+        cached = _FIX_INTEL_CACHE.get(cache_key)
+        if cached and cached[0] > now_m:
+            return cached[1]
     _require_db()
     if repository_id:
         ws.require_repo(repository_id)
@@ -311,12 +322,15 @@ def fix_intel_queue(
             "ai_dismissed": dismissed,
             "ai_acceptance_rate": round(accepted / (accepted + dismissed), 2) if accepted + dismissed else None,
         }
-        return {
+        out = {
             "kpis": kpis,
             "items": items[:limit],
             "repositories": [{"id": r.id, "name": r.name} for r in sorted(repos, key=lambda r: r.name.lower())],
             "max_batch": MAX_TRIAGE_BATCH,
         }
+        if not _database.USING_SQLITE:
+            _FIX_INTEL_CACHE[cache_key] = (now_m + 20.0, out)
+        return out
     finally:
         db.close()
 
@@ -493,6 +507,7 @@ async def fix_intel_triage(body: TriageBody, ws: WorkspaceCtx = Depends(require_
         credits_remaining = _consume_credit(db, actor)
         _audit(db, "FIX_INTEL_TRIAGE", f"{updated} hallazgos", ", ".join(ids)[:900], actor)
         db.commit()
+        _FIX_INTEL_CACHE.clear()
         repo_names = {rid: r.name for rid, r in repos.items()}
         return {
             "items": [_item(f, repo_names) for f in findings],
@@ -532,6 +547,7 @@ def fix_intel_decision(finding_id: str, body: DecisionBody, ws: WorkspaceCtx = D
         if repo:
             _refresh_repo_counters(db, repo)
         db.commit()
+        _FIX_INTEL_CACHE.clear()
         return _item(f, {repo.id: repo.name} if repo else {})
     finally:
         db.close()

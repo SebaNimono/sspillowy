@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Header } from '../components/Header';
 import { SidebarState } from '../components/Sidebar';
-import { NotificationItem, fetchNotifications, markAllNotificationsRead, markNotificationRead } from '../api/client';
+import { NotificationItem, fetchNotifications, markAllNotificationsRead, markNotificationRead, peekApiCache } from '../api/client';
 import { ApiOfflineBanner } from '../components/ApiOfflineBanner';
 import PageSkeleton from '../components/PageSkeleton';
 import { Bell, CheckCheck, KeyRound, ShieldAlert, Sliders, Sparkles, Smartphone, Radar } from 'lucide-react';
@@ -18,7 +18,7 @@ interface PageProps {
   onNotificationsChange?: () => void;
 }
 
-const MIN_SKELETON_MS = 480;
+const MIN_SKELETON_MS = 0;
 
 const typeIcon = (type: NotificationItem['type']) => {
   switch (type) {
@@ -48,15 +48,15 @@ export const NotificationsPage: React.FC<PageProps> = ({
   onNotificationsChange,
 }) => {
   const { t } = useI18n();
-  const [items, setItems] = useState<NotificationItem[]>([]);
+  const [items, setItems] = useState<NotificationItem[]>(() => peekApiCache<NotificationItem[]>('/notifications') ?? []);
   const [filter, setFilter] = useState<'all' | 'unread' | 'critical'>('all');
   const [apiOffline, setApiOffline] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => peekApiCache<NotificationItem[]>('/notifications') === null);
 
   useEffect(() => {
     let cancelled = false;
     const started = Date.now();
-    setLoading(true);
+    if (!peekApiCache('/notifications')) setLoading(true);
 
     fetchNotifications()
       .then((data) => {

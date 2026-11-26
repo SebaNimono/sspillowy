@@ -24,6 +24,7 @@ import {
   X,
 } from 'lucide-react';
 import { useI18n } from '../i18n/I18nProvider';
+import { prefetchTabData } from '../api/client';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 
 export type SidebarState = 'expanded' | 'collapsed' | 'hidden';
@@ -250,6 +251,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 className="nav-item"
                 style={{ position: 'relative' }}
                 onMouseEnter={(e) => {
+                  prefetchTabData(item.id);
                   if (!isCollapsed) return;
                   const r = e.currentTarget.getBoundingClientRect();
                   setHover({ id: item.id, top: r.top + r.height / 2 });

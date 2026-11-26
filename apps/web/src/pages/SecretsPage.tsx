@@ -14,7 +14,7 @@ import {
 import { Header } from '../components/Header';
 import { SidebarState } from '../components/Sidebar';
 import { Toast, ToastMessage } from '../components/Toast';
-import { SecretIncident, SecretStatus, SecretStep, fetchSecrets, updateSecret } from '../api/client';
+import { SecretIncident, SecretStatus, SecretStep, fetchSecrets, peekApiCache, updateSecret } from '../api/client';
 import { SECRET_STEPS, providerGuide, takeSecretFocus } from '../config/secretProviders';
 import { SEVERITY_COLOR, SEVERITY_LABEL } from '../utils/findingGroups';
 import { formatDateTime } from '../utils/formatDateTime';
@@ -54,9 +54,9 @@ const ageLabel = (iso: string | null) => {
 
 export const SecretsPage: React.FC<PageProps> = ({ onNavigate, ...headerProps }) => {
   const { t } = useI18n();
-  const [items, setItems] = useState<SecretIncident[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loaded, setLoaded] = useState(false);
+  const [items, setItems] = useState<SecretIncident[]>(() => peekApiCache<SecretIncident[]>('/secrets') ?? []);
+  const [loading, setLoading] = useState(() => peekApiCache<SecretIncident[]>('/secrets') === null);
+  const [loaded, setLoaded] = useState(() => peekApiCache<SecretIncident[]>('/secrets') !== null);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [statusFilter, setStatusFilter] = useState<'active' | SecretStatus | 'all'>('active');
@@ -71,7 +71,7 @@ export const SecretsPage: React.FC<PageProps> = ({ onNavigate, ...headerProps })
     setToast({ id: Date.now().toString(), type, title, message });
 
   const load = useCallback(async () => {
-    setLoading(true);
+    if (!peekApiCache('/secrets')) setLoading(true);
     try {
       const list = await fetchSecrets();
       setItems(list);

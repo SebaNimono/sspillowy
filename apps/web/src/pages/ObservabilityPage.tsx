@@ -37,6 +37,7 @@ import {
   Repository,
   fetchObservability,
   fetchRepositories,
+  peekApiCache,
   probeObservabilityEndpoint,
   updateRepository,
 } from '../api/client';
@@ -134,8 +135,8 @@ export const ObservabilityPage: React.FC<PageProps> = ({ onNavigate, ...headerPr
     const saved = localStorage.getItem(RANGE_KEY) as ObsRange | null;
     return RANGES.some((r) => r.id === saved) ? (saved as ObsRange) : '24h';
   });
-  const [data, setData] = useState<ObservabilityData | null>(null);
-  const [repos, setRepos] = useState<Repository[]>([]);
+  const [data, setData] = useState<ObservabilityData | null>(() => peekApiCache<ObservabilityData>(`/observability?range=${range}`));
+  const [repos, setRepos] = useState<Repository[]>(() => peekApiCache<Repository[]>('/repositories') ?? []);
   const [savedMonitors, setSavedMonitors] = useState<SavedCustomMonitor[]>(() => loadSavedCustomMonitors());
   const [customResults, setCustomResults] = useState<ObsMonitorItem[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -144,7 +145,7 @@ export const ObservabilityPage: React.FC<PageProps> = ({ onNavigate, ...headerPr
   const [newMonitorName, setNewMonitorName] = useState('');
   const [newMonitorUrl, setNewMonitorUrl] = useState('');
   const [savingMonitor, setSavingMonitor] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => peekApiCache<ObservabilityData>(`/observability?range=${range}`) === null);
   const [error, setError] = useState<string | null>(null);
   const [routeSort, setRouteSort] = useState<'count' | 'p95' | 'errors'>('count');
   const [copied, setCopied] = useState(false);
@@ -173,7 +174,7 @@ export const ObservabilityPage: React.FC<PageProps> = ({ onNavigate, ...headerPr
   }, []);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    if (!peekApiCache(`/observability?range=${range}`)) setLoading(true);
     try {
       const [obs, repoList] = await Promise.all([
         fetchObservability(range),

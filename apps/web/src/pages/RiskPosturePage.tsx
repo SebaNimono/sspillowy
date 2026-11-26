@@ -14,6 +14,7 @@ import {
   deleteDashboardView,
   duplicateDashboardView,
   fetchDashboardViews,
+  peekApiCache,
   toggleDashboardStar,
   updateDashboardView,
 } from '../api/client';
@@ -55,8 +56,8 @@ export const RiskPosturePage: React.FC<PageProps> = (props) => {
   const { t } = useI18n();
   const { onNavigate, ...headerProps } = props;
   const userKey = props.user?.email?.toLowerCase() ?? 'anon';
-  const [views, setViews] = useState<DashboardView[]>([]);
-  const [loaded, setLoaded] = useState(false);
+  const [views, setViews] = useState<DashboardView[]>(() => peekApiCache<DashboardView[]>('/dashboards') ?? []);
+  const [loaded, setLoaded] = useState(() => peekApiCache<DashboardView[]>('/dashboards') !== null);
   const [selected, setSelected] = useState<string | null>(() => localStorage.getItem(SELECTED_KEY) || GENERAL_ID);
   const [recent, setRecent] = useState<RecentEntry[]>(() => loadRecent(userKey));
   const [filter, setFilter] = useState<ListFilter>('all');

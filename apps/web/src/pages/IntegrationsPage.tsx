@@ -14,6 +14,7 @@ import {
   fetchIntegrations,
   getActiveWorkspaceId,
   getStoredUser,
+  peekApiCache,
   testChatIntegration,
 } from '../api/client';
 import PageSkeleton from '../components/PageSkeleton';
@@ -279,7 +280,9 @@ if (typeof window !== 'undefined') {
 export const IntegrationsPage: React.FC<IntegrationsPageProps> = ({ onNavigate, ...headerProps }) => {
   const { t } = useI18n();
   const cacheKey = getIntegrationsCacheKey(headerProps.user?.email);
-  const [data, setDataState] = useState<IntegrationsOverview | null>(() => cacheMap.get(cacheKey) ?? null);
+  const [data, setDataState] = useState<IntegrationsOverview | null>(
+    () => cacheMap.get(cacheKey) ?? peekApiCache<IntegrationsOverview>('/integrations') ?? null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<Category | 'all'>('all');

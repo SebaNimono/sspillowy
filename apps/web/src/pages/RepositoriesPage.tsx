@@ -12,6 +12,7 @@ import {
   fetchIntegrations,
   fetchRepositories,
   fetchScans,
+  peekApiCache,
   triggerScan,
 } from '../api/client';
 import { FolderGit2, Plus, Play, GitBranch, RefreshCw, Trash2, Webhook, Pencil, Lock, FileCode2, Tag } from 'lucide-react';
@@ -132,8 +133,8 @@ const RESUME_MAX_AGE_MS = 20 * 60 * 1000;
 
 export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebarState, user, onLogout, onNavigate, unreadCount, onGoToSite }) => {
   const { t } = useI18n();
-  const [repos, setRepos] = useState<Repository[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [repos, setRepos] = useState<Repository[]>(() => peekApiCache<Repository[]>('/repositories') ?? []);
+  const [loading, setLoading] = useState(() => peekApiCache<Repository[]>('/repositories') === null);
   const [showModal, setShowModal] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [scanTarget, setScanTarget] = useState<{ id: string; name: string; dastUrl?: string | null } | null>(null);
@@ -168,7 +169,7 @@ export const RepositoriesPage: React.FC<PageProps> = ({ sidebarState, setSidebar
   }, []);
 
   const loadRepos = (quiet = false) => {
-    if (!quiet) setLoading(true);
+    if (!quiet && !peekApiCache('/repositories')) setLoading(true);
     return fetchRepositories()
       .then((data) => setRepos(data || []))
       .catch(() => {

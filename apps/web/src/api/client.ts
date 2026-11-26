@@ -341,7 +341,7 @@ function authHeaders(extra?: HeadersInit): Headers {
 
 const inflight = new Map<string, Promise<unknown>>();
 const responseCache = new Map<string, { expiresAt: number; data: unknown }>();
-const GET_CACHE_TTL_MS = 20_000;
+const GET_CACHE_TTL_MS = 120_000;
 
 if (typeof window !== 'undefined') {
   window.addEventListener('sspillowy:workspace-cache-clear', () => {
@@ -360,6 +360,100 @@ export function invalidateApiCache(pathPrefix?: string): void {
     if (p && p.startsWith(pathPrefix)) {
       responseCache.delete(k);
     }
+  }
+}
+
+export function peekApiCache<T>(path: string): T | null {
+  const key = `${getStoredSessionId() || ''}|${getActiveWorkspaceId() || ''}|${path}`;
+  const cached = responseCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.data as T;
+  }
+  return null;
+}
+
+const TAB_PREFETCH_MAP: Record<string, () => void> = {
+  dashboard: () => {
+    void fetchDashboardViews().catch(() => undefined);
+    void fetchStats().catch(() => undefined);
+    void fetchHeatmap().catch(() => undefined);
+    void fetchAuditLog().catch(() => undefined);
+    void fetchFindings().catch(() => undefined);
+    void fetchScans().catch(() => undefined);
+    void fetchRepositories().catch(() => undefined);
+  },
+  velocity: () => {
+    void fetchVelocity(30).catch(() => undefined);
+    void fetchRepositories().catch(() => undefined);
+  },
+  executive: () => {
+    void fetchExecutive(30).catch(() => undefined);
+    void fetchRepositories().catch(() => undefined);
+  },
+  findings: () => {
+    void fetchFindings().catch(() => undefined);
+  },
+  sbom: () => {
+    void fetchSbom().catch(() => undefined);
+  },
+  fixIntel: () => {
+    void fetchFixIntel().catch(() => undefined);
+  },
+  repositories: () => {
+    void fetchRepositories().catch(() => undefined);
+    void fetchScans().catch(() => undefined);
+    void fetchIntegrations().catch(() => undefined);
+  },
+  scans: () => {
+    void fetchScans().catch(() => undefined);
+    void fetchRepositories().catch(() => undefined);
+  },
+  gates: () => {
+    void fetchSecurityGateOverview().catch(() => undefined);
+  },
+  secrets: () => {
+    void fetchSecrets().catch(() => undefined);
+  },
+  runbooks: () => {
+    void fetchRunbooks().catch(() => undefined);
+    void fetchRunbookExecutions().catch(() => undefined);
+    void fetchRepositories().catch(() => undefined);
+  },
+  observability: () => {
+    void fetchObservability('24h').catch(() => undefined);
+    void fetchRepositories().catch(() => undefined);
+  },
+  users: () => {
+    void fetchWorkspaces().catch(() => undefined);
+  },
+  reports: () => {
+    void fetchCompliance().catch(() => undefined);
+  },
+  traceability: () => {
+    void fetchTraceIssues({ status: 'all', limit: 50 }).catch(() => undefined);
+  },
+  notifications: () => {
+    void fetchNotifications().catch(() => undefined);
+  },
+  integrations: () => {
+    void fetchIntegrations().catch(() => undefined);
+  },
+};
+
+export function prefetchTabData(tabId: string): void {
+  if (!getStoredSessionId()) return;
+  TAB_PREFETCH_MAP[tabId]?.();
+}
+
+export function prefetchAllConsoleData(): void {
+  if (!getStoredSessionId()) return;
+  const wave1 = ['dashboard', 'repositories', 'findings', 'scans', 'gates', 'observability'];
+  const wave2 = ['velocity', 'executive', 'sbom', 'fixIntel', 'secrets', 'runbooks'];
+  const wave3 = ['reports', 'traceability', 'integrations', 'users'];
+  wave1.forEach((t) => TAB_PREFETCH_MAP[t]?.());
+  if (typeof window !== 'undefined') {
+    window.setTimeout(() => wave2.forEach((t) => TAB_PREFETCH_MAP[t]?.()), 600);
+    window.setTimeout(() => wave3.forEach((t) => TAB_PREFETCH_MAP[t]?.()), 1400);
   }
 }
 

@@ -13,6 +13,7 @@ import {
   fetchSecurityGateOverview,
   getActiveWorkspaceId,
   getStoredUser,
+  peekApiCache,
   rejectGateBypass,
   revokeGateBypass,
   updateSecurityGate,
@@ -140,8 +141,9 @@ export const SecurityGatesPage: React.FC<PageProps> = ({ onNavigate, ...headerPr
   const { t } = useI18n();
   const cacheKey = getGateCacheKey(headerProps.user?.email);
   const initialCache = cachedGates.get(cacheKey);
-  const [data, setDataState] = useState<SecurityGateOverview | null>(initialCache?.data ?? null);
-  const [draft, setDraft] = useState<SecurityGatePolicy | null>(initialCache?.data.policy ?? null);
+  const apiCached = peekApiCache<SecurityGateOverview>('/security-gates/overview');
+  const [data, setDataState] = useState<SecurityGateOverview | null>(initialCache?.data ?? apiCached ?? null);
+  const [draft, setDraft] = useState<SecurityGatePolicy | null>(initialCache?.data.policy ?? apiCached?.policy ?? null);
   const [lastEvaluatedAt, setLastEvaluatedAt] = useState<Date | null>(
     initialCache ? new Date(initialCache.timestamp) : null,
   );

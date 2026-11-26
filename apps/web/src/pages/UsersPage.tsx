@@ -21,6 +21,7 @@ import {
   changeWorkspaceMemberRole,
   fetchWorkspaces,
   inviteWorkspaceMember,
+  peekApiCache,
   removeWorkspaceMember,
   resendWorkspaceInvitation,
 } from '../api/client';
@@ -72,8 +73,8 @@ export const UsersPage: React.FC<UsersPageProps> = ({
   unreadCount,
   onGoToSite,
 }) => {
-  const [data, setData] = useState<WorkspaceOverview | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<WorkspaceOverview | null>(() => peekApiCache<WorkspaceOverview>('/workspaces'));
+  const [loading, setLoading] = useState(() => peekApiCache<WorkspaceOverview>('/workspaces') === null);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'members' | 'invitations'>('members');
 

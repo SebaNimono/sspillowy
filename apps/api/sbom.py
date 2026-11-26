@@ -136,23 +136,23 @@ def persist_sbom(db, *, scan, repo, packages: list[dict], scan_root: Path | None
 
 def _vuln_index(db, repo_ids: list[str]) -> dict[tuple[str, str, str], dict]:
     """(repo, paquete, versión) -> resumen de vulnerabilidades activas de Trivy."""
-    q = db.query(Finding).filter(
+    q = db.query(Finding.repository_id, Finding.severity, Finding.title, Finding.description).filter(
         Finding.engine == "trivy", Finding.status.in_(ACTIVE_STATUSES), Finding.repository_id.in_(repo_ids)
     )
     index: dict[tuple[str, str, str], dict] = {}
-    for f in q.all():
-        m = _PKG_RE.search(f.description or "")
+    for repository_id, severity, title, description in q.all():
+        m = _PKG_RE.search(description or "")
         if not m:
             continue
         pkg, installed, fixed = m.group(1).strip(), m.group(2).strip(), (m.group(3) or "").strip()
         entry = index.setdefault(
-            (f.repository_id, pkg, installed),
+            (repository_id, pkg, installed),
             {"count": 0, "max_severity": "INFO", "cves": [], "_fixes": []},
         )
         entry["count"] += 1
-        if _SEV_RANK.get(f.severity, 9) < _SEV_RANK.get(entry["max_severity"], 9):
-            entry["max_severity"] = f.severity
-        cve = (f.title or "").split(":", 1)[0].strip()
+        if _SEV_RANK.get(severity, 9) < _SEV_RANK.get(entry["max_severity"], 9):
+            entry["max_severity"] = severity
+        cve = (title or "").split(":", 1)[0].strip()
         if cve and cve not in entry["cves"]:
             entry["cves"].append(cve)
         candidates = [c.strip() for c in fixed.split(",") if c.strip()]
@@ -176,11 +176,23 @@ def _loads(raw: Optional[str]) -> list:
         return []
 
 
+_SBOM_CACHE: dict[tuple[str, str], tuple[float, dict]] = {}
+
+
 @router.get("")
 def get_sbom(
     repository_id: Optional[str] = Query(default=None),
     ws: WorkspaceCtx = Depends(require_ws),
 ):
+    import time as _time
+    import database as _database
+
+    cache_key = (ws.id, repository_id or "")
+    now_m = _time.monotonic()
+    if not _database.USING_SQLITE:
+        cached = _SBOM_CACHE.get(cache_key)
+        if cached and cached[0] > now_m:
+            return cached[1]
     _require_db()
     if repository_id:
         ws.require_repo(repository_id)
@@ -245,7 +257,10 @@ def get_sbom(
                 }
             )
         repositories.sort(key=lambda r: (r["generated_at"] is None, r["name"].lower()))
-        return {"repositories": repositories, "components": out_components}
+        out = {"repositories": repositories, "components": out_components}
+        if not _database.USING_SQLITE:
+            _SBOM_CACHE[cache_key] = (now_m + 30.0, out)
+        return out
     finally:
         db.close()
 

@@ -3,7 +3,7 @@ import { Header } from '../components/Header';
 import { SidebarState } from '../components/Sidebar';
 import { Toast, ToastMessage } from '../components/Toast';
 import PageSkeleton from '../components/PageSkeleton';
-import { Finding, TRACE_REF_KEY, fetchFindings, updateFindingStatus, clearFindings } from '../api/client';
+import { Finding, TRACE_REF_KEY, fetchFindings, updateFindingStatus, clearFindings, peekApiCache } from '../api/client';
 import {
   ShieldAlert,
   Sparkles,
@@ -183,8 +183,8 @@ export const FindingsPage: React.FC<PageProps> = ({
   onGoToSite,
 }) => {
   const { t } = useI18n();
-  const [findings, setFindings] = useState<Finding[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [findings, setFindings] = useState<Finding[]>(() => peekApiCache<Finding[]>('/findings') ?? []);
+  const [loading, setLoading] = useState(() => peekApiCache<Finding[]>('/findings') === null);
   const [clearing, setClearing] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const [view, setView] = useState<'grouped' | 'list'>('grouped');
@@ -206,11 +206,12 @@ export const FindingsPage: React.FC<PageProps> = ({
     setToast({ id: Date.now().toString(), type, title, message });
 
   const loadFindings = () => {
-    setLoading(true);
     const statusFilter =
       selectedStatus === 'active' || selectedStatus === 'all' || selectedStatus === 'fp'
         ? undefined
         : selectedStatus;
+    const path = statusFilter ? `/findings?status=${encodeURIComponent(statusFilter)}` : '/findings';
+    if (!peekApiCache(path)) setLoading(true);
     fetchFindings(undefined, undefined, statusFilter)
       .then((data) => setFindings(data || []))
       .catch((err) => {

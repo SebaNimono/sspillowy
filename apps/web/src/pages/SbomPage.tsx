@@ -3,7 +3,7 @@ import { ArrowRight, Boxes, ChevronDown, ChevronRight, Download, RefreshCw, Sear
 import { Header } from '../components/Header';
 import { SidebarState } from '../components/Sidebar';
 import { Toast, ToastMessage } from '../components/Toast';
-import { SbomComponent, SbomRepository, downloadCycloneDx, fetchSbom } from '../api/client';
+import { SbomComponent, SbomRepository, downloadCycloneDx, fetchSbom, peekApiCache } from '../api/client';
 import { SEVERITY_COLOR, SEVERITY_LABEL, SEVERITY_RANK, Severity } from '../utils/findingGroups';
 import { formatDateTime } from '../utils/formatDateTime';
 import { usePillowPageContext } from '../config/pillowContext';
@@ -68,10 +68,11 @@ const PAGE_SIZE = 80;
 
 export const SbomPage: React.FC<PageProps> = ({ onNavigate, ...headerProps }) => {
   const { t } = useI18n();
-  const [repos, setRepos] = useState<SbomRepository[]>([]);
-  const [components, setComponents] = useState<SbomComponent[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loaded, setLoaded] = useState(false);
+  const cachedSbom = peekApiCache<{ repositories: SbomRepository[]; components: SbomComponent[] }>('/sbom');
+  const [repos, setRepos] = useState<SbomRepository[]>(() => cachedSbom?.repositories ?? []);
+  const [components, setComponents] = useState<SbomComponent[]>(() => cachedSbom?.components ?? []);
+  const [loading, setLoading] = useState(() => cachedSbom === null);
+  const [loaded, setLoaded] = useState(() => cachedSbom !== null);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [query, setQuery] = useState('');
@@ -83,7 +84,7 @@ export const SbomPage: React.FC<PageProps> = ({ onNavigate, ...headerProps }) =>
   const [openChanges, setOpenChanges] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    if (!peekApiCache('/sbom')) setLoading(true);
     try {
       const data = await fetchSbom();
       setRepos(data.repositories);

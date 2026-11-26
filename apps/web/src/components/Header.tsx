@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Activity, Bell, Smartphone, Menu, ChevronRight, LogOut, Globe, Languages, Check } from 'lucide-react';
 import { SidebarState } from './Sidebar';
-import { fetchNotifications, NotificationItem } from '../api/client';
+import { fetchNotifications, NotificationItem, peekApiCache } from '../api/client';
 import { useI18n } from '../i18n/I18nProvider';
 import { Locale } from '../i18n';
 import { APP_VERSION } from '../config/version';
@@ -36,14 +36,15 @@ export const Header: React.FC<HeaderProps> = ({
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showNotifMenu, setShowNotifMenu] = useState(false);
   const [showLangMenu, setShowLangMenu] = useState(false);
-  const [preview, setPreview] = useState<NotificationItem[]>([]);
+  const [preview, setPreview] = useState<NotificationItem[]>(() => (peekApiCache<NotificationItem[]>('/notifications') || []).slice(0, 4));
   const actionsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!showNotifMenu && preview.length > 0) return;
     fetchNotifications()
       .then((data) => setPreview((data || []).slice(0, 4)))
       .catch(() => setPreview([]));
-  }, [unreadCount]);
+  }, [unreadCount, showNotifMenu]);
 
   useEffect(() => {
     if (!showLangMenu && !showNotifMenu && !showProfileMenu) return;

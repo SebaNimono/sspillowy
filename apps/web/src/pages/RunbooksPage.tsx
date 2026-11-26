@@ -15,6 +15,7 @@ import {
   fetchRepositories,
   fetchRunbookExecutions,
   fetchRunbooks,
+  peekApiCache,
   setRunbookEnabled,
   testRunbook,
   updateRunbook,
@@ -69,11 +70,15 @@ function actionChip(a: Runbook['actions'][number]): string {
 
 export const RunbooksPage: React.FC<PageProps> = ({ onNavigate, ...headerProps }) => {
   const { t } = useI18n();
-  const [runbooks, setRunbooks] = useState<Runbook[]>([]);
-  const [executions, setExecutions] = useState<RunbookExecution[]>([]);
-  const [meta, setMeta] = useState<{ email_ready: boolean; security_team: string[] }>({ email_ready: false, security_team: [] });
-  const [repos, setRepos] = useState<Repository[]>([]);
-  const [loaded, setLoaded] = useState(false);
+  const cachedRb = peekApiCache<{ runbooks: Runbook[]; email_ready: boolean; security_team: string[] }>('/runbooks');
+  const [runbooks, setRunbooks] = useState<Runbook[]>(() => cachedRb?.runbooks ?? []);
+  const [executions, setExecutions] = useState<RunbookExecution[]>(() => peekApiCache<RunbookExecution[]>('/runbooks/executions') ?? []);
+  const [meta, setMeta] = useState<{ email_ready: boolean; security_team: string[] }>(() => ({
+    email_ready: cachedRb?.email_ready ?? false,
+    security_team: cachedRb?.security_team ?? [],
+  }));
+  const [repos, setRepos] = useState<Repository[]>(() => peekApiCache<Repository[]>('/repositories') ?? []);
+  const [loaded, setLoaded] = useState(() => cachedRb !== null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<'runbooks' | 'history'>('runbooks');

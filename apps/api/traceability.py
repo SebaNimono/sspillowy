@@ -289,7 +289,20 @@ class Issue:
         return {r.id for r in self.rows}
 
 
+_TRACE_LOAD_CACHE: dict[tuple[str, ...], tuple[float, tuple[dict[str, Issue], dict[str, list[Scan]], dict[str, set]]]] = {}
+
+
 def _load(db, repo_ids: list[str], *, key: str | None = None) -> tuple[dict[str, Issue], dict[str, list[Scan]], dict[str, set]]:
+    import time as _time
+    import database as _database
+
+    cache_key = tuple(sorted(repo_ids or ["__none__"]))
+    now_m = _time.monotonic()
+    if key is None and not _database.USING_SQLITE:
+        cached = _TRACE_LOAD_CACHE.get(cache_key)
+        if cached and cached[0] > now_m:
+            return cached[1]
+
     q = db.query(
         Finding.id,
         Finding.repository_id,
@@ -331,7 +344,10 @@ def _load(db, repo_ids: list[str], *, key: str | None = None) -> tuple[dict[str,
 
     for it in issues.values():
         _lifecycle(it, scans_by_repo.get(it.repo_id, []), engines_seen)
-    return issues, scans_by_repo, engines_seen
+    res = (issues, scans_by_repo, engines_seen)
+    if key is None and not _database.USING_SQLITE:
+        _TRACE_LOAD_CACHE[cache_key] = (now_m + 20.0, res)
+    return res
 
 
 def _scan_time(s: Scan) -> datetime:

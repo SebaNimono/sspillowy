@@ -368,6 +368,14 @@ def compute_observability(
 ) -> dict:
     """Tráfico de la API, correo, webhook y Pillow son de toda la plataforma: solo los ve un administrador de la
     plataforma. Análisis, motores e incidentes son del espacio."""
+    import database as _database
+
+    cache_key = (workspace_id, range_key, platform)
+    now_m = time.monotonic()
+    if now is None and not _database.USING_SQLITE:
+        cached = _OBS_CACHE.get(cache_key)
+        if cached and cached[0] > now_m:
+            return cached[1]
     now = now or _now()
     repo_ids = repo_ids or ["__none__"]
     span, step = RANGES.get(range_key, RANGES["24h"])
@@ -609,7 +617,7 @@ def compute_observability(
     incidents.sort(key=lambda i: i["at"], reverse=True)
 
     p95 = _p95(api_agg)
-    return {
+    result = {
         "range": range_key if range_key in RANGES else "24h",
         "generated_at": now.isoformat(),
         "platform_view": platform,
@@ -639,6 +647,9 @@ def compute_observability(
             "grafana_url": os.getenv("GRAFANA_URL", "").strip() or None,
         },
     }
+    if not _database.USING_SQLITE:
+        _OBS_CACHE[cache_key] = (now_m + 15.0, result)
+    return result
 
 
 # --------------------------------------------------------------------------- API

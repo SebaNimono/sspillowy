@@ -29,6 +29,7 @@ import {
   ComplianceStatus,
   fetchCompliance,
   fetchComplianceEvidence,
+  peekApiCache,
   setComplianceFramework,
   updateComplianceControl,
 } from '../api/client';
@@ -95,8 +96,8 @@ export const ReportsPage: React.FC<PageProps> = ({
   onGoToSite,
 }) => {
   const { t } = useI18n();
-  const [data, setData] = useState<ComplianceOverview | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<ComplianceOverview | null>(() => peekApiCache<ComplianceOverview>('/compliance'));
+  const [loading, setLoading] = useState(() => peekApiCache<ComplianceOverview>('/compliance') === null);
   const [apiOffline, setApiOffline] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [view, setView] = useState<'frameworks' | 'controls'>('frameworks');
@@ -112,7 +113,7 @@ export const ReportsPage: React.FC<PageProps> = ({
     setToast({ id: Date.now().toString(), type, title, message });
 
   const load = useCallback(async () => {
-    setLoading(true);
+    if (!peekApiCache('/compliance')) setLoading(true);
     try {
       setData(await fetchCompliance());
       setApiOffline(false);

@@ -47,6 +47,7 @@ import {
   fetchFindings,
   fetchScans,
   fetchRepositories,
+  peekApiCache,
   updateDashboardView,
 } from '../api/client';
 import {
@@ -426,12 +427,14 @@ export const DashboardPage: React.FC<PageProps> = ({
   const [dragId, setDragId] = useState<DashboardWidgetId | null>(null);
   const [range, setRange] = useState<RangeDays>(() => (view ? view.range_days : loadRange()));
   const [autoRefresh, setAutoRefresh] = useState(false);
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [heatmap, setHeatmap] = useState<HeatmapData>(EMPTY_HEATMAP);
-  const [events, setEvents] = useState<AuditEvent[]>([]);
-  const [findings, setFindings] = useState<Finding[]>([]);
-  const [scans, setScans] = useState<Scan[]>([]);
-  const [repositories, setRepositories] = useState<Repository[]>([]);
+  const scopeKey = view?.repository_ids.join(',') ?? '';
+  const scopeQs = scopeKey ? `?repository_ids=${encodeURIComponent(scopeKey)}` : '';
+  const [stats, setStats] = useState<DashboardStats | null>(() => peekApiCache<DashboardStats>(`/stats${scopeQs}`));
+  const [heatmap, setHeatmap] = useState<HeatmapData>(() => peekApiCache<HeatmapData>(`/heatmap${scopeQs}`) ?? EMPTY_HEATMAP);
+  const [events, setEvents] = useState<AuditEvent[]>(() => peekApiCache<AuditEvent[]>(`/audit-log${scopeQs}`) ?? []);
+  const [findings, setFindings] = useState<Finding[]>(() => peekApiCache<Finding[]>('/findings') ?? []);
+  const [scans, setScans] = useState<Scan[]>(() => peekApiCache<Scan[]>('/scans') ?? []);
+  const [repositories, setRepositories] = useState<Repository[]>(() => peekApiCache<Repository[]>('/repositories') ?? []);
   const [serviceSearch, setServiceSearch] = useState('');
   const [serviceTagFilter, setServiceTagFilter] = useState<string>('ALL');
   const [auditFilter, setAuditFilter] = useState<'ALL' | 'GATE' | 'SCAN' | 'AI'>('ALL');
@@ -445,7 +448,6 @@ export const DashboardPage: React.FC<PageProps> = ({
     view ? (view.pillow_widgets as PlacedPillowWidget[]) : loadPlacedWidgets(),
   );
 
-  const scopeKey = view?.repository_ids.join(',') ?? '';
   const load = useCallback(async () => {
     const scope = scopeKey ? scopeKey.split(',') : undefined;
     const inScope = (repoId: string) => !scope || scope.includes(repoId);

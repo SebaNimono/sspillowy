@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { Header } from '../components/Header';
 import { SidebarState } from '../components/Sidebar';
-import { ExecCompare, ExecTone, ExecutiveData, Repository, fetchExecutive, fetchRepositories } from '../api/client';
+import { ExecCompare, ExecTone, ExecutiveData, Repository, fetchExecutive, fetchRepositories, peekApiCache } from '../api/client';
 import { SEVERITY_COLOR, SEVERITY_LABEL } from '../utils/findingGroups';
 import { formatDateTime } from '../utils/formatDateTime';
 import { usePillowPageContext } from '../config/pillowContext';
@@ -97,14 +97,15 @@ export const ExecutivePage: React.FC<PageProps> = ({ onNavigate, ...headerProps 
     return RANGES.some((r) => r.days === saved) ? saved : 30;
   });
   const [repoId, setRepoId] = useState('');
-  const [repos, setRepos] = useState<Repository[]>([]);
-  const [data, setData] = useState<ExecutiveData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [repos, setRepos] = useState<Repository[]>(() => peekApiCache<Repository[]>('/repositories') ?? []);
+  const [data, setData] = useState<ExecutiveData | null>(() => peekApiCache<ExecutiveData>(`/executive?range_days=${range}`));
+  const [loading, setLoading] = useState(() => peekApiCache<ExecutiveData>(`/executive?range_days=${range}`) === null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    const qs = repoId ? `/executive?range_days=${range}&repository_ids=${encodeURIComponent(repoId)}` : `/executive?range_days=${range}`;
+    if (!peekApiCache(qs)) setLoading(true);
     try {
       setData(await fetchExecutive(range, repoId ? [repoId] : undefined));
       setError(null);

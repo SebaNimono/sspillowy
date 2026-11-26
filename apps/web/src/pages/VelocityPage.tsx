@@ -13,7 +13,7 @@ import {
 import { ArrowDownRight, ArrowRight, ArrowUpRight, Gauge, Info, RefreshCw, Timer, TrendingUp } from 'lucide-react';
 import { Header } from '../components/Header';
 import { SidebarState } from '../components/Sidebar';
-import { Repository, VelocityData, fetchRepositories, fetchVelocity } from '../api/client';
+import { Repository, VelocityData, fetchRepositories, fetchVelocity, peekApiCache } from '../api/client';
 import { SEVERITY_COLOR, SEVERITY_LABEL } from '../utils/findingGroups';
 import { formatDateTime } from '../utils/formatDateTime';
 import { usePillowPageContext } from '../config/pillowContext';
@@ -91,13 +91,14 @@ export const VelocityPage: React.FC<PageProps> = ({ onNavigate, ...headerProps }
     return (RANGES as readonly number[]).includes(saved) ? saved : 30;
   });
   const [repoId, setRepoId] = useState('');
-  const [repos, setRepos] = useState<Repository[]>([]);
-  const [data, setData] = useState<VelocityData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [repos, setRepos] = useState<Repository[]>(() => peekApiCache<Repository[]>('/repositories') ?? []);
+  const [data, setData] = useState<VelocityData | null>(() => peekApiCache<VelocityData>(`/velocity?range_days=${range}`));
+  const [loading, setLoading] = useState(() => peekApiCache<VelocityData>(`/velocity?range_days=${range}`) === null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    const qs = repoId ? `/velocity?range_days=${range}&repository_ids=${encodeURIComponent(repoId)}` : `/velocity?range_days=${range}`;
+    if (!peekApiCache(qs)) setLoading(true);
     try {
       setData(await fetchVelocity(range, repoId ? [repoId] : undefined));
       setError(null);

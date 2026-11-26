@@ -38,6 +38,7 @@ import {
   fetchTraceDetail,
   fetchTraceEvidence,
   fetchTraceIssues,
+  peekApiCache,
 } from '../api/client';
 import { usePillowPageContext } from '../config/pillowContext';
 import { SEVERITY_COLOR, SEVERITY_LABEL, Severity } from '../utils/findingGroups';
@@ -423,9 +424,9 @@ const FindingsView: React.FC<{ initialRef: string | null }> = ({ initialRef }) =
   const [filters, setFilters] = useState<TraceIssueFilters>({ status: 'all' });
   const [query, setQuery] = useState('');
   const [person, setPerson] = useState('');
-  const [data, setData] = useState<TraceIssueList | null>(null);
+  const [data, setData] = useState<TraceIssueList | null>(() => peekApiCache<TraceIssueList>('/traceability/findings?status=all&limit=50'));
   const [limit, setLimit] = useState(PAGE_SIZE);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => peekApiCache<TraceIssueList>('/traceability/findings?status=all&limit=50') === null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(initialRef);
   const [detail, setDetail] = useState<TraceDetail | null>(null);

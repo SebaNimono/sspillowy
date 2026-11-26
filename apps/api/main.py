@@ -185,6 +185,10 @@ app.include_router(metrics_router)
 _READ_NOTIFICATION_IDS: set[str] = set()
 _NOTIF_CACHE: dict[str, tuple[float, list[dict]]] = {}
 _REPO_CACHE: dict[str, tuple[float, list[RepositoryResponse]]] = {}
+_STATS_CACHE: dict[tuple[str, str], tuple[float, DashboardStats]] = {}
+_HEATMAP_CACHE: dict[tuple[str, int, str], tuple[float, HeatmapResponse]] = {}
+_AUDIT_CACHE: dict[tuple[str, int, str], tuple[float, list]] = {}
+_FINDINGS_CACHE: dict[tuple[str, str, str, str, str], tuple[float, list]] = {}
 _LAST_STALE_SCAN_CHECK: float = 0.0
 
 
@@ -195,6 +199,25 @@ def invalidate_repo_and_notif_cache(workspace_id: str | None = None) -> None:
     else:
         _NOTIF_CACHE.clear()
         _REPO_CACHE.clear()
+    _STATS_CACHE.clear()
+    _HEATMAP_CACHE.clear()
+    _AUDIT_CACHE.clear()
+    _FINDINGS_CACHE.clear()
+    try:
+        from fix_intel import _FIX_INTEL_CACHE
+        _FIX_INTEL_CACHE.clear()
+    except Exception:
+        pass
+    try:
+        from sbom import _SBOM_CACHE
+        _SBOM_CACHE.clear()
+    except Exception:
+        pass
+    try:
+        from traceability import _TRACE_LOAD_CACHE
+        _TRACE_LOAD_CACHE.clear()
+    except Exception:
+        pass
 
 
 def _now() -> datetime:
@@ -546,11 +569,22 @@ def _repo_ids_param(raw: Optional[str], ws: WorkspaceCtx) -> list[str]:
 def get_dashboard_stats(
     repository_ids: Optional[str] = Query(default=None), ws: WorkspaceCtx = Depends(require_ws)
 ):
+    import time as _time
+
+    cache_key = (ws.id, repository_ids or "")
+    now_m = _time.monotonic()
+    if not _database.USING_SQLITE:
+        cached = _STATS_CACHE.get(cache_key)
+        if cached and cached[0] > now_m:
+            return cached[1]
     db = SessionLocal()
     try:
         if not db_ping() or not ws.repo_ids:
             return _empty_dashboard_stats()
-        return DashboardStats(**compute_dashboard_stats(db, _repo_ids_param(repository_ids, ws)))
+        out = DashboardStats(**compute_dashboard_stats(db, _repo_ids_param(repository_ids, ws)))
+        if not _database.USING_SQLITE:
+            _STATS_CACHE[cache_key] = (now_m + 30.0, out)
+        return out
     except Exception as exc:
         print(f"[sspillowy] dashboard stats error: {exc}")
         return _empty_dashboard_stats()
@@ -564,11 +598,22 @@ def get_heatmap(
     repository_ids: Optional[str] = Query(default=None),
     ws: WorkspaceCtx = Depends(require_ws),
 ):
+    import time as _time
+
+    cache_key = (ws.id, weeks, repository_ids or "")
+    now_m = _time.monotonic()
+    if not _database.USING_SQLITE:
+        cached = _HEATMAP_CACHE.get(cache_key)
+        if cached and cached[0] > now_m:
+            return cached[1]
     db = SessionLocal()
     try:
         if not db_ping() or not ws.repo_ids:
             return _empty_heatmap(weeks)
-        return HeatmapResponse(**compute_heatmap(db, weeks=weeks, repo_ids=_repo_ids_param(repository_ids, ws)))
+        out = HeatmapResponse(**compute_heatmap(db, weeks=weeks, repo_ids=_repo_ids_param(repository_ids, ws)))
+        if not _database.USING_SQLITE:
+            _HEATMAP_CACHE[cache_key] = (now_m + 30.0, out)
+        return out
     except Exception as exc:
         print(f"[sspillowy] heatmap error: {exc}")
         return _empty_heatmap(weeks)
@@ -582,12 +627,23 @@ def list_audit_log(
     repository_ids: Optional[str] = Query(default=None),
     ws: WorkspaceCtx = Depends(require_ws),
 ):
+    import time as _time
+
+    cache_key = (ws.id, limit, repository_ids or "")
+    now_m = _time.monotonic()
+    if not _database.USING_SQLITE:
+        cached = _AUDIT_CACHE.get(cache_key)
+        if cached and cached[0] > now_m:
+            return cached[1]
     db = SessionLocal()
     try:
         if not db_ping():
             return []
         explicit = _repo_ids_param(repository_ids, ws) if repository_ids else None
-        return list_audit_events(db, limit=limit, repo_ids=explicit, workspace_id=ws.id)
+        out = list_audit_events(db, limit=limit, repo_ids=explicit, workspace_id=ws.id)
+        if not _database.USING_SQLITE:
+            _AUDIT_CACHE[cache_key] = (now_m + 20.0, out)
+        return out
     except Exception as exc:
         print(f"[sspillowy] audit log error: {exc}")
         return []
@@ -731,6 +787,20 @@ def list_findings(
     finding_status: Optional[FindingStatus] = Query(default=None, alias="status"),
     ws: WorkspaceCtx = Depends(require_ws),
 ):
+    import time as _time
+
+    cache_key = (
+        ws.id,
+        repository_id or "",
+        engine.value if engine else "",
+        severity.value if severity else "",
+        finding_status.value if finding_status else "",
+    )
+    now_m = _time.monotonic()
+    if not _database.USING_SQLITE:
+        cached = _FINDINGS_CACHE.get(cache_key)
+        if cached and cached[0] > now_m:
+            return cached[1]
     _require_db()
     db = SessionLocal()
     try:
@@ -757,7 +827,10 @@ def list_findings(
         if not rows:
             return []
         first_seen = first_seen_map(db, [repository_id] if repository_id else ws.scope_ids)
-        return [_finding_out(f, first_seen) for f in rows]
+        out = [_finding_out(f, first_seen) for f in rows]
+        if not _database.USING_SQLITE:
+            _FINDINGS_CACHE[cache_key] = (now_m + 20.0, out)
+        return out
     finally:
         db.close()
 

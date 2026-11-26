@@ -3,7 +3,7 @@ import { ArrowRight, Check, RefreshCw, Sparkles, Wand2, X } from 'lucide-react';
 import { Header } from '../components/Header';
 import { SidebarState } from '../components/Sidebar';
 import { Toast, ToastMessage } from '../components/Toast';
-import { AiVerdict, FixIntelItem, FixIntelQueue, decideFixIntel, fetchFixIntel, triageFindings } from '../api/client';
+import { AiVerdict, FixIntelItem, FixIntelQueue, decideFixIntel, fetchFixIntel, peekApiCache, triageFindings } from '../api/client';
 import { SEVERITY_COLOR, SEVERITY_LABEL, Severity } from '../utils/findingGroups';
 import { formatFilePath } from '../utils/formatFilePath';
 import { formatDateTime } from '../utils/formatDateTime';
@@ -59,8 +59,8 @@ const PAGE_SIZE = 60;
 
 export const FixIntelPage: React.FC<PageProps> = ({ onNavigate, ...headerProps }) => {
   const { t } = useI18n();
-  const [data, setData] = useState<FixIntelQueue | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<FixIntelQueue | null>(() => peekApiCache<FixIntelQueue>('/fix-intel'));
+  const [loading, setLoading] = useState(() => peekApiCache<FixIntelQueue>('/fix-intel') === null);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [repoFilter, setRepoFilter] = useState('');
@@ -75,7 +75,8 @@ export const FixIntelPage: React.FC<PageProps> = ({ onNavigate, ...headerProps }
     setToast({ id: Date.now().toString(), type, title, message });
 
   const load = useCallback(async () => {
-    setLoading(true);
+    const qs = repoFilter ? `/fix-intel?repository_id=${encodeURIComponent(repoFilter)}` : '/fix-intel';
+    if (!peekApiCache(qs)) setLoading(true);
     try {
       setData(await fetchFixIntel(repoFilter || undefined));
       setError(null);

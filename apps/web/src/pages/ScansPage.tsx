@@ -3,7 +3,7 @@ import { Header } from '../components/Header';
 import { SidebarState } from '../components/Sidebar';
 import { Toast, ToastMessage } from '../components/Toast';
 import { ApiOfflineBanner } from '../components/ApiOfflineBanner';
-import { Repository, Scan, fetchRepositories, fetchScans, triggerScan } from '../api/client';
+import { Repository, Scan, fetchRepositories, fetchScans, peekApiCache, triggerScan } from '../api/client';
 import {
   Radar,
   Play,
@@ -90,9 +90,9 @@ export const ScansPage: React.FC<PageProps> = ({
   onGoToSite,
 }) => {
   const { t } = useI18n();
-  const [scans, setScans] = useState<Scan[]>([]);
-  const [repos, setRepos] = useState<Repository[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [scans, setScans] = useState<Scan[]>(() => peekApiCache<Scan[]>('/scans') ?? []);
+  const [repos, setRepos] = useState<Repository[]>(() => peekApiCache<Repository[]>('/repositories') ?? []);
+  const [loading, setLoading] = useState(() => peekApiCache<Scan[]>('/scans') === null);
   const [apiOffline, setApiOffline] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [q, setQ] = useState('');
@@ -119,7 +119,7 @@ export const ScansPage: React.FC<PageProps> = ({
   }, [repos]);
 
   const load = (silent = false) => {
-    if (!silent) setLoading(true);
+    if (!silent && !peekApiCache('/scans')) setLoading(true);
     Promise.all([fetchScans(), fetchRepositories()])
       .then(([scanData, repoData]) => {
         setApiOffline(false);
