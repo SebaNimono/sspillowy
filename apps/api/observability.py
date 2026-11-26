@@ -486,7 +486,7 @@ def compute_observability(
             "detail": f"{_n(email_agg['count'] - bad, 'enviado', 'enviados')}, {bad} con error" if email_agg["count"] else "Sin envíos en el periodo",
         })
 
-    if not os.getenv("GEMINI_API_KEY", "").strip():
+    if not (os.getenv("GROQ_API_KEY", "").strip() or os.getenv("GEMINI_API_KEY", "").strip()):
         components.append({"id": "pillow", "name": "Pillow", "status": "unconfigured", "detail": "Sin activar"})
     elif not platform:
         components.append({"id": "pillow", "name": "Pillow", "status": "up", "detail": "Disponible"})

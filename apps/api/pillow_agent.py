@@ -23,6 +23,7 @@ from obs_metrics import Timer
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
 # gemini-2.0/2.5 ya no están disponibles para cuentas nuevas → 3.6-flash (Google AI Studio)
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash").strip()
 GEMINI_MODEL_FALLBACKS = [
@@ -30,7 +31,37 @@ GEMINI_MODEL_FALLBACKS = [
     for m in os.getenv("GEMINI_MODEL_FALLBACKS", "gemini-flash-latest,gemini-2.5-flash").split(",")
     if m.strip()
 ]
+GROQ_MODEL = os.getenv("GROQ_MODEL", "qwen/qwen3-32b").strip()
+GROQ_MODEL_FALLBACKS = [
+    m.strip()
+    for m in os.getenv(
+        "GROQ_MODEL_FALLBACKS",
+        "qwen/qwen3-32b,qwen-qwq-32b,llama-3.3-70b-versatile,openai/gpt-oss-120b,openai/gpt-oss-20b,llama-3.1-8b-instant",
+    ).split(",")
+    if m.strip()
+]
 PILLOW_DAILY_CREDITS = int(os.getenv("PILLOW_DAILY_CREDITS", "2"))
+
+
+def _active_groq_key() -> str:
+    gk = (os.getenv("GROQ_API_KEY") or GROQ_API_KEY or "").strip()
+    if gk:
+        return gk
+    mk = (os.getenv("GEMINI_API_KEY") or GEMINI_API_KEY or "").strip()
+    if mk.startswith("gsk_"):
+        return mk
+    return ""
+
+
+def _active_gemini_key() -> str:
+    mk = (os.getenv("GEMINI_API_KEY") or GEMINI_API_KEY or "").strip()
+    if mk and not mk.startswith("gsk_"):
+        return mk
+    return ""
+
+
+def pillow_configured() -> bool:
+    return bool(_active_groq_key() or _active_gemini_key())
 
 router = APIRouter(prefix="/api/v1/pillow", tags=["Pillow"])
 logger = logging.getLogger("sspillowy.pillow")
@@ -187,10 +218,11 @@ def _consume_credit(db, user_key: str) -> int:
 
 
 def _parse_gemini_json(text: str) -> dict:
-    """Extrae JSON de la respuesta de Gemini (markdown, texto mezclado o JSON puro)."""
+    """Extrae JSON de la respuesta de IA (markdown, bloques <think> de Qwen, texto mezclado o JSON puro)."""
     raw = (text or "").strip()
     if not raw:
         raise json.JSONDecodeError("empty", raw, 0)
+    raw = re.sub(r"<think>[\s\S]*?</think>", "", raw, flags=re.IGNORECASE).strip() or raw
 
     candidates: list[str] = [raw]
 
@@ -283,10 +315,116 @@ def _friendly_gemini_error(status: int, raw: str) -> str:
     return "Pillow no respondió. Intenta de nuevo en unos minutos; no se descontó ningún crédito."
 
 
+def _groq_model_candidates() -> list[str]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for name in [
+        GROQ_MODEL,
+        *GROQ_MODEL_FALLBACKS,
+        "qwen/qwen3-32b",
+        "llama-3.3-70b-versatile",
+        "openai/gpt-oss-120b",
+        "openai/gpt-oss-20b",
+    ]:
+        if name and name not in seen:
+            seen.add(name)
+            ordered.append(name)
+    return ordered
+
+
+async def _call_groq(
+    groq_key: str,
+    user_message: str,
+    context: dict | None = None,
+    *,
+    system_prompt: str = SYSTEM_PROMPT,
+    schema: dict[str, Any] | None = None,
+    history: list[dict] | None = None,
+    context_label: str = "Contexto actual",
+    max_tokens: int = 2048,
+) -> dict:
+    schema = schema or PILLOW_RESPONSE_SCHEMA
+    ctx_block = ""
+    if context:
+        ctx_block = f"\n{context_label} (JSON):\n{json.dumps(context, ensure_ascii=False, default=str)[:6000]}\n"
+
+    schema_instruction = (
+        f"\nIMPORTANTE: Responde ÚNICAMENTE con un objeto JSON válido que cumpla este esquema JSON:\n"
+        f"{json.dumps(schema, ensure_ascii=False)}\nNo incluyas texto fuera del JSON."
+    )
+    messages: list[dict[str, str]] = [
+        {"role": "system", "content": f"{system_prompt}\n{schema_instruction}"},
+    ]
+    for line in (history or [])[-8:]:
+        role = "assistant" if line.get("role") == "pillow" else "user"
+        text = str(line.get("text") or "").strip()[:1500]
+        if text:
+            messages.append({"role": role, "content": text})
+    messages.append({"role": "user", "content": f"{ctx_block}\nPregunta del usuario:\n{user_message}"})
+
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"}
+    last_status = 502
+    last_raw = ""
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        models_to_try = list(_groq_model_candidates())
+        for idx, model in enumerate(models_to_try):
+            for use_json_mode in (True, False):
+                payload: dict[str, Any] = {
+                    "model": model,
+                    "messages": messages,
+                    "temperature": 0.3,
+                    "max_tokens": max_tokens,
+                }
+                if use_json_mode:
+                    payload["response_format"] = {"type": "json_object"}
+                try:
+                    res = await client.post(url, headers=headers, json=payload)
+                except httpx.HTTPError as exc:
+                    logger.warning("Groq sin respuesta (%s): %s", model, exc)
+                    res = None
+                if res is None:
+                    last_status = 504
+                    break
+                if res.status_code == 200:
+                    body = res.json()
+                    choices = body.get("choices") or []
+                    if choices:
+                        text = ((choices[0].get("message") or {}).get("content") or "").strip()
+                        if text:
+                            return _parse_gemini_json(text)
+                last_status = res.status_code
+                last_raw = res.text[:300]
+                if res.status_code == 400 and use_json_mode:
+                    continue
+                if res.status_code in (400, 404) and idx == 0:
+                    try:
+                        mres = await client.get("https://api.groq.com/openai/v1/models", headers=headers)
+                        if mres.status_code == 200:
+                            avail = [m.get("id", "") for m in (mres.json().get("data") or []) if m.get("id")]
+                            qwen_avail = [m for m in avail if "qwen" in m.lower()]
+                            for qm in reversed(qwen_avail):
+                                if qm not in models_to_try:
+                                    models_to_try.insert(idx + 1, qm)
+                    except Exception:
+                        pass
+                break
+
+    raise HTTPException(status_code=502, detail=_friendly_gemini_error(last_status, last_raw))
+
+
 async def call_gemini(user_message: str, context: dict | None = None, **kwargs: Any) -> dict:
-    if not GEMINI_API_KEY:
+    if not pillow_configured():
         return await _call_gemini(user_message, context, **kwargs)
     with Timer("pillow", "chat"):
+        groq_key = _active_groq_key()
+        if groq_key:
+            try:
+                return await _call_groq(groq_key, user_message, context, **kwargs)
+            except HTTPException:
+                if not _active_gemini_key():
+                    raise
         return await _call_gemini(user_message, context, **kwargs)
 
 
@@ -300,7 +438,8 @@ async def _call_gemini(
     context_label: str = "Contexto actual",
     max_tokens: int = 2048,
 ) -> dict:
-    if not GEMINI_API_KEY:
+    gemini_key = _active_gemini_key()
+    if not gemini_key:
         raise HTTPException(status_code=503, detail="Pillow aún no está activado en el servidor. Avisa al administrador.")
     schema = schema or PILLOW_RESPONSE_SCHEMA
 
@@ -342,7 +481,7 @@ async def _call_gemini(
                 payload = {**base_payload, "generationConfig": gen_config}
                 for attempt in range(3):
                     try:
-                        res = await client.post(url, params={"key": GEMINI_API_KEY}, json=payload)
+                        res = await client.post(url, params={"key": gemini_key}, json=payload)
                     except httpx.HTTPError as exc:
                         logger.warning("Proveedor IA sin respuesta (%s): %s", model, exc)
                         res = None
@@ -390,7 +529,7 @@ def pillow_quota(user_key: str = ""):
 
     if not db_ping():
         return PillowQuotaResponse(
-            configured=bool(GEMINI_API_KEY),
+            configured=pillow_configured(),
             daily_limit=PILLOW_DAILY_CREDITS,
             credits_used=0,
             credits_remaining=PILLOW_DAILY_CREDITS,
@@ -401,7 +540,7 @@ def pillow_quota(user_key: str = ""):
     try:
         used, remaining = _get_quota(db, key)
         return PillowQuotaResponse(
-            configured=bool(GEMINI_API_KEY),
+            configured=pillow_configured(),
             daily_limit=PILLOW_DAILY_CREDITS,
             credits_used=used,
             credits_remaining=remaining,
