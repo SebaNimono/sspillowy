@@ -29,7 +29,6 @@ class ScanModel {
   final String? severity;
   final String? summary;
   final String? repo;
-  final String? filePath;
   final String? type;
   final DateTime createdAt;
 
@@ -40,7 +39,6 @@ class ScanModel {
     this.severity,
     this.summary,
     this.repo,
-    this.filePath,
     this.type,
     required this.createdAt,
   });
@@ -61,21 +59,6 @@ class ScanModel {
       } else {
         parsedDate = DateTime.tryParse(rawDate.toString()) ?? DateTime.now();
       }
-    }
-
-    final rawFile = (json['file_path'] ??
-            json['path'] ??
-            json['location'] ??
-            json['file'] ??
-            json['target'])
-        ?.toString();
-    final rawLine = (json['line'] ?? json['line_number'])?.toString();
-    String? resolvedLocation;
-    if (rawFile != null && rawFile.trim().isNotEmpty && rawFile != 'null') {
-      resolvedLocation =
-          (rawLine != null && rawLine.trim().isNotEmpty && rawLine != 'null')
-              ? '${rawFile.trim()}:$rawLine'
-              : rawFile.trim();
     }
 
     return ScanModel(
@@ -120,7 +103,6 @@ class ScanModel {
               json['repo_name'] ??
               json['repository_name'])
           ?.toString(),
-      filePath: resolvedLocation,
       type: (json['type'] ?? json['scan_type'] ?? json['engine'] ?? 'SAST')
           .toString()
           .toUpperCase(),
@@ -136,7 +118,6 @@ class ScanModel {
       'summary': summary,
       'severity': severity,
       'repo': repo,
-      if (filePath != null) 'file_path': filePath,
       'type': type,
       'created_at': createdAt.toIso8601String(),
     };
@@ -167,13 +148,14 @@ class AuthRepository {
           await prefs.setBool('is_logged_in', true);
           await prefs.remove('persistent_scans_list_v4');
           await prefs.remove('cached_security_bypasses');
-          await prefs.remove('persistent_audit_logs');
-          await prefs.remove('persistent_chat_history');
-          await prefs.remove('pushed_alert_ids');
-          await prefs.remove('persistent_in_app_notifs');
-          await prefs.remove('notif_baseline_seeded');
-          await prefs.remove('selected_workspace_id');
-          await prefs.remove('primary_user_name');
+      await prefs.remove('persistent_audit_logs');
+      await prefs.remove('persistent_chat_history');
+      await prefs.remove('pushed_alert_ids');
+      await prefs.remove('persistent_in_app_notifs');
+      await prefs.remove('notif_baseline_seeded');
+      await prefs.remove('selected_workspace_id');
+      await prefs.remove('primary_user_name');
+      await prefs.remove('notif_baseline_seeded');
           return true;
         }
       }
@@ -272,6 +254,8 @@ class _SSPillowyAppState extends State<SSPillowyApp> {
       await prefs.remove('persistent_in_app_notifs');
       await prefs.remove('notif_baseline_seeded');
       await prefs.remove('selected_workspace_id');
+      await prefs.remove('primary_user_name');
+      await prefs.remove('notif_baseline_seeded');
       await prefs.setBool('is_logged_in', false);
     } catch (_) {}
     if (!mounted) return;
@@ -391,23 +375,6 @@ class _LoginScreenWithTermsState extends State<LoginScreenWithTerms> {
         await launchUrl(uri, mode: LaunchMode.inAppWebView);
       } catch (_) {}
     }
-  }
-
-  Future<void> _handleProviderLogin(
-      String providerKey, String providerLabel) async {
-    setState(() => _inlineLoginError = null);
-    final url =
-        '${ApiClient.baseUrl}/auth/oauth/$providerKey/login?mode=login&client=mobile';
-    await _openWebUrl(url);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Continuando inicio de sesión con $providerLabel. El registro de cuentas nuevas se realiza solo en la web.',
-        ),
-        backgroundColor: const Color(0xFF0284C7),
-      ),
-    );
   }
 
   bool _isValidEmail(String email) {
@@ -610,7 +577,7 @@ class _LoginScreenWithTermsState extends State<LoginScreenWithTerms> {
                             child: const Padding(
                               padding: EdgeInsets.symmetric(vertical: 4.0),
                               child: Text(
-                                'Regístrate en web',
+                                'Regístrate',
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: Color(0xFF38BDF8),
@@ -652,87 +619,10 @@ class _LoginScreenWithTermsState extends State<LoginScreenWithTerms> {
                             ),
                           ),
                   ),
-                  const SizedBox(height: 20),
-                  const Row(
-                    children: [
-                      Expanded(child: Divider(color: Color(0xFF30363D))),
-                      Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 10),
-                        child: Text(
-                          'O continúa con tu cuenta vinculada',
-                          style: TextStyle(
-                              color: Color(0xFF94A3B8), fontSize: 11.5),
-                        ),
-                      ),
-                      Expanded(child: Divider(color: Color(0xFF30363D))),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    alignment: WrapAlignment.center,
-                    children: [
-                      _buildSocialLoginButton(
-                        label: 'GitHub',
-                        icon: Icons.code,
-                        onTap: () => _handleProviderLogin('github', 'GitHub'),
-                      ),
-                      _buildSocialLoginButton(
-                        label: 'GitLab',
-                        icon: Icons.merge_type,
-                        onTap: () => _handleProviderLogin('gitlab', 'GitLab'),
-                      ),
-                      _buildSocialLoginButton(
-                        label: 'Google',
-                        icon: Icons.g_mobiledata,
-                        onTap: () => _handleProviderLogin('google', 'Google'),
-                      ),
-                      _buildSocialLoginButton(
-                        label: 'Microsoft',
-                        icon: Icons.window_outlined,
-                        onTap: () =>
-                            _handleProviderLogin('microsoft', 'Microsoft'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Solo inicio de sesión para cuentas ya creadas en la plataforma web.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Color(0xFF64748B), fontSize: 11),
-                  ),
                 ],
               ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSocialLoginButton({
-    required String label,
-    required IconData icon,
-    required VoidCallback onTap,
-  }) {
-    return SizedBox(
-      width: 175,
-      child: OutlinedButton.icon(
-        style: OutlinedButton.styleFrom(
-          backgroundColor: const Color(0xFF161B22),
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-          side: const BorderSide(color: Color(0xFF30363D)),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(6),
-          ),
-        ),
-        onPressed: _isLoading ? null : onTap,
-        icon: Icon(icon, size: 18, color: const Color(0xFF38BDF8)),
-        label: Text(
-          label,
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
         ),
       ),
     );
@@ -1020,27 +910,26 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
 
   Future<void> _handleNotificationPayload(String payload) async {
     if (!mounted) return;
-    final uri = Uri.tryParse(payload);
-    final resourceId = uri?.queryParameters['id'] ??
-        RegExp(r'id=([^&]+)').firstMatch(payload)?.group(1);
-
     if (payload.contains('bypass')) {
+      final idMatch = RegExp(r'id=([^&]+)').firstMatch(payload);
+      final bypassId = idMatch?.group(1);
       setState(() => _currentIndex = 2);
-      if (resourceId != null && resourceId.isNotEmpty) {
+      if (bypassId != null && bypassId.isNotEmpty) {
         rootNavigatorKey.currentState?.push(
           MaterialPageRoute(
-            builder: (_) => BypassDetailScreen(
-              isOnDuty: widget.isOnDuty,
-              bypassId: resourceId,
+            builder: (_) => BypassDetailScreen(isOnDuty: widget.isOnDuty,
+              bypassId: bypassId,
               bypassService: _bypassService,
             ),
           ),
         );
       }
     } else if (payload.contains('finding')) {
+      final idMatch = RegExp(r'id=([^&]+)').firstMatch(payload);
+      final findingId = idMatch?.group(1);
       setState(() => _currentIndex = 0);
-      if (resourceId != null && resourceId.isNotEmpty) {
-        await _openFindingDetailFromServer(resourceId);
+      if (findingId != null && findingId.isNotEmpty) {
+        await _openFindingDetailFromServer(findingId);
       }
     }
   }
@@ -1064,8 +953,7 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
           final rawList = listRes.data is List
               ? listRes.data as List
               : (listRes.data is Map
-                  ? ((listRes.data['data'] ?? listRes.data['findings'] ?? [])
-                      as List)
+                  ? ((listRes.data['data'] ?? listRes.data['findings'] ?? []) as List)
                   : []);
           for (final item in rawList) {
             if (item is Map && (item['id'] ?? '').toString() == findingId) {
@@ -1109,13 +997,11 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
                     'Estado actual: ${(findingData['status'] ?? 'OPEN').toString().toUpperCase()}',
                     style: const TextStyle(color: Colors.white70, fontSize: 13),
                   ),
-                  if ((findingData['repo'] ?? findingData['repository']) !=
-                      null) ...[
+                  if ((findingData['repo'] ?? findingData['repository']) != null) ...[
                     const SizedBox(height: 6),
                     Text(
                       'Repositorio: ${findingData['repo'] ?? findingData['repository']}',
-                      style:
-                          const TextStyle(color: Colors.white70, fontSize: 13),
+                      style: const TextStyle(color: Colors.white70, fontSize: 13),
                     ),
                   ],
                   const SizedBox(height: 10),
@@ -1124,8 +1010,7 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
                             findingData['description'] ??
                             'Sin descripción adicional.')
                         .toString(),
-                    style:
-                        const TextStyle(color: Colors.white60, fontSize: 12.5),
+                    style: const TextStyle(color: Colors.white60, fontSize: 12.5),
                   ),
                 ],
               ),
@@ -1163,11 +1048,9 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
   }) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.reload();
-    final dismissedIds =
-        (prefs.getStringList('dismissed_notif_ids') ?? []).toSet();
+    final dismissedIds = (prefs.getStringList('dismissed_notif_ids') ?? []).toSet();
     final localReadIds = (prefs.getStringList('read_notif_ids') ?? []).toSet();
-    final persistedPushed =
-        (prefs.getStringList('pushed_alert_ids') ?? []).toSet();
+    final persistedPushed = (prefs.getStringList('pushed_alert_ids') ?? []).toSet();
     _pushedAlertIds.addAll(persistedPushed);
     final savedNotifsJson = prefs.getString('persistent_in_app_notifs');
     List localNotifs = [];
@@ -1220,11 +1103,8 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
             final read = item['read'] == true || item['is_read'] == true;
             final dateStr =
                 (item['created_at'] ?? item['date'] ?? '').toString();
-            final findingId = (item['bypass_id'] ??
-                    item['finding_id'] ??
-                    item['resource_id'] ??
-                    '')
-                .toString();
+            final findingId =
+                (item['finding_id'] ?? item['resource_id'] ?? '').toString();
             final payload = type.toUpperCase().contains('BYPASS')
                 ? '/bypass_detail?id=$findingId'
                 : '/finding_detail?id=$findingId';
@@ -1254,8 +1134,7 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
                   !effectiveRead &&
                   !_pushedAlertIds.contains(id)) {
                 _pushedAlertIds.add(id);
-                await prefs.setStringList(
-                    'pushed_alert_ids', _pushedAlertIds.toList());
+                await prefs.setStringList('pushed_alert_ids', _pushedAlertIds.toList());
                 await NotificationService.showLocalPush(
                   id: id.hashCode.abs() % 100000,
                   title: title,
@@ -1276,13 +1155,11 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
             final bId = (b['id'] ?? '').toString();
             final bStatus = (b['status'] ?? '').toString().toUpperCase();
             final notifKey = 'bypass_$bId';
-            if (bId.isNotEmpty &&
-                bStatus == 'PENDING' &&
-                !dismissedIds.contains(notifKey)) {
+            if (bId.isNotEmpty && bStatus == 'PENDING' && !dismissedIds.contains(notifKey)) {
               final bypassRead = localReadIds.contains(notifKey);
               const title = 'Solicitud de Excepción (Bypass)';
               final body =
-                  '${b['rule'] ?? b['title'] ?? 'Security Gate'} en ${b['repository_name'] ?? b['repository'] ?? b['repo'] ?? 'repositorio'}';
+                  '${b['rule'] ?? b['title'] ?? 'Security Gate'} en ${b['repository'] ?? b['repo'] ?? 'repositorio'}';
               final payload = '/bypass_detail?id=$bId';
 
               if (!localNotifs.any((n) => n['id'] == notifKey)) {
@@ -1303,8 +1180,7 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
                   !bypassRead &&
                   !_pushedAlertIds.contains(notifKey)) {
                 _pushedAlertIds.add(notifKey);
-                await prefs.setStringList(
-                    'pushed_alert_ids', _pushedAlertIds.toList());
+                await prefs.setStringList('pushed_alert_ids', _pushedAlertIds.toList());
                 await NotificationService.showLocalPush(
                   id: notifKey.hashCode.abs() % 100000,
                   title: title,
@@ -1332,15 +1208,14 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
         'persistent_in_app_notifs', jsonEncode(_inAppNotifications));
   }
 
-  Future<void> _addInAppNotification(String title, String body, String type,
-      {String? payload}) async {
+  Future<void> _addInAppNotification(
+      String title, String body, String type) async {
     final newId = DateTime.now().millisecondsSinceEpoch.toString();
-    final newNotif = <String, dynamic>{
+    final newNotif = {
       'id': newId,
       'title': title,
       'body': body,
       'type': type,
-      if (payload != null && payload.isNotEmpty) 'payload': payload,
       'read': false,
       'time':
           '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}',
@@ -1361,8 +1236,7 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
     await _savePersistentNotifications();
 
     final prefs = await SharedPreferences.getInstance();
-    final readIds = (prefs.getStringList('read_notif_ids') ?? []).toSet()
-      ..add(notifId);
+    final readIds = (prefs.getStringList('read_notif_ids') ?? []).toSet()..add(notifId);
     await prefs.setStringList('read_notif_ids', readIds.toList());
 
     try {
@@ -1402,8 +1276,7 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
 
   Future<void> _clearNotifications() async {
     final prefs = await SharedPreferences.getInstance();
-    final dismissedIds =
-        (prefs.getStringList('dismissed_notif_ids') ?? []).toSet();
+    final dismissedIds = (prefs.getStringList('dismissed_notif_ids') ?? []).toSet();
     for (var n in _inAppNotifications) {
       dismissedIds.add(n['id'].toString());
     }
@@ -1421,13 +1294,8 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
   }
 
   void _addAuditLog(StringMap log) {
-    final enriched = {
-      ...log,
-      if (!log.containsKey('timestamp'))
-        'timestamp': DateTime.now().toIso8601String(),
-    };
     setState(() {
-      _globalAuditLogs.insert(0, enriched);
+      _globalAuditLogs.insert(0, log);
     });
     _savePersistentAuditLogs();
   }
@@ -1450,8 +1318,7 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
         currentScans: _currentActiveScans,
         isOnDuty: widget.isOnDuty,
       ),
-      SecurityGateBypassesScreen(
-        isOnDuty: widget.isOnDuty,
+      SecurityGateBypassesScreen(isOnDuty: widget.isOnDuty,
         repository: _incidentRepository,
       ),
       AuditHistoryScreen(
@@ -1520,17 +1387,11 @@ class PillowChatScreen extends StatefulWidget {
 }
 
 class _PillowChatScreenState extends State<PillowChatScreen> {
-  static const List<String> _quickPrompts = [
-    '¿Cuáles son los 3 hallazgos más urgentes?',
-    '¿Qué excepciones de seguridad están activas?',
-    '¿Hay secretos o credenciales expuestas?',
-  ];
-
   List<StringMap> _messages = [
     {
       'role': 'assistant',
       'text':
-          '¡Hola! Soy tu asistente de seguridad Pillow IA para la aplicación móvil. ¿En qué te puedo ayudar sobre los hallazgos actuales o el estado del Security Gate?'
+          '¡Hola! Soy tu asistente de seguridad Pillow IA para la aplicación móvil. ¿En qué te puedo ayudar sobre los hallazgos actuales de tus repositorios?'
     }
   ];
   final TextEditingController _chatController = TextEditingController();
@@ -1580,7 +1441,7 @@ class _PillowChatScreenState extends State<PillowChatScreen> {
         {
           'role': 'assistant',
           'text':
-              '¡Hola! Soy tu asistente de seguridad Pillow IA para la aplicación móvil. ¿En qué te puedo ayudar sobre los hallazgos actuales o el estado del Security Gate?'
+              '¡Hola! Soy tu asistente de seguridad Pillow IA para la aplicación móvil. ¿En qué te puedo ayudar sobre los hallazgos actuales de tus repositorios?'
         }
       ];
     });
@@ -1616,75 +1477,6 @@ class _PillowChatScreenState extends State<PillowChatScreen> {
     return cleaned;
   }
 
-  Future _fetchLiveSecurityGateContext() async {
-    final List bypassesList = [];
-    Map<String, dynamic> gateOverview = {};
-
-    try {
-      final bypassRes = await _apiClient.get('/security-gates/bypasses');
-      if (bypassRes.statusCode == 200 && bypassRes.data != null) {
-        final raw = bypassRes.data;
-        List items = [];
-        if (raw is List) {
-          items = raw;
-        } else if (raw is Map) {
-          items = raw['bypasses'] ??
-              raw['exceptions'] ??
-              raw['data'] ??
-              raw['items'] ??
-              [];
-        }
-        for (final b in items) {
-          if (b is Map) {
-            bypassesList.add({
-              'id': (b['id'] ?? '').toString(),
-              'rule':
-                  (b['rule'] ?? b['rule_id'] ?? b['title'] ?? '').toString(),
-              'status': (b['status'] ?? '').toString().toUpperCase(),
-              'repository':
-                  (b['repository_name'] ?? b['repository'] ?? b['repo'] ?? '')
-                      .toString(),
-              'requested_by': (b['requested_by'] ??
-                      b['requestedBy'] ??
-                      b['requester'] ??
-                      '')
-                  .toString(),
-              'justification':
-                  (b['justification'] ?? b['reason'] ?? b['note'] ?? '')
-                      .toString(),
-              'expires_at':
-                  (b['expires_at'] ?? b['pending_expires_at'] ?? '').toString(),
-            });
-          }
-        }
-      }
-    } catch (_) {}
-
-    try {
-      final overviewRes = await _apiClient.get('/security-gates/overview');
-      if (overviewRes.statusCode == 200 && overviewRes.data is Map) {
-        gateOverview = Map<String, dynamic>.from(overviewRes.data as Map);
-      }
-    } catch (_) {}
-
-    final activeBypasses = bypassesList
-        .where((b) =>
-            b['status'] == 'APPROVED' ||
-            b['status'] == 'EXEMPTED' ||
-            b['status'] == 'ACTIVE')
-        .toList();
-    final pendingBypasses =
-        bypassesList.where((b) => b['status'] == 'PENDING').toList();
-
-    return {
-      'security_gate_overview': gateOverview,
-      'total_bypasses': bypassesList.length,
-      'active_bypasses_count': activeBypasses.length,
-      'pending_bypasses_count': pendingBypasses.length,
-      'bypasses': bypassesList,
-    };
-  }
-
   Future<void> _sendMessageToAI(String prompt) async {
     final cleanPrompt = prompt.trim();
     if (cleanPrompt.isEmpty) return;
@@ -1709,11 +1501,7 @@ class _PillowChatScreenState extends State<PillowChatScreen> {
         _apiClient.setAuthToken(token);
       }
 
-      // 1. Obtener estado real de Security Gates y Bypasses para inyectarlo en memoria
-      final gateContext = await _fetchLiveSecurityGateContext();
-
-      // 2. Obtener lista actualizada de hallazgos si la memoria local está vacía
-      List findingsPayload = widget.currentScans
+      final findingsPayload = widget.currentScans
           .map((scan) => {
                 'id': scan.id,
                 'title': scan.title,
@@ -1721,41 +1509,9 @@ class _PillowChatScreenState extends State<PillowChatScreen> {
                 'severity': scan.severity,
                 'summary': scan.summary,
                 'repo': scan.repo,
-                'location': scan.filePath,
                 'type': scan.type,
               })
           .toList();
-
-      if (findingsPayload.isEmpty) {
-        try {
-          final findingsRes = await _apiClient.get('/findings');
-          if (findingsRes.statusCode == 200 && findingsRes.data != null) {
-            final raw = findingsRes.data;
-            final list = raw is List
-                ? raw
-                : (raw is Map ? (raw['findings'] ?? raw['data'] ?? []) : []);
-            findingsPayload = (list as List)
-                .whereType()
-                .map((f) => {
-                      'id': (f['id'] ?? '').toString(),
-                      'title': (f['title'] ?? f['rule_id'] ?? '').toString(),
-                      'status':
-                          (f['status'] ?? 'OPEN').toString().toUpperCase(),
-                      'severity':
-                          (f['severity'] ?? 'HIGH').toString().toUpperCase(),
-                      'summary':
-                          (f['summary'] ?? f['description'] ?? '').toString(),
-                      'repo': (f['repository_name'] ??
-                              f['repository'] ??
-                              f['repo'] ??
-                              '')
-                          .toString(),
-                      'type': (f['type'] ?? f['engine'] ?? 'SAST').toString(),
-                    })
-                .toList();
-          }
-        } catch (_) {}
-      }
 
       final historyPayload = _messages
           .map((m) => {
@@ -1773,21 +1529,17 @@ class _PillowChatScreenState extends State<PillowChatScreen> {
         'dashboard_context': {
           'app_type': 'mobile',
           'on_duty': widget.isOnDuty,
-          ...gateContext,
         },
         'page_context': {
           'app_type': 'mobile',
-          'total_findings': findingsPayload.length,
+          'total_findings': widget.currentScans.length,
           'on_duty': widget.isOnDuty,
           'findings': findingsPayload,
-          ...gateContext,
         },
         'history': historyPayload,
       };
 
-      final res = await _apiClient.post('/pillow/chat',
-          data: bodyData,
-          options: Options(receiveTimeout: const Duration(seconds: 50)));
+      final res = await _apiClient.post('/pillow/chat', data: bodyData, options: Options(receiveTimeout: const Duration(seconds: 50)));
       if (res.data != null) {
         final raw = res.data;
         if (raw is Map) {
@@ -1817,10 +1569,7 @@ class _PillowChatScreenState extends State<PillowChatScreen> {
           : '';
       errorDetail = status != null
           ? 'Error del servidor Pillow IA ($status)${msg.isNotEmpty ? ": $msg" : ""}.'
-          : (e.type == DioExceptionType.receiveTimeout ||
-                  e.type == DioExceptionType.connectionTimeout
-              ? 'Pillow IA tardó demasiado en responder. Intenta nuevamente.'
-              : 'Sin conexión con el servicio de Pillow IA. Verifica tu red.');
+          : (e.type == DioExceptionType.receiveTimeout || e.type == DioExceptionType.connectionTimeout ? 'Pillow IA tardó demasiado en responder. Intenta nuevamente.' : 'Sin conexión con el servicio de Pillow IA. Verifica tu red.');
     } catch (e) {
       errorDetail = 'No se pudo obtener respuesta de Pillow IA: $e';
     }
@@ -1841,11 +1590,8 @@ class _PillowChatScreenState extends State<PillowChatScreen> {
       _scrollToBottom();
     }
   }
-
   @override
   Widget build(BuildContext context) {
-    final bool isInitialChat = _messages.length <= 1;
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Asistente Pillow IA'),
@@ -1917,49 +1663,6 @@ class _PillowChatScreenState extends State<PillowChatScreen> {
           ),
           if (_isThinking)
             const LinearProgressIndicator(color: Color(0xFF38BDF8)),
-          if (isInitialChat && !_isThinking)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-              color: const Color(0xFF0D1117),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Preguntas rápidas:',
-                    style: TextStyle(
-                      color: Color(0xFF94A3B8),
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    children: _quickPrompts.map((promptText) {
-                      return ActionChip(
-                        backgroundColor: const Color(0xFF161B22),
-                        side: const BorderSide(color: Color(0xFF38BDF8)),
-                        avatar: const Icon(
-                          Icons.bolt,
-                          size: 15,
-                          color: Color(0xFF38BDF8),
-                        ),
-                        label: Text(
-                          promptText,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                          ),
-                        ),
-                        onPressed: () => _sendMessageToAI(promptText),
-                      );
-                    }).toList(),
-                  ),
-                ],
-              ),
-            ),
           Container(
             padding: const EdgeInsets.all(12),
             color: const Color(0xFF161B22),
@@ -1997,8 +1700,7 @@ class ScanListScreen extends StatefulWidget {
   final bool isOnDuty;
   final ValueChanged<List<ScanModel>> onScansUpdated;
   final ValueChanged<StringMap> onAuditAdded;
-  final Function(String title, String body, String type, {String? payload})
-      onAddNotification;
+  final Function(String title, String body, String type) onAddNotification;
   final List notifications;
   final Function(int index) onMarkRead;
   final VoidCallback onMarkAllRead;
@@ -2347,19 +2049,6 @@ class _ScanListScreenState extends State<ScanListScreen> {
     );
   }
 
-  Color _severityChipColor(String severity) {
-    switch (severity.toUpperCase()) {
-      case 'CRITICAL':
-        return Colors.redAccent;
-      case 'HIGH':
-        return Colors.deepOrangeAccent;
-      case 'MEDIUM':
-        return Colors.amber;
-      default:
-        return const Color(0xFF38BDF8);
-    }
-  }
-
   void _showDetailModal(BuildContext context, ScanModel scan) {
     showModalBottomSheet(
       context: context,
@@ -2375,628 +2064,501 @@ class _ScanListScreenState extends State<ScanListScreen> {
 
         final bool isAlreadyProcessed =
             scan.status == 'EXEMPTED' || scan.status == 'BLOCKED';
-        final severityLabel = (scan.severity ?? 'HIGH').toUpperCase();
-        final sevColor = _severityChipColor(severityLabel);
-        final exactLocation = scan.filePath ??
-            ((scan.repo != null && scan.repo!.isNotEmpty)
-                ? '${scan.repo} (${scan.type ?? "SAST"})'
-                : 'Hallazgo #${scan.id} • ${scan.type ?? "SAST"}');
 
         return StatefulBuilder(
           builder: (context, setModalState) {
             return Padding(
               padding: EdgeInsets.only(
                 bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-                top: 20,
+                top: 24,
                 left: 20,
                 right: 20,
               ),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // 1. ARRIBA: Ubicación exacta en etiqueta destacada + Chip de severidad
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF0D1117),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                  color: const Color(0xFF38BDF8)
-                                      .withValues(alpha: 0.5)),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.location_on_outlined,
-                                    size: 16, color: Color(0xFF38BDF8)),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: Text(
-                                    exactLocation,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: Color(0xFF38BDF8),
-                                      fontSize: 12.5,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: sevColor.withValues(alpha: 0.18),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: sevColor),
-                          ),
-                          child: Text(
-                            severityLabel,
-                            style: TextStyle(
-                              color: sevColor,
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        IconButton(
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                          icon: const Icon(Icons.close, color: Colors.grey),
-                          onPressed: () => Navigator.pop(bottomSheetContext),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      scan.title ?? 'Sintetización del Hallazgo',
-                      style: const TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(scan.title ?? 'Sintetización del Hallazgo',
+                            style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white)),
                       ),
-                    ),
-                    if (scan.repo != null && scan.repo!.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        'Repositorio: ${scan.repo}  •  Motor: ${scan.type ?? "SAST"}',
-                        style: const TextStyle(
-                            color: Color(0xFF94A3B8), fontSize: 12),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.grey),
+                        onPressed: () => Navigator.pop(bottomSheetContext),
                       ),
                     ],
-                    const Divider(height: 20, color: Color(0xFF30363D)),
-
-                    // 2. AL CENTRO: Resumen y recomendación de remediación de Pillow
-                    const Row(
+                  ),
+                  const Divider(color: Color(0xFF30363D)),
+                  const SizedBox(height: 8),
+                  const Text('Resumen Pillow:',
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF38BDF8))),
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0D1117),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFF30363D)),
+                    ),
+                    child: Text(
+                      scan.summary ??
+                          'Análisis detectó vulnerabilidades que requieren revisión HITL.',
+                      style:
+                          const TextStyle(fontSize: 13, color: Colors.white70),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  if (!widget.isOnDuty)
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade900.withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: Colors.amber.shade700),
+                      ),
+                      child: const Text(
+                        'Modo Lectura (Fuera de Guardia): No tienes permiso para aprobar ni bloquear excepciones.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.amber, fontSize: 12),
+                      ),
+                    ),
+                  if (isAlreadyProcessed)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF21262D),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        'Estado actual: ${scan.status == "EXEMPTED" ? "Excepción Lanzada" : "Despliegue Bloqueado"}',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                            color: Colors.amber, fontWeight: FontWeight.bold),
+                      ),
+                    )
+                  else
+                    Row(
                       children: [
-                        Icon(Icons.smart_toy_outlined,
-                            size: 16, color: Color(0xFF38BDF8)),
-                        SizedBox(width: 6),
-                        Text(
-                          'Resumen y remediación Pillow:',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF38BDF8),
-                            fontSize: 13.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxHeight: 165),
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0D1117),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: const Color(0xFF30363D)),
-                        ),
-                        child: SingleChildScrollView(
-                          child: Text(
-                            scan.summary ??
-                                'Análisis detectó vulnerabilidades que requieren revisión HITL.',
-                            style: const TextStyle(
-                                fontSize: 13,
-                                color: Colors.white70,
-                                height: 1.35),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-
-                    // 3. ABAJO: Botones de acción (Excepción, Bloquear, etc.)
-                    if (!widget.isOnDuty)
-                      Container(
-                        width: double.infinity,
-                        margin: const EdgeInsets.only(bottom: 12),
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: Colors.amber.shade900.withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: Colors.amber.shade700),
-                        ),
-                        child: const Text(
-                          'Modo Lectura (Fuera de Guardia): No tienes permiso para aprobar ni bloquear excepciones.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.amber, fontSize: 12),
-                        ),
-                      ),
-                    if (isAlreadyProcessed)
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF21262D),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          'Estado actual: ${scan.status == "EXEMPTED" ? "Excepción Lanzada" : "Despliegue Bloqueado"}',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                              color: Colors.amber, fontWeight: FontWeight.bold),
-                        ),
-                      )
-                    else
-                      Row(
-                        children: [
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: widget.isOnDuty
-                                    ? Colors.amber.shade800
-                                    : Colors.grey.shade800,
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 12),
-                              ),
-                              icon: const Icon(Icons.fingerprint,
-                                  color: Colors.white),
-                              label: const Text('Excepción',
-                                  style: TextStyle(color: Colors.white)),
-                              onPressed: !widget.isOnDuty
-                                  ? null
-                                  : () {
-                                      String? inlineError;
-                                      showDialog(
-                                        context: context,
-                                        builder: (dialogContext) =>
-                                            StatefulBuilder(
-                                          builder: (context, setDialogState) {
-                                            return AlertDialog(
-                                              backgroundColor:
-                                                  const Color(0xFF161B22),
-                                              title: const Text(
-                                                  'Aprobar Excepción Temporizada',
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: widget.isOnDuty
+                                  ? Colors.amber.shade800
+                                  : Colors.grey.shade800,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            icon: const Icon(Icons.fingerprint,
+                                color: Colors.white),
+                            label: const Text('Excepción',
+                                style: TextStyle(color: Colors.white)),
+                            onPressed: !widget.isOnDuty
+                                ? null
+                                : () {
+                                    String? inlineError;
+                                    showDialog(
+                                      context: context,
+                                      builder: (dialogContext) =>
+                                          StatefulBuilder(
+                                        builder: (context, setDialogState) {
+                                          return AlertDialog(
+                                            backgroundColor:
+                                                const Color(0xFF161B22),
+                                            title: const Text(
+                                                'Aprobar Excepción Temporizada',
+                                                style: TextStyle(
+                                                    color: Colors.white)),
+                                            content: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                const Text(
+                                                  '¿Autorizar el pase a producción con esta vulnerabilidad activa? Se solicitará huella o rostro.',
                                                   style: TextStyle(
-                                                      color: Colors.white)),
-                                              content: Column(
-                                                mainAxisSize: MainAxisSize.min,
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  const Text(
-                                                    '¿Autorizar el pase a producción con esta vulnerabilidad activa? Se solicitará huella o rostro.',
-                                                    style: TextStyle(
-                                                        fontSize: 13,
-                                                        color: Colors.grey),
+                                                      fontSize: 13,
+                                                      color: Colors.grey),
+                                                ),
+                                                const SizedBox(height: 12),
+                                                DropdownButtonFormField<int>(
+                                                  initialValue: selectedHours,
+                                                  dropdownColor:
+                                                      const Color(0xFF161B22),
+                                                  decoration:
+                                                      const InputDecoration(
+                                                    labelText:
+                                                        'Duración de la excepción',
+                                                    border:
+                                                        OutlineInputBorder(),
                                                   ),
-                                                  const SizedBox(height: 12),
-                                                  DropdownButtonFormField<int>(
-                                                    initialValue: selectedHours,
-                                                    dropdownColor:
-                                                        const Color(0xFF161B22),
-                                                    decoration:
-                                                        const InputDecoration(
-                                                      labelText:
-                                                          'Duración de la excepción',
-                                                      border:
-                                                          OutlineInputBorder(),
-                                                    ),
-                                                    items: const [
-                                                      DropdownMenuItem(
-                                                          value: 24,
-                                                          child:
-                                                              Text('24 Horas')),
-                                                      DropdownMenuItem(
-                                                          value: 72,
-                                                          child:
-                                                              Text('72 Horas')),
-                                                      DropdownMenuItem(
-                                                          value: 168,
-                                                          child: Text(
-                                                              '168 Horas (1 Semana)')),
-                                                    ],
-                                                    onChanged: (val) =>
-                                                        selectedHours =
-                                                            val ?? 24,
+                                                  items: const [
+                                                    DropdownMenuItem(
+                                                        value: 24,
+                                                        child:
+                                                            Text('24 Horas')),
+                                                    DropdownMenuItem(
+                                                        value: 72,
+                                                        child:
+                                                            Text('72 Horas')),
+                                                    DropdownMenuItem(
+                                                        value: 168,
+                                                        child: Text(
+                                                            '168 Horas (1 Semana)')),
+                                                  ],
+                                                  onChanged: (val) =>
+                                                      selectedHours = val ?? 24,
+                                                ),
+                                                const SizedBox(height: 12),
+                                                TextField(
+                                                  controller:
+                                                      justificationController,
+                                                  maxLines: 2,
+                                                  decoration: InputDecoration(
+                                                    border:
+                                                        const OutlineInputBorder(),
+                                                    hintText:
+                                                        'Justificación (mínimo 10 caracteres)',
+                                                    errorText: inlineError,
                                                   ),
-                                                  const SizedBox(height: 12),
-                                                  TextField(
-                                                    controller:
-                                                        justificationController,
-                                                    maxLines: 2,
-                                                    decoration: InputDecoration(
-                                                      border:
-                                                          const OutlineInputBorder(),
-                                                      hintText:
-                                                          'Justificación (mínimo 12 caracteres)',
-                                                      errorText: inlineError,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                              actions: [
-                                                TextButton(
-                                                    onPressed: () =>
-                                                        Navigator.pop(
-                                                            dialogContext),
-                                                    child:
-                                                        const Text('Cancelar')),
-                                                ElevatedButton(
-                                                  onPressed: () async {
-                                                    final justificationText =
-                                                        justificationController
-                                                            .text
-                                                            .trim();
-                                                    if (justificationText
-                                                            .length >=
-                                                        12) {
-                                                      final verified =
-                                                          await BiometricGuard
-                                                              .verifyIdentity(
-                                                        reason:
-                                                            'Confirma con huella o rostro para lanzar la excepción',
-                                                      );
-                                                      if (!verified) {
-                                                        setDialogState(() {
-                                                          inlineError =
-                                                              'Firma biométrica requerida para autorizar.';
-                                                        });
-                                                        return;
+                                                ),
+                                              ],
+                                            ),
+                                            actions: [
+                                              TextButton(
+                                                  onPressed: () =>
+                                                      Navigator.pop(
+                                                          dialogContext),
+                                                  child:
+                                                      const Text('Cancelar')),
+                                              ElevatedButton(
+                                                onPressed: () async {
+                                                  final justificationText =
+                                                      justificationController
+                                                          .text
+                                                          .trim();
+                                                  if (justificationText
+                                                          .length >=
+                                                      10) {
+                                                    final verified =
+                                                        await BiometricGuard
+                                                            .verifyIdentity(
+                                                      reason:
+                                                          'Confirma con huella o rostro para lanzar la excepción',
+                                                    );
+                                                    if (!verified) {
+                                                      setDialogState(() {
+                                                        inlineError =
+                                                            'Firma biométrica requerida para autorizar.';
+                                                      });
+                                                      return;
+                                                    }
+
+                                                    if (!dialogContext
+                                                            .mounted ||
+                                                        !bottomSheetContext
+                                                            .mounted) {
+                                                      return;
+                                                    }
+                                                    Navigator.pop(
+                                                        dialogContext);
+                                                    Navigator.pop(
+                                                        bottomSheetContext);
+
+                                                    try {
+                                                          await SharedPreferences
+                                                              .getInstance();
+                                                      final token =
+                                                          await ApiClient.readStoredToken();
+
+                                                      if (token != null &&
+                                                          token.isNotEmpty) {
+                                                        _apiClient.setAuthToken(
+                                                            token);
                                                       }
 
-                                                      if (!dialogContext
-                                                              .mounted ||
-                                                          !bottomSheetContext
-                                                              .mounted) {
-                                                        return;
-                                                      }
-                                                      Navigator.pop(
-                                                          dialogContext);
-                                                      Navigator.pop(
-                                                          bottomSheetContext);
+                                                      await _apiClient.patch(
+                                                          '/findings/${scan.id}',
+                                                          data: {
+                                                            'status':
+                                                                'EXEMPTED',
+                                                            'duration_hours':
+                                                                selectedHours,
+                                                            'justification':
+                                                                justificationText,
+                                                          });
 
                                                       try {
-                                                        await SharedPreferences
-                                                            .getInstance();
-                                                        final token =
-                                                            await ApiClient
-                                                                .readStoredToken();
-
-                                                        if (token != null &&
-                                                            token.isNotEmpty) {
-                                                          _apiClient
-                                                              .setAuthToken(
-                                                                  token);
-                                                        }
-
-                                                        await _apiClient.patch(
-                                                            '/findings/${scan.id}',
+                                                        await _apiClient.post(
+                                                            '/security-gates/bypasses',
                                                             data: {
-                                                              'status':
-                                                                  'EXEMPTED',
+                                                              'finding_id':
+                                                                  scan.id,
                                                               'duration_hours':
                                                                   selectedHours,
                                                               'justification':
                                                                   justificationText,
                                                             });
-
-                                                        try {
-                                                          await _apiClient.post(
-                                                              '/security-gates/bypasses',
-                                                              data: {
-                                                                'finding_id':
-                                                                    scan.id,
-                                                                'duration_hours':
-                                                                    selectedHours,
-                                                                'justification':
-                                                                    justificationText,
-                                                              });
-                                                        } catch (_) {}
                                                       } catch (_) {}
+                                                    } catch (_) {}
 
-                                                      final notifPayload =
-                                                          '/finding_detail?id=${scan.id}';
+                                                    await NotificationService
+                                                        .showLocalPush(
+                                                      id: DateTime.now()
+                                                              .millisecondsSinceEpoch ~/
+                                                          1000,
+                                                      title:
+                                                          'Excepción Lanzada',
+                                                      body:
+                                                          'Se aprobó la excepción para "${scan.title}" por $selectedHours Horas.',
+                                                      payload:
+                                                          '/finding_detail?id=${scan.id}',
+                                                    );
 
-                                                      await NotificationService
-                                                          .showLocalPush(
-                                                        id: DateTime.now()
-                                                                .millisecondsSinceEpoch ~/
-                                                            1000,
-                                                        title:
-                                                            'Excepción Lanzada',
-                                                        body:
-                                                            'Se aprobó la excepción para "${scan.title}" por $selectedHours Horas.',
-                                                        payload: notifPayload,
-                                                      );
+                                                    widget.onAddNotification(
+                                                      'Excepción Lanzada',
+                                                      'Se aprobó la excepción para "${scan.title}" por $selectedHours Horas.',
+                                                      'EXEMPTION',
+                                                    );
 
-                                                      widget.onAddNotification(
-                                                        'Excepción Lanzada',
-                                                        'Se aprobó la excepción para "${scan.title}" por $selectedHours Horas.',
-                                                        'EXEMPTION',
-                                                        payload: notifPayload,
-                                                      );
+                                                    setState(() {
+                                                      final idx = _localScans
+                                                          .indexWhere((s) =>
+                                                              s.id == scan.id);
+                                                      if (idx != -1) {
+                                                        _localScans[idx] =
+                                                            ScanModel(
+                                                          id: scan.id,
+                                                          title: scan.title,
+                                                          status: 'EXEMPTED',
+                                                          severity:
+                                                              scan.severity,
+                                                          summary: scan.summary,
+                                                          repo: scan.repo,
+                                                          type: scan.type,
+                                                          createdAt:
+                                                              scan.createdAt,
+                                                        );
+                                                      }
+                                                    });
+                                                    await _saveScansToPrefs();
+                                                    widget.onScansUpdated(
+                                                        _localScans);
 
-                                                      setState(() {
-                                                        final idx = _localScans
-                                                            .indexWhere((s) =>
-                                                                s.id ==
-                                                                scan.id);
-                                                        if (idx != -1) {
-                                                          _localScans[idx] =
-                                                              ScanModel(
-                                                            id: scan.id,
-                                                            title: scan.title,
-                                                            status: 'EXEMPTED',
-                                                            severity:
-                                                                scan.severity,
-                                                            summary:
-                                                                scan.summary,
-                                                            repo: scan.repo,
-                                                            filePath:
-                                                                scan.filePath,
-                                                            type: scan.type,
-                                                            createdAt:
-                                                                scan.createdAt,
-                                                          );
-                                                        }
-                                                      });
-                                                      await _saveScansToPrefs();
-                                                      widget.onScansUpdated(
-                                                          _localScans);
-
-                                                      widget.onAuditAdded({
-                                                        'id': scan.id,
-                                                        'type': 'EXEMPTION',
-                                                        'title':
-                                                            'Excepción Lanzada',
-                                                        'subtitle':
-                                                            '${scan.title ?? 'Repo'} - "$justificationText"',
-                                                        'time':
-                                                            'Quedan $selectedHours h',
-                                                        'duration':
-                                                            '$selectedHours Horas',
-                                                        'timestamp': DateTime
-                                                                .now()
-                                                            .toIso8601String(),
-                                                      });
-                                                    } else {
-                                                      setDialogState(() {
-                                                        inlineError =
-                                                            'La justificación debe tener al menos 12 caracteres.';
-                                                      });
-                                                    }
-                                                  },
-                                                  child:
-                                                      const Text('Confirmar'),
-                                                ),
-                                              ],
-                                            );
-                                          },
-                                        ),
-                                      );
-                                    },
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: widget.isOnDuty
-                                    ? Colors.red.shade700
-                                    : Colors.grey.shade800,
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 12),
-                              ),
-                              icon: const Icon(Icons.fingerprint,
-                                  color: Colors.white),
-                              label: const Text('Bloquear',
-                                  style: TextStyle(color: Colors.white)),
-                              onPressed: !widget.isOnDuty
-                                  ? null
-                                  : () {
-                                      String? inlineError;
-                                      showDialog(
-                                        context: context,
-                                        builder: (dialogContext) =>
-                                            StatefulBuilder(
-                                          builder: (context, setDialogState) {
-                                            return AlertDialog(
-                                              backgroundColor:
-                                                  const Color(0xFF161B22),
-                                              title: const Text(
-                                                  'Confirmar Bloqueo de Despliegue',
-                                                  style: TextStyle(
-                                                      color: Colors.white)),
-                                              content: TextField(
-                                                controller: reasonController,
-                                                decoration: InputDecoration(
-                                                  border:
-                                                      const OutlineInputBorder(),
-                                                  hintText:
-                                                      'Motivo del bloqueo (mínimo 3 caracteres)',
-                                                  errorText: inlineError,
-                                                ),
+                                                    widget.onAuditAdded({
+                                                      'id': scan.id,
+                                                      'type': 'EXEMPTION',
+                                                      'title':
+                                                          'Excepción Lanzada',
+                                                      'subtitle':
+                                                          '${scan.title ?? 'Repo'} - "$justificationText"',
+                                                      'time':
+                                                          'Quedan $selectedHours h',
+                                                      'duration':
+                                                          '$selectedHours Horas',
+                                                    });
+                                                  } else {
+                                                    setDialogState(() {
+                                                      inlineError =
+                                                          'La justificación debe tener al menos 10 caracteres.';
+                                                    });
+                                                  }
+                                                },
+                                                child: const Text('Confirmar'),
                                               ),
-                                              actions: [
-                                                TextButton(
-                                                    onPressed: () =>
-                                                        Navigator.pop(
-                                                            dialogContext),
-                                                    child:
-                                                        const Text('Cancelar')),
-                                                ElevatedButton(
-                                                  style:
-                                                      ElevatedButton.styleFrom(
-                                                          backgroundColor:
-                                                              Colors.red),
-                                                  onPressed: () async {
-                                                    final reasonText =
-                                                        reasonController.text
-                                                            .trim();
-                                                    if (reasonText.length >=
-                                                        3) {
-                                                      final verified =
-                                                          await BiometricGuard
-                                                              .verifyIdentity(
-                                                        reason:
-                                                            'Confirma con huella o rostro para BLOQUEAR este despliegue',
-                                                      );
-                                                      if (!verified) {
-                                                        setDialogState(() {
-                                                          inlineError =
-                                                              'Firma biométrica requerida para bloquear.';
-                                                        });
-                                                        return;
-                                                      }
-
-                                                      if (!dialogContext
-                                                              .mounted ||
-                                                          !bottomSheetContext
-                                                              .mounted) {
-                                                        return;
-                                                      }
+                                            ],
+                                          );
+                                        },
+                                      ),
+                                    );
+                                  },
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: widget.isOnDuty
+                                  ? Colors.red.shade700
+                                  : Colors.grey.shade800,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            icon: const Icon(Icons.fingerprint,
+                                color: Colors.white),
+                            label: const Text('Bloquear',
+                                style: TextStyle(color: Colors.white)),
+                            onPressed: !widget.isOnDuty
+                                ? null
+                                : () {
+                                    String? inlineError;
+                                    showDialog(
+                                      context: context,
+                                      builder: (dialogContext) =>
+                                          StatefulBuilder(
+                                        builder: (context, setDialogState) {
+                                          return AlertDialog(
+                                            backgroundColor:
+                                                const Color(0xFF161B22),
+                                            title: const Text(
+                                                'Confirmar Bloqueo de Despliegue',
+                                                style: TextStyle(
+                                                    color: Colors.white)),
+                                            content: TextField(
+                                              controller: reasonController,
+                                              decoration: InputDecoration(
+                                                border:
+                                                    const OutlineInputBorder(),
+                                                hintText:
+                                                    'Motivo del bloqueo (mínimo 3 caracteres)',
+                                                errorText: inlineError,
+                                              ),
+                                            ),
+                                            actions: [
+                                              TextButton(
+                                                  onPressed: () =>
                                                       Navigator.pop(
-                                                          dialogContext);
-                                                      Navigator.pop(
-                                                          bottomSheetContext);
-
-                                                      try {
-                                                        await SharedPreferences
-                                                            .getInstance();
-                                                        final token =
-                                                            await ApiClient
-                                                                .readStoredToken();
-
-                                                        if (token != null &&
-                                                            token.isNotEmpty) {
-                                                          _apiClient
-                                                              .setAuthToken(
-                                                                  token);
-                                                        }
-
-                                                        await _apiClient.patch(
-                                                            '/findings/${scan.id}',
-                                                            data: {
-                                                              'status':
-                                                                  'BLOCKED',
-                                                              'reason':
-                                                                  reasonText,
-                                                            });
-                                                      } catch (_) {}
-
-                                                      final notifPayload =
-                                                          '/finding_detail?id=${scan.id}';
-
-                                                      await NotificationService
-                                                          .showLocalPush(
-                                                        id: DateTime.now()
-                                                                .millisecondsSinceEpoch ~/
-                                                            1000,
-                                                        title:
-                                                            'Bloqueo Aplicado',
-                                                        body:
-                                                            'Se bloqueó el despliegue para "${scan.title}". Motivo: $reasonText',
-                                                        payload: notifPayload,
-                                                      );
-
-                                                      widget.onAddNotification(
-                                                        'Bloqueo Aplicado',
-                                                        'Se bloqueó el despliegue para "${scan.title}". Motivo: $reasonText',
-                                                        'BLOCK',
-                                                        payload: notifPayload,
-                                                      );
-
-                                                      setState(() {
-                                                        final idx = _localScans
-                                                            .indexWhere((s) =>
-                                                                s.id ==
-                                                                scan.id);
-                                                        if (idx != -1) {
-                                                          _localScans[idx] =
-                                                              ScanModel(
-                                                            id: scan.id,
-                                                            title: scan.title,
-                                                            status: 'BLOCKED',
-                                                            severity:
-                                                                scan.severity,
-                                                            summary:
-                                                                scan.summary,
-                                                            repo: scan.repo,
-                                                            filePath:
-                                                                scan.filePath,
-                                                            type: scan.type,
-                                                            createdAt:
-                                                                scan.createdAt,
-                                                          );
-                                                        }
-                                                      });
-                                                      await _saveScansToPrefs();
-                                                      widget.onScansUpdated(
-                                                          _localScans);
-
-                                                      widget.onAuditAdded({
-                                                        'id': scan.id,
-                                                        'type': 'BLOCK',
-                                                        'title':
-                                                            'Bloqueo de Despliegue',
-                                                        'subtitle':
-                                                            '${scan.title ?? 'Repo'} - "$reasonText"',
-                                                        'time': 'Bloqueado',
-                                                        'duration':
-                                                            'Permanente',
-                                                        'timestamp': DateTime
-                                                                .now()
-                                                            .toIso8601String(),
-                                                      });
-                                                    } else {
+                                                          dialogContext),
+                                                  child:
+                                                      const Text('Cancelar')),
+                                              ElevatedButton(
+                                                style: ElevatedButton.styleFrom(
+                                                    backgroundColor:
+                                                        Colors.red),
+                                                onPressed: () async {
+                                                  final reasonText =
+                                                      reasonController.text
+                                                          .trim();
+                                                  if (reasonText.length >= 3) {
+                                                    final verified =
+                                                        await BiometricGuard
+                                                            .verifyIdentity(
+                                                      reason:
+                                                          'Confirma con huella o rostro para BLOQUEAR este despliegue',
+                                                    );
+                                                    if (!verified) {
                                                       setDialogState(() {
                                                         inlineError =
-                                                            'El motivo debe tener al menos 3 caracteres.';
+                                                            'Firma biométrica requerida para bloquear.';
                                                       });
+                                                      return;
                                                     }
-                                                  },
-                                                  child: const Text('Bloquear',
-                                                      style: TextStyle(
-                                                          color: Colors.white)),
-                                                ),
-                                              ],
-                                            );
-                                          },
-                                        ),
-                                      );
-                                    },
-                            ),
+
+                                                    if (!dialogContext
+                                                            .mounted ||
+                                                        !bottomSheetContext
+                                                            .mounted) {
+                                                      return;
+                                                    }
+                                                    Navigator.pop(
+                                                        dialogContext);
+                                                    Navigator.pop(
+                                                        bottomSheetContext);
+
+                                                    try {
+                                                          await SharedPreferences
+                                                              .getInstance();
+                                                      final token =
+                                                          await ApiClient.readStoredToken();
+
+                                                      if (token != null &&
+                                                          token.isNotEmpty) {
+                                                        _apiClient.setAuthToken(
+                                                            token);
+                                                      }
+
+                                                      await _apiClient.patch(
+                                                          '/findings/${scan.id}',
+                                                          data: {
+                                                            'status': 'BLOCKED',
+                                                            'reason':
+                                                                reasonText,
+                                                          });
+                                                    } catch (_) {}
+
+                                                    await NotificationService
+                                                        .showLocalPush(
+                                                      id: DateTime.now()
+                                                              .millisecondsSinceEpoch ~/
+                                                          1000,
+                                                      title: 'Bloqueo Aplicado',
+                                                      body:
+                                                          'Se bloqueó el despliegue para "${scan.title}". Motivo: $reasonText',
+                                                      payload:
+                                                          '/finding_detail?id=${scan.id}',
+                                                    );
+
+                                                    widget.onAddNotification(
+                                                      'Bloqueo Aplicado',
+                                                      'Se bloqueó el despliegue para "${scan.title}". Motivo: $reasonText',
+                                                      'BLOCK',
+                                                    );
+
+                                                    setState(() {
+                                                      final idx = _localScans
+                                                          .indexWhere((s) =>
+                                                              s.id == scan.id);
+                                                      if (idx != -1) {
+                                                        _localScans[idx] =
+                                                            ScanModel(
+                                                          id: scan.id,
+                                                          title: scan.title,
+                                                          status: 'BLOCKED',
+                                                          severity:
+                                                              scan.severity,
+                                                          summary: scan.summary,
+                                                          repo: scan.repo,
+                                                          type: scan.type,
+                                                          createdAt:
+                                                              scan.createdAt,
+                                                        );
+                                                      }
+                                                    });
+                                                    await _saveScansToPrefs();
+                                                    widget.onScansUpdated(
+                                                        _localScans);
+
+                                                    widget.onAuditAdded({
+                                                      'id': scan.id,
+                                                      'type': 'BLOCK',
+                                                      'title':
+                                                          'Bloqueo de Despliegue',
+                                                      'subtitle':
+                                                          '${scan.title ?? 'Repo'} - "$reasonText"',
+                                                      'time': 'Bloqueado',
+                                                      'duration': 'Permanente',
+                                                    });
+                                                  } else {
+                                                    setDialogState(() {
+                                                      inlineError =
+                                                          'El motivo debe tener al menos 3 caracteres.';
+                                                    });
+                                                  }
+                                                },
+                                                child: const Text('Bloquear',
+                                                    style: TextStyle(
+                                                        color: Colors.white)),
+                                              ),
+                                            ],
+                                          );
+                                        },
+                                      ),
+                                    );
+                                  },
                           ),
-                        ],
-                      ),
-                    const SizedBox(height: 8),
-                  ],
-                ),
+                        ),
+                      ],
+                    ),
+                  const SizedBox(height: 12),
+                ],
               ),
             );
           },
@@ -3195,15 +2757,13 @@ class _ScanListScreenState extends State<ScanListScreen> {
                               leading: Builder(
                                 builder: (_) {
                                   final st = scan.status.toUpperCase();
-                                  final sev =
-                                      (scan.severity ?? '').toUpperCase();
+                                  final sev = (scan.severity ?? '').toUpperCase();
                                   Color bgColor;
                                   IconData iconData;
                                   if (st == 'BLOCKED' || st == 'BLOQUEADO') {
                                     bgColor = Colors.blueGrey.shade700;
                                     iconData = Icons.block;
-                                  } else if (st == 'EXEMPTED' ||
-                                      st == 'ACCEPTED_RISK') {
+                                  } else if (st == 'EXEMPTED' || st == 'ACCEPTED_RISK') {
                                     bgColor = Colors.amber.shade800;
                                     iconData = Icons.shield_outlined;
                                   } else if (sev == 'CRITICAL') {
@@ -3259,29 +2819,6 @@ class AuditHistoryScreen extends StatefulWidget {
 }
 
 class _AuditHistoryScreenState extends State<AuditHistoryScreen> {
-  String _resolveTemporalSection(StringMap log) {
-    final rawTs = (log['timestamp'] ?? log['created_at'] ?? log['date'] ?? '')
-        .toString()
-        .trim();
-    final parsed = DateTime.tryParse(rawTs)?.toLocal();
-    if (parsed == null) {
-      return 'Hoy';
-    }
-    final now = DateTime.now();
-    final todayStart = DateTime(now.year, now.month, now.day);
-    final yesterdayStart = todayStart.subtract(const Duration(days: 1));
-    final weekStart = todayStart.subtract(const Duration(days: 7));
-
-    if (!parsed.isBefore(todayStart)) {
-      return 'Hoy';
-    } else if (!parsed.isBefore(yesterdayStart)) {
-      return 'Ayer';
-    } else if (!parsed.isBefore(weekStart)) {
-      return 'Esta semana';
-    }
-    return 'Esta semana';
-  }
-
   void _showLogDetail(BuildContext context, StringMap log) {
     showModalBottomSheet(
       context: context,
@@ -3325,18 +2862,6 @@ class _AuditHistoryScreenState extends State<AuditHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final Map<String, List<StringMap>> grouped = {
-      'Hoy': [],
-      'Ayer': [],
-      'Esta semana': [],
-    };
-    for (final log in widget.auditLogs) {
-      final bucket = _resolveTemporalSection(log);
-      grouped[bucket]!.add(log);
-    }
-
-    final sections = grouped.entries.where((e) => e.value.isNotEmpty).toList();
-
     return Scaffold(
       appBar: AppBar(title: const Text('Historial de Auditoría')),
       body: widget.auditLogs.isEmpty
@@ -3346,74 +2871,39 @@ class _AuditHistoryScreenState extends State<AuditHistoryScreen> {
                 style: TextStyle(color: Colors.grey),
               ),
             )
-          : ListView(
+          : ListView.builder(
               padding: const EdgeInsets.all(12),
-              children: [
-                for (final section in sections) ...[
-                  Padding(
-                    padding: const EdgeInsets.only(top: 6, bottom: 8, left: 4),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 4,
-                          height: 16,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF38BDF8),
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          section.key,
-                          style: const TextStyle(
-                            color: Color(0xFF38BDF8),
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 0.3,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          '(${section.value.length})',
-                          style: const TextStyle(
-                            color: Color(0xFF94A3B8),
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
+              itemCount: widget.auditLogs.length,
+              itemBuilder: (context, index) {
+                final log = widget.auditLogs[index];
+                return Card(
+                  color: const Color(0xFF161B22),
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    leading: Icon(
+                      log['type'] == 'EXEMPTION'
+                          ? Icons.shield
+                          : log['type'] == 'BLOCK'
+                              ? Icons.block
+                              : Icons.history_edu,
+                      color: log['type'] == 'EXEMPTION'
+                          ? Colors.amber
+                          : log['type'] == 'BLOCK'
+                              ? Colors.red
+                              : Colors.grey,
                     ),
+                    title: Text(log['title']!,
+                        style: const TextStyle(color: Colors.white)),
+                    subtitle: Text(log['subtitle']!,
+                        style:
+                            const TextStyle(color: Colors.grey, fontSize: 12)),
+                    trailing: Text(log['time']!,
+                        style:
+                            const TextStyle(fontSize: 11, color: Colors.amber)),
+                    onTap: () => _showLogDetail(context, log),
                   ),
-                  ...section.value.map((log) {
-                    return Card(
-                      color: const Color(0xFF161B22),
-                      margin: const EdgeInsets.only(bottom: 8),
-                      child: ListTile(
-                        leading: Icon(
-                          log['type'] == 'EXEMPTION'
-                              ? Icons.shield
-                              : log['type'] == 'BLOCK'
-                                  ? Icons.block
-                                  : Icons.history_edu,
-                          color: log['type'] == 'EXEMPTION'
-                              ? Colors.amber
-                              : log['type'] == 'BLOCK'
-                                  ? Colors.red
-                                  : Colors.grey,
-                        ),
-                        title: Text(log['title'] ?? 'Evento',
-                            style: const TextStyle(color: Colors.white)),
-                        subtitle: Text(log['subtitle'] ?? '',
-                            style: const TextStyle(
-                                color: Colors.grey, fontSize: 12)),
-                        trailing: Text(log['time'] ?? '',
-                            style: const TextStyle(
-                                fontSize: 11, color: Colors.amber)),
-                        onTap: () => _showLogDetail(context, log),
-                      ),
-                    );
-                  }),
-                ],
-              ],
+                );
+              },
             ),
     );
   }
@@ -3567,16 +3057,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF161B22),
-        title: const Text('Cambiar de cuenta',
-            style: TextStyle(color: Colors.white)),
+        title: const Text('Cambiar de cuenta', style: TextStyle(color: Colors.white)),
         content: Text(
           'Por seguridad, para operar como $targetEmail debes cerrar la sesión actual e iniciar sesión con sus credenciales.',
           style: const TextStyle(color: Colors.white70),
         ),
         actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancelar')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
           ElevatedButton(
             onPressed: () {
               Navigator.pop(ctx);
@@ -3594,22 +3081,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF161B22),
-        title: const Text('Eliminar cuenta permanentemente',
-            style: TextStyle(color: Colors.redAccent)),
+        title: const Text('Eliminar cuenta permanentemente', style: TextStyle(color: Colors.redAccent)),
         content: const Text(
           'Esta acción eliminará tu cuenta y revocará tus sesiones activas en el servidor. No se puede deshacer.',
           style: TextStyle(color: Colors.white70),
         ),
         actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancelar')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
           ElevatedButton(
-            style:
-                ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Eliminar cuenta',
-                style: TextStyle(color: Colors.white)),
+            child: const Text('Eliminar cuenta', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -3624,26 +3106,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (res.statusCode == 200 || res.statusCode == 204) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Cuenta eliminada correctamente.'),
-              backgroundColor: Colors.green),
+          const SnackBar(content: Text('Cuenta eliminada correctamente.'), backgroundColor: Colors.green),
         );
         widget.onLogout();
       } else {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(
-                  'El servidor rechazó la eliminación (${res.statusCode}).'),
-              backgroundColor: Colors.redAccent),
+          SnackBar(content: Text('El servidor rechazó la eliminación (${res.statusCode}).'), backgroundColor: Colors.redAccent),
         );
       }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text('No se pudo eliminar la cuenta en el servidor: $e'),
-            backgroundColor: Colors.redAccent),
+        SnackBar(content: Text('No se pudo eliminar la cuenta en el servidor: $e'), backgroundColor: Colors.redAccent),
       );
     }
   }
@@ -3888,3 +3363,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

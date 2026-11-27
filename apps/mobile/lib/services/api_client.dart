@@ -7,10 +7,8 @@ import "auth_headers.dart";
 
 class ApiClient {
   static const String baseUrl = "https://api.sspillowy.com/api/v1";
-  static final StreamController<void> _sessionExpiredController =
-      StreamController<void>.broadcast();
-  static Stream<void> get sessionExpiredStream =>
-      _sessionExpiredController.stream;
+  static final StreamController<void> _sessionExpiredController = StreamController<void>.broadcast();
+  static Stream<void> get sessionExpiredStream => _sessionExpiredController.stream;
   static const FlutterSecureStorage _secureStorage = FlutterSecureStorage();
 
   late final Dio dio;
@@ -40,18 +38,6 @@ class ApiClient {
             options.headers.remove('Authorization');
             options.headers.remove('X-Session-Id');
           }
-
-          try {
-            final prefs = await SharedPreferences.getInstance();
-            final workspaceId =
-                (prefs.getString('selected_workspace_id') ?? '').trim();
-            if (workspaceId.isNotEmpty) {
-              options.headers['X-Workspace-Id'] = workspaceId;
-            } else {
-              options.headers.remove('X-Workspace-Id');
-            }
-          } catch (_) {}
-
           handler.next(options);
         },
         onError: (DioException error, handler) async {
@@ -61,8 +47,7 @@ class ApiClient {
             if (!_sessionExpiredController.isClosed) {
               _sessionExpiredController.add(null);
             }
-          } else if (status == 403 &&
-              error.requestOptions.path.contains('/auth/')) {
+          } else if (status == 403 && error.requestOptions.path.contains('/auth/')) {
             await clearAuthToken();
           }
           return handler.next(error);
@@ -132,7 +117,6 @@ class ApiClient {
     _memoryToken = null;
     dio.options.headers.remove('Authorization');
     dio.options.headers.remove('X-Session-Id');
-    dio.options.headers.remove('X-Workspace-Id');
     try {
       await _secureStorage.delete(key: "jwt_token");
       await _secureStorage.delete(key: "session_id");
@@ -142,7 +126,6 @@ class ApiClient {
       await prefs.remove("jwt_token");
       await prefs.remove("session_id");
       await prefs.remove("auth_token");
-      await prefs.remove("selected_workspace_id");
       await prefs.remove("cached_security_bypasses");
       await prefs.remove("persistent_chat_history");
       await prefs.remove("persistent_scans_list_v4");
@@ -218,3 +201,6 @@ class ApiClient {
     );
   }
 }
+
+
+

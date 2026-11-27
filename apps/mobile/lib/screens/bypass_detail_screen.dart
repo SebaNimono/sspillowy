@@ -38,8 +38,7 @@ class _BypassDetailScreenState extends State<BypassDetailScreen> {
 
   bool get _isPendingExpired {
     if (_status == 'EXPIRED') return true;
-    final rawDeadline =
-        (_data['pending_expires_at'] ?? _data['expires_at'])?.toString();
+    final rawDeadline = (_data['pending_expires_at'] ?? _data['expires_at'])?.toString();
     if (rawDeadline == null || rawDeadline.isEmpty) return false;
     final parsed = DateTime.tryParse(rawDeadline);
     if (parsed == null) return false;
@@ -51,29 +50,6 @@ class _BypassDetailScreenState extends State<BypassDetailScreen> {
   String? get _latestCommitSha {
     final sha = (_data['latest_commit_sha'] ?? '').toString().trim();
     return sha.isEmpty ? null : sha;
-  }
-
-  String _pickField(List<String> keys, String fallback) {
-    for (final key in keys) {
-      final val = _data[key];
-      if (val != null) {
-        if (val is Map) {
-          final nested =
-              (val['name'] ?? val['full_name'] ?? val['email'] ?? val['title'])
-                  ?.toString()
-                  .trim();
-          if (nested != null && nested.isNotEmpty && nested != 'null') {
-            return nested;
-          }
-        } else {
-          final text = val.toString().trim();
-          if (text.isNotEmpty && text != 'null') {
-            return text;
-          }
-        }
-      }
-    }
-    return fallback;
   }
 
   Future<void> _fetchBypassDetail() async {
@@ -100,16 +76,9 @@ class _BypassDetailScreenState extends State<BypassDetailScreen> {
 
   Future<void> _confirmAndExecuteAction(bool isApprove) async {
     if (!widget.isOnDuty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-              'Modo Lectura: activa el switch «Estado de Guardia (On-Call)» en tu Perfil para aprobar o rechazar.'),
-          backgroundColor: Colors.amber,
-        ),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Activa el modo Guardia para aprobar o rechazar excepciones.'), backgroundColor: Colors.orange));
       return;
     }
-
     // Revalidar vigencia y contexto en tiempo real antes de aprobar/rechazar
     await _fetchBypassDetail();
     if (!mounted) return;
@@ -132,7 +101,6 @@ class _BypassDetailScreenState extends State<BypassDetailScreen> {
     final actionText = isApprove ? 'Aprobar' : 'Rechazar';
     bool ackContextChange = !_contextChanged;
     final expectedSha = _latestCommitSha;
-    String? inlineReasonError;
 
     showDialog(
       context: context,
@@ -140,7 +108,6 @@ class _BypassDetailScreenState extends State<BypassDetailScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              backgroundColor: const Color(0xFF161B22),
               title: Text('Confirmar $actionText Excepción'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -169,8 +136,7 @@ class _BypassDetailScreenState extends State<BypassDetailScreen> {
                         contentPadding: EdgeInsets.zero,
                         dense: true,
                         value: ackContextChange,
-                        onChanged: (v) =>
-                            setDialogState(() => ackContextChange = v ?? false),
+                        onChanged: (v) => setDialogState(() => ackContextChange = v ?? false),
                         title: const Text(
                           'El repositorio tuvo un nuevo commit/escaneo tras esta solicitud. Confirmo que revisé el contexto actual.',
                           style: TextStyle(fontSize: 12),
@@ -181,11 +147,9 @@ class _BypassDetailScreenState extends State<BypassDetailScreen> {
                   const SizedBox(height: 12),
                   TextField(
                     controller: reasonController,
-                    maxLines: 2,
-                    decoration: InputDecoration(
-                      labelText: 'Motivo / Comentario (mín. 12 caracteres)',
-                      border: const OutlineInputBorder(),
-                      errorText: inlineReasonError,
+                    decoration: const InputDecoration(
+                      labelText: 'Motivo / Comentario',
+                      border: OutlineInputBorder(),
                     ),
                   ),
                 ],
@@ -202,21 +166,13 @@ class _BypassDetailScreenState extends State<BypassDetailScreen> {
                   onPressed: (isApprove && _contextChanged && !ackContextChange)
                       ? null
                       : () async {
-                          final reason = reasonController.text.trim();
-                          if (reason.length < 12) {
-                            setDialogState(() {
-                              inlineReasonError =
-                                  'Ingresa al menos 12 caracteres de justificación.';
-                            });
-                            return;
-                          }
+                          final reason = reasonController.text;
                           Navigator.of(dialogContext).pop();
                           await _submitDecision(
                             isApprove,
                             reason,
                             expectedCommitSha: expectedSha,
-                            acknowledgeContextChange:
-                                _contextChanged && ackContextChange,
+                            acknowledgeContextChange: _contextChanged && ackContextChange,
                           );
                         },
                   child: Text(actionText),
@@ -298,8 +254,7 @@ class _BypassDetailScreenState extends State<BypassDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final canAct =
-        _status == 'PENDING' && !_isPendingExpired && _data.isNotEmpty;
+    final canAct = _status == 'PENDING' && !_isPendingExpired && _data.isNotEmpty;
     return Scaffold(
       appBar: AppBar(
         title: Text('Detalle de Excepción #${widget.bypassId}'),
@@ -358,9 +313,7 @@ class _BypassDetailScreenState extends State<BypassDetailScreen> {
                         style: TextStyle(color: Colors.white, fontSize: 12.5),
                       ),
                     ),
-                  if (_status == 'PENDING' &&
-                      !_isPendingExpired &&
-                      _contextChanged)
+                  if (_status == 'PENDING' && !_isPendingExpired && _contextChanged)
                     Container(
                       width: double.infinity,
                       margin: const EdgeInsets.only(bottom: 12),
@@ -372,8 +325,7 @@ class _BypassDetailScreenState extends State<BypassDetailScreen> {
                       ),
                       child: Text(
                         'Contexto actualizado: el repositorio registró un nuevo escaneo/commit (${_latestCommitSha != null && _latestCommitSha!.length > 8 ? _latestCommitSha!.substring(0, 8) : (_latestCommitSha ?? "nuevo")}) después de crearse esta solicitud.',
-                        style: const TextStyle(
-                            color: Colors.white, fontSize: 12.5),
+                        style: const TextStyle(color: Colors.white, fontSize: 12.5),
                       ),
                     ),
                   Card(
@@ -384,24 +336,16 @@ class _BypassDetailScreenState extends State<BypassDetailScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            _pickField(
-                              [
-                                'rule',
-                                'rule_id',
-                                'rule_name',
-                                'title',
-                                'finding_title',
-                                'name',
-                              ],
-                              'Excepción de Seguridad',
-                            ),
+                            _data['rule'] ??
+                                _data['title'] ??
+                                'Excepción de Seguridad',
                             style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
                               color: Colors.white,
                             ),
                           ),
-                          const Divider(height: 20, color: Color(0xFF30363D)),
+                          const Divider(height: 20, color: Colors.grey),
                           _buildDetailRow(
                               'Estado:',
                               _isPendingExpired && _status == 'PENDING'
@@ -410,50 +354,30 @@ class _BypassDetailScreenState extends State<BypassDetailScreen> {
                                       ? 'No verificado'
                                       : _status)),
                           _buildDetailRow(
-                            'Repositorio:',
-                            _pickField(
-                              [
-                                'repository_name',
-                                'repository',
-                                'repo_name',
-                                'repo',
-                                'project_name',
-                              ],
-                              'No especificado',
-                            ),
-                          ),
+                              'Repositorio:',
+                              (_data['repository_name'] ??
+                                      _data['repository'] ??
+                                      _data['repo'] ??
+                                      'No especificado')
+                                  .toString()),
                           _buildDetailRow(
-                            'Solicitado Por:',
-                            _pickField(
-                              [
-                                'requested_by_name',
-                                'requested_by',
-                                'requestedBy',
-                                'requester_email',
-                                'requester',
-                                'user_email',
-                                'author',
-                              ],
-                              'Usuario Hub',
-                            ),
-                          ),
+                              'Solicitado Por:',
+                              (_data['requestedBy'] ??
+                                      _data['requested_by'] ??
+                                      'Sistema')
+                                  .toString()),
                           _buildDetailRow(
-                            'Justificación:',
-                            _pickField(
-                              [
-                                'reason',
-                                'justification',
-                                'note',
-                                'description',
-                              ],
-                              'Sin detalle',
-                            ),
-                          ),
+                              'Justificación:',
+                              (_data['reason'] ??
+                                      _data['justification'] ??
+                                      _data['note'] ??
+                                      'Sin detalle')
+                                  .toString()),
                           if (_latestCommitSha != null)
-                            _buildDetailRow(
-                                'Commit actual:', _latestCommitSha!),
+                            _buildDetailRow('Commit actual:', _latestCommitSha!),
                           if (_data['pending_expires_at'] != null)
-                            _buildDetailRow('Vence aprobación:',
+                            _buildDetailRow(
+                                'Vence aprobación:',
                                 _data['pending_expires_at'].toString()),
                           if (_data['createdAt'] != null ||
                               _data['created_at'] != null)
@@ -468,30 +392,6 @@ class _BypassDetailScreenState extends State<BypassDetailScreen> {
                   const Spacer(),
                   if (_isLoading)
                     const Center(child: CircularProgressIndicator())
-                  else if (canAct && !widget.isOnDuty)
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.amber.shade900.withValues(alpha: 0.25),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.amber.shade700),
-                      ),
-                      child: const Row(
-                        children: [
-                          Icon(Icons.shield_outlined,
-                              color: Colors.amber, size: 20),
-                          SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              'Modo Lectura activo: enciende «Estado de Guardia (On-Call)» en tu Perfil para aprobar o rechazar esta solicitud.',
-                              style: TextStyle(
-                                  color: Colors.amber, fontSize: 12.5),
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
                   else if (canAct)
                     Row(
                       children: [
@@ -537,7 +437,7 @@ class _BypassDetailScreenState extends State<BypassDetailScreen> {
             child: Text(
               label,
               style: const TextStyle(
-                  color: Color(0xFF94A3B8), fontWeight: FontWeight.w500),
+                  color: Colors.grey, fontWeight: FontWeight.w500),
             ),
           ),
           Expanded(
@@ -552,3 +452,4 @@ class _BypassDetailScreenState extends State<BypassDetailScreen> {
     );
   }
 }
+
