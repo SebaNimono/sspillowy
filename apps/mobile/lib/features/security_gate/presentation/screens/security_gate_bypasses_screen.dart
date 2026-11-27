@@ -52,15 +52,27 @@ class _SecurityGateBypassesScreenState
     if (mounted) {
       setState(() {
         _allBypasses = data;
-        _applyFilter(_activeFilter);
+        _applyFilter(_activeFilter, toggle: false);
         _isLoading = false;
       });
     }
   }
 
-  void _applyFilter(String? filterType) {
+  bool _isHitlItem(Map<String, dynamic> map) {
+    final status = (map['status'] ?? '').toString().toLowerCase();
+    final type = (map['type'] ?? '').toString().toLowerCase();
+    return status == 'pending' || status == 'approved' || type == 'hitl';
+  }
+
+  bool _isBlockItem(Map<String, dynamic> map) {
+    final status = (map['status'] ?? '').toString().toLowerCase();
+    final type = (map['type'] ?? '').toString().toLowerCase();
+    return status == 'rejected' || status == 'blocked' || type == 'block';
+  }
+
+  void _applyFilter(String? filterType, {bool toggle = true}) {
     setState(() {
-      if (_activeFilter == filterType) {
+      if (toggle && _activeFilter == filterType) {
         _activeFilter = null;
       } else {
         _activeFilter = filterType;
@@ -69,16 +81,12 @@ class _SecurityGateBypassesScreenState
       if (_activeFilter == 'hitl') {
         _filteredBypasses = _allBypasses.where((item) {
           final map = Map<String, dynamic>.from(item is Map ? item : {});
-          final status = (map['status'] ?? '').toString().toLowerCase();
-          final type = (map['type'] ?? '').toString().toLowerCase();
-          return status == 'pending' || status == 'approved' || type == 'hitl';
+          return _isHitlItem(map);
         }).toList();
       } else if (_activeFilter == 'block') {
         _filteredBypasses = _allBypasses.where((item) {
           final map = Map<String, dynamic>.from(item is Map ? item : {});
-          final status = (map['status'] ?? '').toString().toLowerCase();
-          final type = (map['type'] ?? '').toString().toLowerCase();
-          return status == 'rejected' || status == 'blocked' || type == 'block';
+          return _isBlockItem(map);
         }).toList();
       } else {
         _filteredBypasses = List.from(_allBypasses);
@@ -86,12 +94,89 @@ class _SecurityGateBypassesScreenState
     });
   }
 
+  String _pickField(
+      Map<String, dynamic> map, List<String> keys, String fallback) {
+    for (final key in keys) {
+      final val = map[key];
+      if (val != null) {
+        if (val is Map) {
+          final nested =
+              val['name'] ?? val['title'] ?? val['email'] ?? val['full_name'];
+          if (nested != null &&
+              nested.toString().trim().isNotEmpty &&
+              nested.toString() != 'null') {
+            return nested.toString().trim();
+          }
+        } else {
+          final str = val.toString().trim();
+          if (str.isNotEmpty && str != 'null') {
+            return str;
+          }
+        }
+      }
+    }
+    return fallback;
+  }
+
+  String _resolveTitle(Map<String, dynamic> item) {
+    final title = _pickField(
+      item,
+      [
+        'rule_name',
+        'rule',
+        'finding_title',
+        'title',
+        'name',
+        'vulnerability',
+        'reason'
+      ],
+      '',
+    );
+    if (title.isNotEmpty) return title;
+    final id = item['id']?.toString();
+    return (id != null && id.isNotEmpty)
+        ? 'Solicitud #${id.length > 8 ? id.substring(0, 8) : id}'
+        : 'Solicitud de Excepción';
+  }
+
+  String _resolveRepo(Map<String, dynamic> item) {
+    return _pickField(
+      item,
+      [
+        'repository_name',
+        'repo_name',
+        'repository',
+        'repo',
+        'project',
+        'target'
+      ],
+      'Sin repo',
+    );
+  }
+
+  String _resolveRequester(Map<String, dynamic> item) {
+    return _pickField(
+      item,
+      [
+        'requested_by_name',
+        'requested_by',
+        'requestedBy',
+        'requester',
+        'user_email',
+        'email',
+        'author',
+        'creator',
+      ],
+      'Guardia CI/CD',
+    );
+  }
+
   void _openDetail(Map<String, dynamic> item) async {
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => BypassDetailScreen(
-            isOnDuty: widget.isOnDuty,
+          isOnDuty: widget.isOnDuty,
           bypassId: item['id']?.toString() ?? 'N/A',
           bypassService: _bypassService,
           initialData: item,
@@ -106,6 +191,14 @@ class _SecurityGateBypassesScreenState
 
   @override
   Widget build(BuildContext context) {
+    final hitlCount = _allBypasses
+        .where((e) => _isHitlItem(Map<String, dynamic>.from(e is Map ? e : {})))
+        .length;
+    final blockCount = _allBypasses
+        .where(
+            (e) => _isBlockItem(Map<String, dynamic>.from(e is Map ? e : {})))
+        .length;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Bypasses & Excepciones'),
@@ -131,66 +224,171 @@ class _SecurityGateBypassesScreenState
                   color: Colors.white,
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               const Text(
-                'Aquí se resumen las excepciones autorizadas por el Tech Lead y los bloqueos permanentes de despliegue en el pipeline de CI/CD.',
-                style: TextStyle(color: Colors.grey, fontSize: 13),
+                'Toca una categoría para filtrar las solicitudes del pipeline:',
+                style: TextStyle(color: Color(0xFFB1BAC4), fontSize: 13),
               ),
-              const SizedBox(height: 20),
-              InkWell(
-                borderRadius: BorderRadius.circular(8),
-                onTap: () => _applyFilter('hitl'),
-                child: Card(
-                  color: _activeFilter == 'hitl'
-                      ? const Color(0xFF238636).withValues(alpha: 0.3)
-                      : const Color(0xFF161B22),
-                  shape: RoundedRectangleBorder(
-                    side: BorderSide(
-                      color: _activeFilter == 'hitl'
-                          ? Colors.amber
-                          : Colors.transparent,
-                      width: 1,
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(10),
+                      onTap: () => _applyFilter('hitl'),
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: _activeFilter == 'hitl'
+                              ? Colors.amber.withValues(alpha: 0.22)
+                              : const Color(0xFF1C2331),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: _activeFilter == 'hitl'
+                                ? Colors.amber
+                                : const Color(0xFF30363D),
+                            width: _activeFilter == 'hitl' ? 1.5 : 1,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Icon(Icons.shield_outlined,
+                                    color: Colors.amber, size: 20),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 7, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.amber.withValues(alpha: 0.18),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        _activeFilter == 'hitl'
+                                            ? Icons.filter_alt
+                                            : Icons.filter_list,
+                                        size: 12,
+                                        color: Colors.amber,
+                                      ),
+                                      const SizedBox(width: 3),
+                                      Text(
+                                        '$hitlCount',
+                                        style: const TextStyle(
+                                          color: Colors.amber,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Excepciones HITL',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            const Text(
+                              'Filtro: 24h a 168h',
+                              style: TextStyle(
+                                  color: Color(0xFFC9D1D9), fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                    borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const ListTile(
-                    leading: Icon(Icons.shield_outlined, color: Colors.amber),
-                    title: Text('Excepciones Temporizadas (HITL)',
-                        style: TextStyle(color: Colors.white)),
-                    subtitle: Text(
-                        'Permiten la continuidad de los pipelines durante 24h a 168h.',
-                        style: TextStyle(color: Colors.grey, fontSize: 12)),
-                    trailing: Icon(Icons.chevron_right, color: Colors.grey),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              InkWell(
-                borderRadius: BorderRadius.circular(8),
-                onTap: () => _applyFilter('block'),
-                child: Card(
-                  color: _activeFilter == 'block'
-                      ? Colors.redAccent.withValues(alpha: 0.2)
-                      : const Color(0xFF161B22),
-                  shape: RoundedRectangleBorder(
-                    side: BorderSide(
-                      color: _activeFilter == 'block'
-                          ? Colors.redAccent
-                          : Colors.transparent,
-                      width: 1,
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(10),
+                      onTap: () => _applyFilter('block'),
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: _activeFilter == 'block'
+                              ? Colors.redAccent.withValues(alpha: 0.22)
+                              : const Color(0xFF1C2331),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: _activeFilter == 'block'
+                                ? Colors.redAccent
+                                : const Color(0xFF30363D),
+                            width: _activeFilter == 'block' ? 1.5 : 1,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Icon(Icons.block,
+                                    color: Colors.redAccent, size: 20),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 7, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.redAccent
+                                        .withValues(alpha: 0.18),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        _activeFilter == 'block'
+                                            ? Icons.filter_alt
+                                            : Icons.filter_list,
+                                        size: 12,
+                                        color: Colors.redAccent,
+                                      ),
+                                      const SizedBox(width: 3),
+                                      Text(
+                                        '$blockCount',
+                                        style: const TextStyle(
+                                          color: Colors.redAccent,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Bloqueos',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            const Text(
+                              'Filtro: Críticos',
+                              style: TextStyle(
+                                  color: Color(0xFFC9D1D9), fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                    borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const ListTile(
-                    leading: Icon(Icons.block, color: Colors.redAccent),
-                    title: Text('Bloqueos de Despliegue',
-                        style: TextStyle(color: Colors.white)),
-                    subtitle: Text(
-                        'Detienen el pase a producción ante fallos o fugas críticas.',
-                        style: TextStyle(color: Colors.grey, fontSize: 12)),
-                    trailing: Icon(Icons.chevron_right, color: Colors.grey),
-                  ),
-                ),
+                ],
               ),
               const SizedBox(height: 16),
               Row(
@@ -198,17 +396,18 @@ class _SecurityGateBypassesScreenState
                 children: [
                   Text(
                     _activeFilter == 'hitl'
-                        ? 'Filtrado: Excepciones HITL'
+                        ? 'Mostrando: Excepciones HITL (${_filteredBypasses.length})'
                         : _activeFilter == 'block'
-                            ? 'Filtrado: Bloqueos'
-                            : 'Solicitudes Registradas',
+                            ? 'Mostrando: Bloqueos (${_filteredBypasses.length})'
+                            : 'Solicitudes Registradas (${_filteredBypasses.length})',
                     style: const TextStyle(
                         color: Colors.white, fontWeight: FontWeight.w600),
                   ),
                   if (_activeFilter != null)
-                    TextButton(
+                    TextButton.icon(
                       onPressed: () => _applyFilter(null),
-                      child: const Text('Limpiar filtro'),
+                      icon: const Icon(Icons.close, size: 16),
+                      label: const Text('Ver todas'),
                     ),
                 ],
               ),
@@ -227,7 +426,8 @@ class _SecurityGateBypassesScreenState
                                     _allBypasses.isEmpty
                                         ? 'No hay solicitudes de bypass registradas.'
                                         : 'No se encontraron registros para este filtro.',
-                                    style: const TextStyle(color: Colors.grey),
+                                    style: const TextStyle(
+                                        color: Color(0xFFC9D1D9)),
                                   ),
                                 ),
                               ),
@@ -246,15 +446,27 @@ class _SecurityGateBypassesScreenState
 
                               Color statusColor = Colors.orange;
                               if (status == 'approved') {
-                                statusColor = Colors.green;
+                                statusColor = Colors.greenAccent;
                               }
                               if (status == 'rejected' || status == 'blocked') {
-                                statusColor = Colors.red;
+                                statusColor = Colors.redAccent;
                               }
 
+                              final titleText = _resolveTitle(item);
+                              final repoText = _resolveRepo(item);
+                              final reqText = _resolveRequester(item);
+
                               return Card(
-                                color: const Color(0xFF0D1117),
-                                margin: const EdgeInsets.symmetric(vertical: 4),
+                                color: const Color(0xFF1C2331),
+                                elevation: 2,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  side: const BorderSide(
+                                    color: Color(0xFF364152),
+                                    width: 1,
+                                  ),
+                                ),
+                                margin: const EdgeInsets.symmetric(vertical: 5),
                                 child: ListTile(
                                   onTap: () => _openDetail(item),
                                   leading: Icon(
@@ -266,33 +478,40 @@ class _SecurityGateBypassesScreenState
                                     color: statusColor,
                                   ),
                                   title: Text(
-                                    item['rule'] ??
-                                        item['title'] ??
-                                        item['name'] ??
-                                        'Bypass Request',
+                                    titleText,
                                     style: const TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w500),
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 14,
+                                    ),
                                   ),
-                                  subtitle: Text(
-                                    'Repo: ${item['repository'] ?? item['repo'] ?? 'N/A'} | Req: ${item['requestedBy'] ?? item['author'] ?? 'Sistema'}',
-                                    style: const TextStyle(
-                                        color: Colors.grey, fontSize: 12),
+                                  subtitle: Padding(
+                                    padding: const EdgeInsets.only(top: 4),
+                                    child: Text(
+                                      'Repo: $repoText  •  Req: $reqText',
+                                      style: const TextStyle(
+                                        color: Color(0xFFD0D7DE),
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
                                   ),
                                   trailing: Container(
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 8, vertical: 4),
                                     decoration: BoxDecoration(
-                                      color: statusColor.withValues(alpha: 0.2),
-                                      borderRadius: BorderRadius.circular(4),
+                                      color:
+                                          statusColor.withValues(alpha: 0.18),
+                                      borderRadius: BorderRadius.circular(6),
                                       border: Border.all(color: statusColor),
                                     ),
                                     child: Text(
                                       status.toUpperCase(),
                                       style: TextStyle(
-                                          color: statusColor,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold),
+                                        color: statusColor,
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.bold,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -307,6 +526,3 @@ class _SecurityGateBypassesScreenState
     );
   }
 }
-
-
-

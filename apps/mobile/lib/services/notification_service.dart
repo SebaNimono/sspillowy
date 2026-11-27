@@ -2,11 +2,13 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/notification_model.dart';
 
 class NotificationService {
   final String baseUrl;
   final String token;
+  final String? workspaceId;
 
   static final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
@@ -14,12 +16,33 @@ class NotificationService {
   NotificationService({
     required this.baseUrl,
     required this.token,
+    this.workspaceId,
   });
 
-  Map<String, String> get _headers => {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      };
+  Future<String?> _resolveWorkspaceId() async {
+    if (workspaceId != null && workspaceId!.trim().isNotEmpty) {
+      return workspaceId!.trim();
+    }
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final stored = prefs.getString('active_workspace_id') ??
+          prefs.getString('selected_workspace_id') ??
+          prefs.getString('workspace_id');
+      if (stored != null && stored.trim().isNotEmpty) {
+        return stored.trim();
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future _buildHeaders() async {
+    final activeWs = await _resolveWorkspaceId();
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $token',
+      if (activeWs != null && activeWs.isNotEmpty) 'X-Workspace-Id': activeWs,
+    };
+  }
 
   // 1. Inicialización del sistema nativo de Push y Handler de Deep Linking
   static Future<void> initSystemNotifications(
@@ -84,9 +107,19 @@ class NotificationService {
   // 3. Métodos HTTP existentes de sincronización con la API
   Future<List<NotificationModel>> fetchNotifications() async {
     try {
+      final activeWs = await _resolveWorkspaceId();
+      final headers = await _buildHeaders();
+      final baseUri = Uri.parse('$baseUrl/api/v1/notifications');
+      final uri = (activeWs != null && activeWs.isNotEmpty)
+          ? baseUri.replace(queryParameters: {
+              ...baseUri.queryParameters,
+              'workspace_id': activeWs,
+            })
+          : baseUri;
+
       final response = await http.get(
-        Uri.parse('$baseUrl/api/v1/notifications'),
-        headers: _headers,
+        uri,
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -108,9 +141,10 @@ class NotificationService {
   }
 
   Future<bool> markAsRead(String notificationId) async {
+    final headers = await _buildHeaders();
     final response = await http.post(
       Uri.parse('$baseUrl/api/v1/notifications/$notificationId/read'),
-      headers: _headers,
+      headers: headers,
     );
 
     if (response.statusCode == 200 || response.statusCode == 204) {

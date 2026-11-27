@@ -38,7 +38,8 @@ class _BypassDetailScreenState extends State<BypassDetailScreen> {
 
   bool get _isPendingExpired {
     if (_status == 'EXPIRED') return true;
-    final rawDeadline = (_data['pending_expires_at'] ?? _data['expires_at'])?.toString();
+    final rawDeadline =
+        (_data['pending_expires_at'] ?? _data['expires_at'])?.toString();
     if (rawDeadline == null || rawDeadline.isEmpty) return false;
     final parsed = DateTime.tryParse(rawDeadline);
     if (parsed == null) return false;
@@ -76,7 +77,13 @@ class _BypassDetailScreenState extends State<BypassDetailScreen> {
 
   Future<void> _confirmAndExecuteAction(bool isApprove) async {
     if (!widget.isOnDuty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Activa el modo Guardia para aprobar o rechazar excepciones.'), backgroundColor: Colors.orange));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'Activa el modo Guardia para aprobar o rechazar excepciones.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
       return;
     }
     // Revalidar vigencia y contexto en tiempo real antes de aprobar/rechazar
@@ -101,12 +108,16 @@ class _BypassDetailScreenState extends State<BypassDetailScreen> {
     final actionText = isApprove ? 'Aprobar' : 'Rechazar';
     bool ackContextChange = !_contextChanged;
     final expectedSha = _latestCommitSha;
+    String? validationError;
 
     showDialog(
       context: context,
       builder: (BuildContext dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
+            final currentLength = reasonController.text.trim().length;
+            final isReasonValid = currentLength >= 12;
+
             return AlertDialog(
               title: Text('Confirmar $actionText Excepción'),
               content: Column(
@@ -136,7 +147,8 @@ class _BypassDetailScreenState extends State<BypassDetailScreen> {
                         contentPadding: EdgeInsets.zero,
                         dense: true,
                         value: ackContextChange,
-                        onChanged: (v) => setDialogState(() => ackContextChange = v ?? false),
+                        onChanged: (v) =>
+                            setDialogState(() => ackContextChange = v ?? false),
                         title: const Text(
                           'El repositorio tuvo un nuevo commit/escaneo tras esta solicitud. Confirmo que revisé el contexto actual.',
                           style: TextStyle(fontSize: 12),
@@ -147,9 +159,24 @@ class _BypassDetailScreenState extends State<BypassDetailScreen> {
                   const SizedBox(height: 12),
                   TextField(
                     controller: reasonController,
-                    decoration: const InputDecoration(
-                      labelText: 'Motivo / Comentario',
-                      border: OutlineInputBorder(),
+                    maxLines: 2,
+                    onChanged: (_) {
+                      setDialogState(() {
+                        if (reasonController.text.trim().length >= 12) {
+                          validationError = null;
+                        }
+                      });
+                    },
+                    decoration: InputDecoration(
+                      labelText: 'Motivo / Justificación (mín. 12 caracteres)',
+                      hintText: 'Detalla la razón técnica de esta decisión...',
+                      helperText: '$currentLength / 12 caracteres mínimos',
+                      helperStyle: TextStyle(
+                        color: isReasonValid ? Colors.greenAccent : Colors.grey,
+                        fontSize: 11,
+                      ),
+                      errorText: validationError,
+                      border: const OutlineInputBorder(),
                     ),
                   ),
                 ],
@@ -166,13 +193,21 @@ class _BypassDetailScreenState extends State<BypassDetailScreen> {
                   onPressed: (isApprove && _contextChanged && !ackContextChange)
                       ? null
                       : () async {
-                          final reason = reasonController.text;
+                          final trimmedReason = reasonController.text.trim();
+                          if (trimmedReason.length < 12) {
+                            setDialogState(() {
+                              validationError =
+                                  'La justificación debe tener al menos 12 caracteres (${trimmedReason.length}/12).';
+                            });
+                            return;
+                          }
                           Navigator.of(dialogContext).pop();
                           await _submitDecision(
                             isApprove,
-                            reason,
+                            trimmedReason,
                             expectedCommitSha: expectedSha,
-                            acknowledgeContextChange: _contextChanged && ackContextChange,
+                            acknowledgeContextChange:
+                                _contextChanged && ackContextChange,
                           );
                         },
                   child: Text(actionText),
@@ -254,7 +289,8 @@ class _BypassDetailScreenState extends State<BypassDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final canAct = _status == 'PENDING' && !_isPendingExpired && _data.isNotEmpty;
+    final canAct =
+        _status == 'PENDING' && !_isPendingExpired && _data.isNotEmpty;
     return Scaffold(
       appBar: AppBar(
         title: Text('Detalle de Excepción #${widget.bypassId}'),
@@ -313,7 +349,9 @@ class _BypassDetailScreenState extends State<BypassDetailScreen> {
                         style: TextStyle(color: Colors.white, fontSize: 12.5),
                       ),
                     ),
-                  if (_status == 'PENDING' && !_isPendingExpired && _contextChanged)
+                  if (_status == 'PENDING' &&
+                      !_isPendingExpired &&
+                      _contextChanged)
                     Container(
                       width: double.infinity,
                       margin: const EdgeInsets.only(bottom: 12),
@@ -325,7 +363,8 @@ class _BypassDetailScreenState extends State<BypassDetailScreen> {
                       ),
                       child: Text(
                         'Contexto actualizado: el repositorio registró un nuevo escaneo/commit (${_latestCommitSha != null && _latestCommitSha!.length > 8 ? _latestCommitSha!.substring(0, 8) : (_latestCommitSha ?? "nuevo")}) después de crearse esta solicitud.',
-                        style: const TextStyle(color: Colors.white, fontSize: 12.5),
+                        style: const TextStyle(
+                            color: Colors.white, fontSize: 12.5),
                       ),
                     ),
                   Card(
@@ -336,7 +375,9 @@ class _BypassDetailScreenState extends State<BypassDetailScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            _data['rule'] ??
+                            _data['rule_name'] ??
+                                _data['rule'] ??
+                                _data['finding_title'] ??
                                 _data['title'] ??
                                 'Excepción de Seguridad',
                             style: const TextStyle(
@@ -356,15 +397,18 @@ class _BypassDetailScreenState extends State<BypassDetailScreen> {
                           _buildDetailRow(
                               'Repositorio:',
                               (_data['repository_name'] ??
+                                      _data['repo_name'] ??
                                       _data['repository'] ??
                                       _data['repo'] ??
                                       'No especificado')
                                   .toString()),
                           _buildDetailRow(
                               'Solicitado Por:',
-                              (_data['requestedBy'] ??
+                              (_data['requested_by_name'] ??
+                                      _data['requestedBy'] ??
                                       _data['requested_by'] ??
-                                      'Sistema')
+                                      _data['user_email'] ??
+                                      'Guardia CI/CD')
                                   .toString()),
                           _buildDetailRow(
                               'Justificación:',
@@ -374,10 +418,10 @@ class _BypassDetailScreenState extends State<BypassDetailScreen> {
                                       'Sin detalle')
                                   .toString()),
                           if (_latestCommitSha != null)
-                            _buildDetailRow('Commit actual:', _latestCommitSha!),
-                          if (_data['pending_expires_at'] != null)
                             _buildDetailRow(
-                                'Vence aprobación:',
+                                'Commit actual:', _latestCommitSha!),
+                          if (_data['pending_expires_at'] != null)
+                            _buildDetailRow('Vence aprobación:',
                                 _data['pending_expires_at'].toString()),
                           if (_data['createdAt'] != null ||
                               _data['created_at'] != null)
@@ -452,4 +496,3 @@ class _BypassDetailScreenState extends State<BypassDetailScreen> {
     );
   }
 }
-

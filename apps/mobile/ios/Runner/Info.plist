@@ -45,6 +45,23 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.sspillowy.mobile</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>sspillowy</string>
+			</array>
+		</dict>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
@@ -81,4 +98,3 @@
 	<string>Se requiere Face ID para proteger el acceso a tu sesión y a los controles de seguridad de SSPILLOWY Pulse.</string>
 </dict>
 </plist>
-
